@@ -79,6 +79,7 @@ MODNOISE=1 node game/tools/balance_sim.mjs   # the seed-noise floor those deltas
 ESCORT=1 node game/tools/balance_sim.mjs     # what one resident's ability is worth
 ESCORT=1 SPECIES=railmane WEAPON=longtooth LETHAL=slug node game/tools/balance_sim.mjs
 AIM=1 node game/tools/balance_sim.mjs        # free aim vs assisted, by input quality
+STUDY=1 node game/tools/balance_sim.mjs      # battles per evolution, and the anti-grind curve
 python3 game/tools/stamp_sw.py --check  # service worker cache stamp is current
 node game/tests/run.mjs                 # fourteen browser suites against the real UI
 ```

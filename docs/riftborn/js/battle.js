@@ -89,6 +89,10 @@ export function makeCombatant(species, level, data, { resident = null, wild = fa
     restraint: 0,
     required: 0,           // set for the wild side when the battle starts
     fainted: false,
+    // Was this one ever on the field? Only participants earn Study.
+    participated: false,
+    // For a pack member: the ending it reached, once it has reached one.
+    resolved: null,
     flash: 0,
   };
 }
@@ -110,18 +114,44 @@ export function computeMoveDamage(attacker, defender, move, data, rng = Math.ran
   const roll = lo + rng() * (hi - lo);
 
   /*
-   * The attack term is COMPRESSED, and that is the most important line here.
+   * Damage is a FRACTION OF THE DEFENDER'S HEALTH, not an absolute number, and
+   * that is the most important line here. It went through two wrong versions to
+   * get there and both are worth keeping written down.
    *
-   * Raw, a Mote's attack of 10 against a Strider's 34 is a 3.4x swing, which
-   * quietly buried the 2x type chart underneath it: Tide-on-Ember measured 8
-   * damage while Ember-on-Tide measured 11, so "super effective" hit for less
-   * than "not very effective" and the headline mechanic of the whole game was
-   * invisible. An exponent of 0.55 keeps a bigger monster meaningfully stronger
-   * while leaving the type chart the loudest term in the formula.
+   * Version one multiplied a flat base by the attacker's raw attack stat. A
+   * Mote's attack of 10 against a Strider's 34 is a 3.4x swing, which buried the
+   * 2x type chart underneath it: Tide-on-Ember measured 8 damage while
+   * Ember-on-Tide measured 11, so "super effective" hit for LESS than "not very
+   * effective" and the headline mechanic of the whole game was invisible.
+   *
+   * Version two fixed that by compressing attack to ^0.55. The type chart came
+   * back — and a scaling bug came with it, because health did not get the same
+   * treatment. Health grows with level, size class and evolution stage; damage
+   * now grew with the 0.55 power of one of those. Measured across the bestiary,
+   * a same-species fight took 6 turns at stage 1, 14 at stage 2 and a median of
+   * 41 at stage 3. A mirror match against Karrahk took ONE HUNDRED AND EIGHTEEN
+   * TURNS. Nobody is tapping a button 118 times, so the apexes — the fights the
+   * whole rift system exists to deliver — were unplayable, and the headline
+   * numbers looked fine because everything anyone had played was stage 1.
+   *
+   * Version three is this one: a move takes a share of what it is hitting, so
+   * turns-to-kill is the same whether the target is a Mote or a Titan. The
+   * attacker's advantage is the RATIO of the two attack stats, still compressed
+   * so the type chart stays the loudest term: measured, a super-effective move
+   * takes 47% of the target's health where a resisted one takes 22%, so the
+   * chart is worth 2.1x and is plainly visible in the bar.
+   *
+   * Measured across all 43 species, a same-species best-move fight is now 7
+   * turns at stage 1, 7 at stage 2 and 8 at stage 3, with the whole bestiary
+   * inside 12. The extremes stay extreme, which is the point: Karrahk one-shots
+   * a Glimmerfly, and a Glimmerfly needs 44 turns to fell a Karrahk — it will be
+   * dead long before, and that is the correct answer to bringing a Mote to an
+   * apex rather than a number to tune away.
    */
-  const power = Math.pow(Math.max(1, attacker.attack) / 30, 0.55);
+  const ratio = Math.max(1, attacker.attack) / Math.max(1, defender.attack);
+  const power = Math.pow(ratio, rules.attack_ratio_exponent ?? 0.55);
 
-  const raw = (rules.base_damage ?? 12)
+  const raw = defender.maxHp * (rules.hp_fraction_damage ?? 0.15)
     * (move.power / 50)
     * power
     * eff * stab * roll
@@ -140,23 +170,50 @@ export function computeMoveDamage(attacker, defender, move, data, rng = Math.ran
 
 // ---------------------------------------------------------------- the battle
 
+/**
+ * Arm one wild combatant: its Restraint requirement is a property of the
+ * individual, so every member of a pack gets its own.
+ */
+function armWild(data, w) {
+  w.wild = true;
+  w.required = restraintRequired(
+    w.species,
+    data.sizes.sizes.find((s) => s.id === w.species.size),
+    data.ammo.restraint_required_scale ?? 1,
+  );
+  return w;
+}
+
 export function createBattle(opts) {
   const { data, rng = Math.random } = opts;
   const rules = data.elements.battle_rules;
 
-  const wild = opts.wild;
-  wild.wild = true;
-  wild.required = restraintRequired(
-    wild.species,
-    data.sizes.sizes.find((s) => s.id === wild.species.size),
-    data.ammo.restraint_required_scale ?? 1,
-  );
+  /*
+   * A pack is a QUEUE, not a crowd. Phase 3 spawns packs of up to four and the
+   * first turn-based build simply ignored `packSize` — it fought one member and
+   * then resolved the whole spawn, which quietly deleted a phase of work and
+   * made the engage card ("Sparkmite x3") a lie.
+   *
+   * One at a time is also the only reading that keeps the rest of the engine
+   * honest: Restraint, the catch roll and the flee check are all written about
+   * an individual. What makes a pack hard is that YOUR side does not heal
+   * between members, so the third one meets whatever the first two left of you.
+   */
+  const wilds = (opts.wilds ?? [opts.wild]).filter(Boolean).map((w) => armWild(data, w));
 
   return {
     data, rng, rules,
     team: opts.team ?? [],
     active: 0,
-    wild,
+    wilds,
+    index: 0,
+    wild: wilds[0],
+    /*
+     * One entry per member that reached an ending, in the shape the arena's
+     * `fight.results` already uses, so a pack can end as two culls and a capture
+     * down either combat path and the Codex cannot tell which one you played.
+     */
+    results: [],
     /*
      * The Warden fights alongside an empty bench. At rank 1 nobody has a monster
      * yet, and a game that refuses to start until you have caught something you
@@ -176,6 +233,7 @@ export function createBattle(opts) {
     },
     turn: 0,
     log: [],
+    // The verdict for the ENCOUNTER. Per-member endings live in `results`.
     outcome: null,          // null | 'caught' | 'defeated' | 'fled' | 'wiped' | 'escaped'
     caughtWith: null,
     lastCatch: null,
@@ -192,6 +250,58 @@ function say(b, text, kind = 'info') {
   b.log.push({ text, kind, turn: b.turn });
   return b.log;
 }
+
+// ---------------------------------------------------------------- the queue
+
+/** The verdict for the whole encounter, read off what happened to each member. */
+function encounterVerdict(b) {
+  if (b.results.some((r) => r.outcome === 'caught')) return 'caught';
+  if (b.results.some((r) => r.outcome === 'defeated')) return 'defeated';
+  return 'escaped';
+}
+
+/**
+ * One member of the pack reached an ending. Record it, and either send up the
+ * next one or call the encounter.
+ *
+ * Returns true when the encounter is over, so callers know whether to stop.
+ */
+function resolveMember(b, outcome) {
+  const w = b.wild;
+  w.resolved = outcome;
+  b.results.push({
+    speciesId: w.speciesId,
+    outcome,
+    level: w.level,
+    // The arena's "clean capture" rule, unchanged: subdued above 80% health.
+    clean: outcome === 'caught' && w.hp / w.maxHp > 0.8,
+    hpFraction: w.hp / w.maxHp,
+    heightM: w.heightM,
+    percentile: w.percentile,
+    caughtWith: outcome === 'caught' ? b.caughtWith : null,
+  });
+
+  const left = b.wilds.length - b.index - 1;
+  if (left > 0) {
+    b.index += 1;
+    b.wild = b.wilds[b.index];
+    /*
+     * The replacement does not act on the turn it arrives. Without this the
+     * order loop would run on past the member you just downed and let a fresh,
+     * full-health monster hit you in the same turn — a pack of three would get
+     * three free attacks purely from the shape of the loop.
+     */
+    b.advanced = true;
+    say(b, `Another ${b.wild.species.name} steps up — ${left} left.`, 'info');
+    return false;
+  }
+
+  b.outcome = encounterVerdict(b);
+  return true;
+}
+
+/** How many of the pack are still to be dealt with, the current one included. */
+export const remaining = (b) => Math.max(0, b.wilds.length - b.results.length);
 
 // ---------------------------------------------------------------- statuses
 
@@ -321,8 +431,8 @@ function checkFlee(b) {
   const chance = w.species.stats.skittishness * 0.12 * (hurt > (w.species.stats.flee_threshold ?? 0.25) ? 0 : 1);
   if (hurt < 1 - (w.species.stats.flee_threshold ?? 0.25)) return;   // only when wounded past its threshold
   if (b.rng() < w.species.stats.skittishness * 0.18) {
-    b.outcome = 'escaped';
     say(b, `${w.species.name} broke away.`, 'bad');
+    resolveMember(b, 'escaped');
   }
   void chance;
 }
@@ -338,9 +448,18 @@ export function takeTurn(b, action) {
   if (b.outcome) return [];
   const from = b.log.length;
   b.turn += 1;
+  b.advanced = false;
 
   const mine = activeMon(b);
   const w = b.wild;
+
+  /*
+   * Participation is recorded here and nowhere else: whoever is on the field
+   * when a turn is taken has been in the fight, and that is what earns Study.
+   * A monster that never leaves the bench learns nothing, so bringing a weak
+   * one in to share the lesson costs the turn it takes to swap it in.
+   */
+  if (mine && !b.wardenOnly) mine.participated = true;
 
   // Swapping and catching happen before the wild monster acts; a move races it.
   if (action.kind === 'swap') {
@@ -362,9 +481,10 @@ export function takeTurn(b, action) {
     b.spent[ammo.id] = (b.spent[ammo.id] ?? 0) + 1;
     say(b, `You fire a ${ammo.name}.`, 'info');
     if (b.rng() < chance) {
-      b.outcome = 'caught';
       b.caughtWith = ammo.id;
-      say(b, `${w.species.name} is caught!`, 'good');
+      say(b, `${b.wild.species.name} is caught!`, 'good');
+      resolveMember(b, 'caught');
+      // Caught or not, the turn is over — the next one up does not get a free hit.
       return b.log.slice(from);
     }
     // A failed capture still does something: the sedative lands even when the
@@ -396,7 +516,12 @@ export function takeTurn(b, action) {
         w.flash = 1;
         say(b, `You use ${move.name}. −${dmg}`, 'hit');
       }
-      if (w.hp <= 0) { w.fainted = true; b.outcome = 'defeated'; say(b, `${w.species.name} is down.`, 'good'); return b.log.slice(from); }
+      if (w.hp <= 0) {
+        w.fainted = true;
+        say(b, `${w.species.name} is down.`, 'good');
+        resolveMember(b, 'defeated');
+        return b.log.slice(from);
+      }
       wildTurn(b);
     } else {
       const move = mine.moves[action.index] ?? mine.moves[0];
@@ -410,14 +535,17 @@ export function takeTurn(b, action) {
         : wildFirst ? ['wild', 'mine'] : ['mine', 'wild'];
 
       for (const side of order) {
-        if (b.outcome) break;
+        if (b.outcome || b.advanced) break;
         if (side === 'mine') {
           if (mine.fainted) continue;
-          attack(b, mine, w, move, mine.species.name);
-          if (w.hp <= 0) {
-            w.fainted = true;
-            b.outcome = 'defeated';
-            say(b, `${w.species.name} is down.`, 'good');
+          // `b.wild` can change under this loop, so read it fresh rather than
+          // reusing the `w` captured at the top of the turn.
+          const target = b.wild;
+          attack(b, mine, target, move, mine.species.name);
+          if (target.hp <= 0) {
+            target.fainted = true;
+            say(b, `${target.species.name} is down.`, 'good');
+            resolveMember(b, 'defeated');
           }
         } else {
           wildTurn(b);
@@ -427,7 +555,8 @@ export function takeTurn(b, action) {
   }
 
   if (!b.outcome) {
-    tickStatuses(w);
+    // `b.wild` and not `w`: a member may have been resolved during this turn.
+    tickStatuses(b.wild);
     for (const c of b.team) tickStatuses(c);
     checkFlee(b);
   }

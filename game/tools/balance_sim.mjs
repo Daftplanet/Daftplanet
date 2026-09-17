@@ -14,6 +14,10 @@ import { dirname, join } from 'node:path';
 import { loadLoadout } from '../../docs/riftborn/js/rules.js';
 import { escortAbility } from '../../docs/riftborn/js/sanctuary.js';
 import { createFight, step, weakPointPositions, assistMiss, ARENA } from '../../docs/riftborn/js/game.js';
+import {
+  makeCombatant, createBattle, takeTurn, levelOf, wildLevel, computeMoveDamage, catchChance,
+} from '../../docs/riftborn/js/battle.js';
+import { studyFromBattle, STUDY_PER_MINUTE } from '../../docs/riftborn/js/sanctuary.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DATA = join(HERE, '..', '..', 'docs', 'riftborn', 'data');
@@ -497,5 +501,116 @@ if (process.env.AIM) {
       + ` → assisted ${(Math.max(...assisted.map(([, r]) => r.win)) * 100).toFixed(0)}%`
       + `   ·   skill spread: free ${(spread(free) * 100).toFixed(0)}pt`
       + ` → assisted ${(spread(assisted) * 100).toFixed(0)}pt`);
+  }
+}
+
+
+/*
+ * ---------------------------------------------------------------- STUDY=1
+ *
+ * What is a battle worth?
+ *
+ * Study is the evolution currency, and before the turn-based battle existed it
+ * came only from habitat time (1/minute), walking (25/km) and feeding (40 for
+ * three materials). Granting it for fighting is easy; granting the RIGHT amount
+ * is not, and the failure modes point in both directions — too little and the
+ * battle is decoration, too much and the Sanctuary's whole "this pays in three
+ * weeks" identity evaporates.
+ *
+ * So this plays real battles through battle.js — the same module the browser
+ * runs — and accumulates Study until a resident hits its evolution threshold.
+ * It reports the count, which is the number that actually matters, rather than
+ * dividing the threshold by a nominal per-battle figure. Those two disagree,
+ * and the reason they disagree is the interesting part: the relative-level term
+ * means the reward SHRINKS as the monster you are raising outgrows what you are
+ * fighting, so the last stretch to a threshold is slower than the first.
+ */
+if (process.env.STUDY) {
+  const byId = Object.fromEntries(data.monsters.monsters.map((m) => [m.id, m]));
+  const N = Number(process.env.RUNS ?? 400);
+
+  /* A bot that fights it out: best expected move, dart it once it is soft. */
+  function playBattle(seed, mySpecies, myStudy, wildSpecies, rank, { capture = true } = {}) {
+    const rng = mulberry32(seed);
+    const resident = { uid: 'x', speciesId: mySpecies.id, study: myStudy, heightM: 1, percentile: 0.5 };
+    const mine = makeCombatant(mySpecies, levelOf(resident, mySpecies), data, { resident, specimenRng: rng });
+    const wild = makeCombatant(wildSpecies, wildLevel(wildSpecies, rank), data, { wild: true, specimenRng: rng });
+    const b = createBattle({ data, team: [mine], wilds: [wild], rng });
+    const dart = data.ammo.capture.find((a) => a.id === 'tranq_dart');
+
+    for (let turn = 0; turn < 60 && !b.outcome; turn++) {
+      const w = b.wild;
+      const soft = w.hp / w.maxHp < 0.5;
+      if (capture && soft && dart && catchChance(b, dart).chance > 0.3) {
+        takeTurn(b, { kind: 'catch', ammoId: dart.id });
+        continue;
+      }
+      // Best expected damage, which is what a competent player converges on.
+      let best = 0, bestI = 0;
+      mine.moves.forEach((m, i) => {
+        const d = computeMoveDamage(mine, w, m, data, () => 0.5).damage * (m.accuracy ?? 1);
+        if (d > best) { best = d; bestI = i; }
+      });
+      takeTurn(b, { kind: 'move', index: bestI });
+    }
+    if (!b.outcome) b.outcome = 'escaped';
+    return b;
+  }
+
+  /** Battles from zero Study to an evolution threshold, fighting this tier. */
+  function battlesToEvolve(mySpecies, wildSpecies, rank, threshold, seed0) {
+    let study = 0, battles = 0, wins = 0, turns = 0;
+    while (study < threshold && battles < 5000) {
+      const b = playBattle(seed0 + battles * 7919, mySpecies, study, wildSpecies, rank);
+      const me = b.team[0];
+      let gained = 0;
+      for (const r of b.results) gained += studyFromBattle(r.level, me.level, r.outcome);
+      if (!b.results.length) gained += studyFromBattle(b.wild.level, me.level, b.outcome);
+      study += gained;
+      turns += b.turn;
+      if (b.outcome === 'caught' || b.outcome === 'defeated') wins++;
+      battles++;
+    }
+    return { battles, wins: wins / battles, turns: turns / battles, study };
+  }
+
+  const TIERS = [
+    { label: 'stage 1 -> 2  (400 Study)',  mine: 'sootpup',    wild: 'sootpup',    rank: 3,  need: 400 },
+    { label: 'stage 2 -> 3  (1600 Study)', mine: 'cinderfang', wild: 'cinderfang', rank: 10, need: 1600 },
+  ];
+
+  console.log(`\nSTUDY FROM BATTLE — accumulating to each evolution threshold, ${N} traces per tier`);
+  console.log('tier                          battles   win%   turns/battle   Study/battle   = passive');
+  for (const t of TIERS) {
+    const runs = Array.from({ length: N }, (_, i) =>
+      battlesToEvolve(byId[t.mine], byId[t.wild], t.rank, t.need, i * 104729 + 7));
+    const avg = (f) => runs.reduce((a, r) => a + f(r), 0) / runs.length;
+    const battles = avg((r) => r.battles);
+    const perBattle = t.need / battles;
+    const hours = perBattle / STUDY_PER_MINUTE / 60;
+    console.log(`${t.label.padEnd(28)} ${battles.toFixed(1).padStart(7)} `
+      + `${`${(avg((r) => r.wins) * 100).toFixed(0)}%`.padStart(6)} `
+      + `${avg((r) => r.turns).toFixed(1).padStart(14)} `
+      + `${perBattle.toFixed(0).padStart(14)} `
+      + `${`${hours.toFixed(1)}h`.padStart(10)}`);
+  }
+
+  /*
+   * The anti-grind check. Wild level scales with Warden rank, so a Mote stays a
+   * Mote forever; without a relative term it would stay farmable forever too.
+   */
+  console.log('\nANTI-GRIND — one win against the same low-stage wild, as the raised monster grows');
+  console.log('my Study    my level    wild level    Study for the win');
+  for (const study of [0, 400, 1600, 3600]) {
+    const sp = byId.sootpup;
+    const lvl = levelOf({ study }, sp);
+    const wl = wildLevel(sp, 3);
+    console.log(`${String(study).padStart(8)} ${String(lvl).padStart(11)} ${String(wl).padStart(13)} `
+      + `${String(studyFromBattle(wl, lvl, 'defeated')).padStart(20)}`);
+  }
+
+  console.log('\nBY ENDING — the same fight, ended five ways (level 16 wild, level 14 of mine)');
+  for (const o of ['caught', 'defeated', 'escaped', 'wiped', 'fled']) {
+    console.log(`  ${o.padEnd(10)} ${String(studyFromBattle(16, 14, o)).padStart(5)} Study`);
   }
 }

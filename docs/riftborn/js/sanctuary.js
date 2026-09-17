@@ -14,6 +14,88 @@ export const STUDY_PER_KM_WALKED = 25;
 export const FEED_COST = 3;
 export const FEED_STUDY = 40;
 
+/*
+ * ---------------------------------------------------------------- study by fighting
+ *
+ * Study used to accrue three ways, all of them passive: habitat time, walking,
+ * and feeding. None of them involved the monster doing anything. Once the
+ * turn-based battle became the default that was a hole you could drive a bus
+ * through — your monsters got stronger by SITTING IN THEIR PEN while the thing
+ * you spend the whole game doing taught them nothing at all.
+ *
+ * The rates below are calibrated against the two evolution thresholds the
+ * bestiary actually uses (400 Study for stage 1->2, 1600 for stage 2->3) with
+ * one requirement: an evolution should cost about the same NUMBER OF BATTLES at
+ * both tiers, because that count is what a player actually feels. It is the "at
+ * both tiers" that picks the shape of the formula.
+ *
+ * The obvious formula — level x a stage bonus — fails that test. Level already
+ * carries stage (wildLevel adds six per stage), so a stage bonus counts it
+ * twice and makes the HARDER evolution the cheaper one. Dropping it and letting
+ * level do the work lands, measured over 120 accumulation traces per tier with
+ * STUDY=1 in balance_sim:
+ *
+ *     stage 1 -> 2 (400 Study):   29.8 battles, 96% won, 5.6 turns each
+ *     stage 2 -> 3 (1600 Study):  31.0 battles, 76% won, 9.0 turns each
+ *
+ * Thirty battles, not the seventeen this comment claimed before anyone ran it.
+ * The arithmetic was not wrong so much as naive: dividing a threshold by a
+ * nominal per-battle figure ignores that the reward SHRINKS as the monster you
+ * are raising outgrows what you are fighting, so the last stretch to a
+ * threshold is much slower than the first. Only accumulating it shows that.
+ *
+ * Against the passive channel, one battle is worth about 13 minutes of habitat
+ * time at tier 1 and 52 at tier 2, while taking two or three minutes to play.
+ * Active play beats idling by roughly five to one, and idling still earns its
+ * keep overnight — which is the balance the Sanctuary was always meant to have.
+ *
+ * The relative term is the anti-grind, and it matters more here than in most
+ * games: wild level scales with Warden rank, so low-stage species stay low-level
+ * forever and would otherwise remain farmable at any point in the game. Beating
+ * a Mote at level 24 is worth about 4 Study against an appropriate fight's 100.
+ */
+export const STUDY_PER_WILD_LEVEL = 5.5;
+
+/**
+ * How far the level gap can swing the reward. The floor stops high-level
+ * grinding on trivial spawns; the ceiling stops a single giant-killing from
+ * being unbounded — beating something six times your level is a whole
+ * evolution in one fight, which is a story, and capping it there keeps it one.
+ */
+export const STUDY_RELATIVE_CLAMP = [0.25, 2.5];
+
+/**
+ * What each ending is worth. Winning is winning, however it ended: this game's
+ * thesis is that culling and cataloguing are both legitimate, so a kill teaches
+ * a monster exactly what a capture does. Losing still teaches something, and
+ * deliberately teaches more than running away, because you stayed in it.
+ */
+export const STUDY_OUTCOME_SCALE = {
+  caught: 1,
+  defeated: 1,
+  escaped: 0.35,   // it broke away — you did the work, it left
+  wiped: 0.25,     // you lost, but you were in the fight
+  fled: 0.15,      // you backed out
+};
+
+/**
+ * Study one participating monster earns from one resolved opponent.
+ *
+ * Participation is the gate, and it is applied by the caller: a monster that
+ * never left the bench learns nothing, so bringing a weak one in to share the
+ * lesson costs you the turn it takes to swap. That trade is the decision.
+ */
+export function studyFromBattle(wildLevel, myLevel, outcome) {
+  const scale = STUDY_OUTCOME_SCALE[outcome] ?? 0;
+  if (!scale) return 0;
+  const [lo, hi] = STUDY_RELATIVE_CLAMP;
+  const relative = Math.max(lo, Math.min(hi, wildLevel / Math.max(1, myLevel)));
+  return Math.round(STUDY_PER_WILD_LEVEL * wildLevel * relative * scale);
+}
+
+/** The same number expressed as habitat time, which is how the Sanctuary reads it. */
+export const studyAsMinutes = (study) => study / STUDY_PER_MINUTE;
+
 /**
  * Evolution conditions, keyed by the `condition` field in monsters.json.
  * Each returns { met, label } so the UI can explain what is still missing rather

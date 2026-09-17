@@ -8,7 +8,14 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 950 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-const ok = (l, c, x = '') => console.log(`${c ? 'PASS' : 'FAIL'}  ${l}${x ? '  — ' + x : ''}`);
+/*
+ * A failing check must FAIL THE RUN. Until this counted, every suite exited on
+ * console errors alone: a red FAIL line printed, the runner read exit code 0,
+ * and the run announced "all suites passed" underneath it. A check that cannot
+ * fail the build is a comment with extra steps.
+ */
+let fails = 0;
+const ok = (l, c, x = '') => { if (!c) fails++; console.log(`${c ? 'PASS' : 'FAIL'}  ${l}${x ? '  — ' + x : ''}`); };
 
 /** Engage a named species in the current aim mode. */
 await page.addInitScript(() => {
@@ -221,12 +228,21 @@ ok('the aim mode persists and is what the fight runs',
 
 // --- 9. assisted aim is playable by someone who never reads the ring
 /*
- * Aggregated over several fights on purpose. A single run of this comparison is
- * noise: whether a fixed-aim free player lands anything at all depends entirely
- * on whether the monster happens to wander across the line they are pointing at,
- * and one lucky spawn made free aim look competent.
+ * Aggregated over many fights on purpose, and the number matters.
+ *
+ * A single run of this comparison is noise: whether a fixed-aim free player
+ * lands anything at all depends entirely on whether the monster happens to
+ * wander across the line they are pointing at, and one lucky spawn made free
+ * aim look competent.
+ *
+ * Six fights was not enough either, which took a while to notice because the
+ * suite could not fail the build. A never-aiming assisted player finishes
+ * roughly a third of its fights, so six fights expects TWO culls — and zero
+ * came up about half the time, failing an assertion that wanted at least one.
+ * Measured at 24 fights the count is 7 to 11 against free aim's flat zero,
+ * which is a signal rather than a coin toss.
  */
-const playable = await page.evaluate(async () => {
+const playable = await page.evaluate(async (FIGHTS) => {
   const r = window.__riftborn;
   const run = async (mode) => {
     const f = await window.engageIn(mode, 'cinderfang');
@@ -246,18 +262,20 @@ const playable = await page.evaluate(async () => {
   };
   const total = async (mode) => {
     const acc = { hits: 0, shots: 0, culled: 0 };
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < FIGHTS; i++) {
       const one = await run(mode);
       acc.hits += one.hits; acc.shots += one.shots; acc.culled += one.culled;
     }
     return acc;
   };
   return { free: await total('free'), assisted: await total('assisted') };
-});
+}, Number(process.env.AIM_FIGHTS ?? 24));
 const rate = (a) => (a.shots ? (a.hits / a.shots) * 100 : 0);
+const FIGHTS = Number(process.env.AIM_FIGHTS ?? 24);
 ok('a player who never aims can still resolve a fight assisted, and cannot free',
-   playable.assisted.hits >= playable.free.hits * 2 && playable.assisted.culled > playable.free.culled,
-   `trigger held at a fixed bearing, 6 fights each: free ${playable.free.hits}/${playable.free.shots}`
+   playable.assisted.hits >= Math.max(20, playable.free.hits * 10)
+   && playable.assisted.culled >= 3 && playable.free.culled === 0,
+   `trigger held at a fixed bearing, ${FIGHTS} fights each: free ${playable.free.hits}/${playable.free.shots}`
    + ` (${rate(playable.free).toFixed(0)}%, ${playable.free.culled} culled)`
    + ` · assisted ${playable.assisted.hits}/${playable.assisted.shots}`
    + ` (${rate(playable.assisted).toFixed(0)}%, ${playable.assisted.culled} culled)`);
@@ -272,4 +290,5 @@ ok('no horizontal overflow at 390px with every pad showing', overflow === 0, `${
 await page.screenshot({ path: process.argv[2] ?? 'aim.png' });
 await browser.close();
 console.log(errors.length ? `\nCONSOLE ERRORS:\n${errors.join('\n')}` : '\nno console errors');
-process.exit(errors.length ? 1 : 0);
+if (fails) console.log(`${fails} check(s) FAILED`);
+process.exit(errors.length || fails ? 1 : 0);

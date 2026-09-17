@@ -8,7 +8,14 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 950 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-const ok = (l, c, x = '') => console.log(`${c ? 'PASS' : 'FAIL'}  ${l}${x ? '  — ' + x : ''}`);
+/*
+ * A failing check must FAIL THE RUN. Until this counted, every suite exited on
+ * console errors alone: a red FAIL line printed, the runner read exit code 0,
+ * and the run announced "all suites passed" underneath it. A check that cannot
+ * fail the build is a comment with extra steps.
+ */
+let fails = 0;
+const ok = (l, c, x = '') => { if (!c) fails++; console.log(`${c ? 'PASS' : 'FAIL'}  ${l}${x ? '  — ' + x : ''}`); };
 
 /** Start a battle against a named species with a chosen team. */
 await page.addInitScript(() => {
@@ -34,9 +41,34 @@ await page.addInitScript(() => {
     const base = r.patrol.spawns[0];
     if (!base) return null;
     r.teleportTo(base);
-    r.startBattle({ ...base, id: `b-${Math.random()}`, speciesId: wildId, packSize: 1 });
+    r.startBattle({ ...base, id: `b-${Math.random()}`, speciesId: wildId, packSize: opts.packSize ?? 1 });
     await new Promise((d) => setTimeout(d, 350));
     return r.battle;
+  };
+
+  /*
+   * Play a battle to its end with a fixed policy, straight through the engine.
+   * Deliberately NOT by clicking: the menu is rebuilt every turn and an earlier
+   * suite of mine spent a while chasing a stale button rather than a real bug.
+   */
+  window.playOut = (policy = 'fight') => {
+    const r = window.__riftborn;
+    const b = r.battle;
+    for (let i = 0; i < 200 && !b.outcome; i++) {
+      const o = r.battleOptions();
+      if (policy === 'catch' && b.wild.hp / b.wild.maxHp < 0.5) {
+        const ammo = r.data.ammo.capture.find((a) => r.profile.ammoCount(a.id) > 0);
+        if (ammo) { r.takeTurn({ kind: 'catch', ammoId: ammo.id }); continue; }
+      }
+      // Whichever move hits hardest, which is what a competent player converges on.
+      let best = 0, bestI = 0;
+      o.moves.forEach((m, j) => {
+        const d = r.computeMoveDamage(r.activeMon(b) ?? b.wild, b.wild, m, r.data, () => 0.5).damage;
+        if (d > best) { best = d; bestI = j; }
+      });
+      r.takeTurn({ kind: 'move', index: bestI });
+    }
+    return b;
   };
 });
 
@@ -269,7 +301,166 @@ ok('the real-time arena is still there for anyone who wants it',
    arena.wentToArena && arena.hasFight,
    'the world panel switches combat mode, and the old shooter runs unchanged');
 
-// --- 11. phone layout
+// --- 11. a pack comes up one at a time, and every member is recorded
+const pack = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['cinderfang', 'brinelet', 'sporelet'], 'sparkmite', { packSize: 3 });
+  const b = r.battle;
+  const started = { wilds: b.wilds.length, facing: b.wild.speciesId, remaining: r.remaining(b) };
+  const seen = [];
+  for (let i = 0; i < 400 && !b.outcome; i++) {
+    seen.push(b.wild);
+    window.playOut('fight');
+    if (b.outcome) break;
+  }
+  const distinct = new Set(b.wilds.map((w) => w.heightM)).size;
+  const before = r.profile.entry('sparkmite');
+  const beforeN = (before.culled ?? 0) + (before.catalogued ?? 0);
+  const beforeEnc = r.profile.state.stats.encounters;
+  r.finishBattle();
+  const after = r.profile.entry('sparkmite');
+  const outcomes = b.results.map((x) => x.outcome);
+  return {
+    ...started,
+    results: b.results.length,
+    outcomes,
+    distinct,
+    /*
+     * An escape is recorded but is neither a cull nor a catalogue, which the
+     * first version of this check forgot — it demanded three kept specimens
+     * from a pack where one got away, and failed on correct behaviour. Count
+     * encounters for "every member was resolved", and kept specimens against
+     * the members that did not get away.
+     */
+    encounters: r.profile.state.stats.encounters - beforeEnc,
+    kept: (after.culled ?? 0) + (after.catalogued ?? 0) - beforeN,
+    wantKept: outcomes.filter((o) => o !== 'escaped').length,
+  };
+});
+ok('a pack of three is three monsters, fought one at a time and recorded one at a time',
+   pack.wilds === 3 && pack.results === 3 && pack.distinct === 3
+   && pack.encounters === 3 && pack.kept === pack.wantKept,
+   `${pack.wilds} queued · ${pack.results} reached an ending (${pack.outcomes.join(', ')})`
+   + ` · ${pack.encounters} encounters logged · ${pack.kept} specimens kept of ${pack.wantKept}`
+   + ` that did not get away · ${pack.distinct} distinct measured heights`);
+
+// --- 12. the replacement does not get a free hit on the turn it arrives
+/*
+ * Read the LOG, not our health. The first version of this check compared HP
+ * across the changeover turn and failed on correct behaviour: when the wild
+ * moves first it hits us and THEN dies, so damage on a KO turn is perfectly
+ * legitimate and the check could not tell it from a free hit.
+ *
+ * "Another X steps up" is the last thing that happens when a member is
+ * replaced, so anything logged after it in the same turn is the free hit.
+ */
+const freeHit = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['pyrecrown'], 'sparkmite', { packSize: 3, study: 3000 });
+  const b = r.battle;
+  const changeovers = [];
+  for (let i = 0; i < 80 && !b.outcome; i++) {
+    const idx = b.index;
+    let best = 0, bestI = 0;
+    r.battleOptions().moves.forEach((m, j) => {
+      const d = r.computeMoveDamage(r.activeMon(b), b.wild, m, r.data, () => 0.5).damage;
+      if (d > best) { best = d; bestI = j; }
+    });
+    const lines = r.takeTurn({ kind: 'move', index: bestI }).map((l) => l.text);
+    if (b.index > idx) {
+      const at = lines.findIndex((t) => t.startsWith('Another '));
+      changeovers.push({ turn: i + 1, after: lines.slice(at + 1), last: lines.at(-1) });
+    }
+  }
+  return { changeovers, n: changeovers.length };
+});
+ok('the monster that steps up does not also attack on the turn it arrives',
+   freeHit.n >= 1 && freeHit.changeovers.every((c) => c.after.length === 0),
+   `${freeHit.n} changeover(s), nothing logged after any of them`
+   + ` — e.g. turn ${freeHit.changeovers[0]?.turn} ends "${freeHit.changeovers[0]?.last}"`
+   + ' · a pack of three would otherwise collect free hits from the shape of the loop');
+
+// --- 13. a fight is the same length whether it is a Mote or a Titan
+const lengths = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const rows = r.data.monsters.monsters.map((sp) => {
+    const lvl = 4 + ((sp.stage ?? 1) - 1) * 6;
+    const a = r.makeCombatant(sp, lvl, r.data, { resident: { study: 0 } });
+    const d = r.makeCombatant(sp, lvl, r.data, { wild: true });
+    const best = Math.max(...a.moves.map((m) => r.computeMoveDamage(a, d, m, r.data, () => 0.5).damage));
+    return { id: sp.id, stage: sp.stage ?? 1, turns: Math.ceil(d.maxHp / best) };
+  });
+  const med = (n) => {
+    const v = rows.filter((x) => x.stage === n).map((x) => x.turns).sort((a, b) => a - b);
+    return v[Math.floor(v.length / 2)];
+  };
+  const worst = rows.sort((a, b) => b.turns - a.turns)[0];
+  return { s1: med(1), s2: med(2), s3: med(3), worst };
+});
+ok('an apex fight is a fight, not an endurance test',
+   lengths.worst.turns <= 15 && Math.abs(lengths.s3 - lengths.s1) <= 3,
+   `mirror match: ${lengths.s1} turns at stage 1 · ${lengths.s2} at stage 2 · ${lengths.s3} at stage 3`
+   + ` · worst in the book is ${lengths.worst.id} at ${lengths.worst.turns}`
+   + ' — an absolute damage base made this 6 / 14 / 41, and Karrahk 118');
+
+// --- 14. winning teaches the monsters that fought, and only those
+const study = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['cinderfang', 'brinelet', 'sporelet'], 'sootpup', { study: 100 });
+  const b = r.battle;
+  const before = r.profile.state.residents.map((x) => x.study);
+  window.playOut('fight');
+  const outcome = b.outcome;
+  const wildLevel = b.wild.level;
+  const mineLevel = r.activeMon(b).level;
+  r.finishBattle();
+  const after = r.profile.state.residents.map((x) => x.study);
+  return {
+    outcome, wildLevel, mineLevel,
+    gained: after.map((x, i) => x - before[i]),
+    expected: r.studyFromBattle(wildLevel, mineLevel, outcome),
+  };
+});
+ok('the monster that fought learns something; the two on the bench do not',
+   study.gained[0] > 0 && study.gained[1] === 0 && study.gained[2] === 0
+   && study.gained[0] === study.expected,
+   `won as "${study.outcome}" · Lv.${study.mineLevel} against Lv.${study.wildLevel}`
+   + ` → +${study.gained[0]} Study for the one on the field, +${study.gained[1]}/+${study.gained[2]} for the bench`);
+
+// --- 15. swapping a monster in shares the lesson, at the cost of a turn
+const shared = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['cinderfang', 'brinelet'], 'sootpup', { study: 100 });
+  const b = r.battle;
+  const before = r.profile.state.residents.map((x) => x.study);
+  r.takeTurn({ kind: 'swap', index: 1 });      // costs the turn, buys the share
+  window.playOut('fight');
+  r.finishBattle();
+  const after = r.profile.state.residents.map((x) => x.study);
+  return { gained: after.map((x, i) => x - before[i]), outcome: b.outcome, turns: b.turn };
+});
+ok('a monster you swap in has been in the fight, and is taught for it',
+   shared.gained[0] > 0 && shared.gained[1] > 0,
+   `both learned (+${shared.gained[0]} and +${shared.gained[1]}) over ${shared.turns} turns`
+   + ' — the swap costs a turn, which is the price of the share');
+
+// --- 16. grinding something trivial stops paying
+const grind = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const sp = r.data.monsters.monsters.find((m) => m.id === 'sootpup');
+  const wl = r.wildLevel(sp, 3);
+  const rows = [0, 400, 1600, 3600].map((s) => ({
+    study: s, level: r.levelOf({ study: s }, sp), got: r.studyFromBattle(wl, r.levelOf({ study: s }, sp), 'defeated'),
+  }));
+  return { wl, rows };
+});
+ok('a raised monster stops learning from what it has outgrown',
+   grind.rows[0].got > grind.rows[3].got * 3 && grind.rows[3].got > 0,
+   `the same Lv.${grind.wl} wild teaches `
+   + grind.rows.map((x) => `Lv.${x.level}: ${x.got}`).join(' · ')
+   + ' — worth about a fifth once you have outgrown it, never zero');
+
+// --- 17. phone layout
 await page.setViewportSize({ width: 390, height: 844 });
 await page.evaluate(async () => { await window.battleWith(['brinelet'], 'cinderfang'); });
 await page.waitForTimeout(400);
@@ -279,4 +470,5 @@ ok('no horizontal overflow at 390px', overflow === 0, `${overflow}px`);
 await page.screenshot({ path: process.argv[2] ?? 'battle.png' });
 await browser.close();
 console.log(errors.length ? `\nCONSOLE ERRORS:\n${errors.join('\n')}` : '\nno console errors');
-process.exit(errors.length ? 1 : 0);
+if (fails) console.log(`${fails} check(s) FAILED`);
+process.exit(errors.length || fails ? 1 : 0);

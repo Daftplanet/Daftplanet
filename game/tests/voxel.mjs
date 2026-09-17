@@ -8,7 +8,14 @@ const page = await browser.newPage({ viewport: { width: 1280, height: 950 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-const ok = (l, c, x = '') => console.log(`${c ? 'PASS' : 'FAIL'}  ${l}${x ? '  — ' + x : ''}`);
+/*
+ * A failing check must FAIL THE RUN. Until this counted, every suite exited on
+ * console errors alone: a red FAIL line printed, the runner read exit code 0,
+ * and the run announced "all suites passed" underneath it. A check that cannot
+ * fail the build is a comment with extra steps.
+ */
+let fails = 0;
+const ok = (l, c, x = '') => { if (!c) fails++; console.log(`${c ? 'PASS' : 'FAIL'}  ${l}${x ? '  — ' + x : ''}`); };
 
 await page.goto(URL, { waitUntil: 'networkidle' });
 await page.evaluate(() => localStorage.clear());
@@ -221,4 +228,5 @@ ok('no horizontal overflow at 390px', overflow === 0, `${overflow}px`);
 await page.screenshot({ path: process.argv[2] ?? 'voxel.png' });
 await browser.close();
 console.log(errors.length ? `\nCONSOLE ERRORS:\n${errors.join('\n')}` : '\nno console errors');
-process.exit(errors.length ? 1 : 0);
+if (fails) console.log(`${fails} check(s) FAILED`);
+process.exit(errors.length || fails ? 1 : 0);

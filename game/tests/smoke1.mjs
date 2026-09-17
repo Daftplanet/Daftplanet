@@ -11,7 +11,12 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('requestfailed', (r) => errors.push(`requestfailed: ${r.url()} ${r.failure()?.errorText}`));
 
-const ok = (label, cond, extra = '') => console.log(`${cond ? 'PASS' : 'FAIL'}  ${label}${extra ? '  — ' + extra : ''}`);
+/*
+ * A failing check must FAIL THE RUN — see the note in the other suites: this
+ * exited on console errors alone, so a FAIL line never reached the exit code.
+ */
+let fails = 0;
+const ok = (label, cond, extra = '') => { if (!cond) fails++; console.log(`${cond ? 'PASS' : 'FAIL'}  ${label}${extra ? '  — ' + extra : ''}`); };
 
 await page.goto(URL, { waitUntil: 'networkidle' });
 await page.waitForFunction(() => window.__riftborn !== undefined, null, { timeout: 8000 });
@@ -317,4 +322,5 @@ await mobile.screenshot({ path: (process.argv[2] ?? 'p1.png').replace('.png', '-
 
 await browser.close();
 console.log(errors.length ? `\nCONSOLE ERRORS:\n${errors.join('\n')}` : '\nno console errors');
-process.exit(errors.length ? 1 : 0);
+if (fails) console.log(`${fails} check(s) FAILED`);
+process.exit(errors.length || fails ? 1 : 0);

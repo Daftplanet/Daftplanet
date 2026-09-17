@@ -1149,14 +1149,204 @@ positions, plus a no-CORS variant and a 404 variant — which exercises the whol
 path end to end and does not depend on OpenStreetMap being up. **The real basemap
 is unverified by eye and will need a look on a device with a normal connection.**
 
+# Phase 4, part 2: making the battle feed the game around it
+
+Two of the three things the last section left open, and a third that was hiding
+underneath them.
+
+## Your monsters got stronger by sitting in their pen
+
+A resident's level is `4 + floor(sqrt(study)/2) + (stage-1)*6`. Study came from
+habitat time (1/minute), walking (25/km) and feeding (40 for three materials).
+None of those involve the monster doing anything, and `finishBattle` granted
+none of the three.
+
+So the default combat mode — the thing you now spend the whole game doing —
+taught your monsters **nothing at all**. In Pokémon terms: no experience from
+battles. The raising loop and the fighting loop were two separate games sharing
+a save file.
+
+Study for fighting is now participation × opposition:
+
+```
+study = 5.5 × wildLevel × clamp(wildLevel / myLevel, 0.25, 2.5) × outcomeScale
+```
+
+Three deliberate choices in that line:
+
+- **Participation is the gate.** Whoever was on the field learns; the bench does
+  not. Swapping a weak monster in to share the lesson costs you the turn, which
+  is the trade that makes it a decision.
+- **No stage bonus**, although one is the obvious thing to write. `wildLevel`
+  already adds six per stage, so a stage bonus counts stage twice — and that
+  made the *harder* evolution the *cheaper* one in battles.
+- **Winning is winning.** A cull teaches exactly what a capture does, because
+  the game's thesis is that both are legitimate. Losing teaches a quarter;
+  running away teaches less than losing, because you did not stay in it.
+
+### The arithmetic was naive and the measurement said so
+
+I calibrated by hand first: 400 Study at ~22 a battle is 18 battles, 1600 at
+~100 is 16, near enough equal, done. I wrote that in the comment.
+
+Then `STUDY=1 node game/tools/balance_sim.mjs` played real battles through
+`battle.js` and accumulated Study until each threshold, 120 traces per tier:
+
+| tier | battles | won | turns each | Study/battle | = passive |
+|---|---|---|---|---|---|
+| stage 1 → 2 (400) | 29.8 | 96% | 5.6 | 13 | 0.2 h |
+| stage 2 → 3 (1600) | 31.0 | 76% | 9.0 | 52 | 0.9 h |
+
+Thirty battles, not seventeen. Dividing a threshold by a nominal per-battle
+figure ignores that **the reward shrinks as the monster you are raising outgrows
+what you are fighting**, so the last stretch to a threshold is far slower than
+the first. Only accumulating shows that. The comment now carries the measured
+table instead of my arithmetic.
+
+The ratio that matters came out right without being aimed at: a battle is worth
+about 13 minutes of habitat time at tier 1 and 52 at tier 2, and takes two or
+three minutes to play. Active play beats idling by roughly five to one, and
+idling still earns its keep overnight.
+
+## A pack of three was one monster and a lie on the engage card
+
+`startBattle` built a single combatant and ignored `spawn.packSize` entirely,
+then resolved the whole spawn. The engage card said "Sparkmite ×3", you fought
+one, and the other two evaporated — a phase of pack work bypassed by the default
+combat mode.
+
+A pack is a **queue**, not a crowd: one member at a time, each its own
+individual with its own measured height and its own Restraint requirement.
+That is the only reading that keeps the rest of the engine honest, because
+Restraint, the catch roll and the flee check are all written about an
+individual. What makes a pack hard is that **your side does not heal between
+members**, so the third one meets whatever the first two left of you.
+
+The replacement does not act on the turn it arrives. Without that the order loop
+runs straight on past the member you just downed and lets a fresh, full-health
+monster hit you in the same turn — a pack of three would collect three free
+attacks purely from the shape of a `for` loop. There is a check for it now.
+
+Per-member results come back in the same shape the arena's `fight.results`
+already used, so a pack can still end as two culls and a capture and **the Codex
+cannot tell which combat mode you played**.
+
+## And underneath both: an apex fight was 118 turns
+
+This one was found by accident. The Study diagnostic reported stage 2 battles
+running 21 turns against stage 1's 7, which is not a Study problem, so I measured
+turns-to-kill in a mirror match across all 43 species:
+
+| stage | median turns | worst |
+|---|---|---|
+| 1 | 6 | 9 |
+| 2 | 14 | 27 |
+| 3 | **41** | **Karrahk, 118** |
+
+Nobody taps a button 118 times. The apexes — the fights the entire rift system
+exists to deliver — were unplayable, and it had gone unnoticed because
+everything anyone had actually played was stage 1.
+
+The cause was the fix from the previous section. Damage was
+
+```
+base_damage × (power/50) × (attack/30)^0.55 × effectiveness × stab × roll × (1−armour)
+```
+
+That `^0.55` is what rescued the type chart from being buried under the attack
+stat. But **health did not get the same treatment**: health grows with level,
+size class *and* evolution stage, while damage now grew with the 0.55 power of
+one of those. Every tier of the game was slower than the last, compounding.
+
+Damage is now a share of what it is hitting:
+
+```
+defender.maxHp × 0.15 × (power/50) × (attackRatio)^0.55 × effectiveness × stab × roll × (1−armour)
+```
+
+Turns-to-kill is scale-free by construction. Measured over the same 43 species:
+**7 turns at stage 1, 7 at stage 2, 8 at stage 3**, with the whole bestiary
+inside 12. And the thing the compression was protecting survives intact — a
+super-effective move takes 47% of a target's health where a resisted one takes
+22%, so the chart is worth 2.1× and is plainly visible in the bar.
+
+The extremes stay extreme, which is the point. Karrahk one-shots a Glimmerfly.
+A Glimmerfly needs 44 turns to fell a Karrahk — it will be dead long before, and
+that is the correct answer to bringing a Mote to an apex rather than a number to
+tune away.
+
+## The suites could not fail
+
+While chasing a flaky check I noticed the run announcing **`all suites passed`
+with a red `FAIL` line above it**.
+
+Every suite ended `process.exit(errors.length ? 1 : 0)` — it exited on console
+errors and on nothing else. The `ok()` helper printed `PASS` or `FAIL` and threw
+the result away. So for fourteen suites and several hundred checks, a check
+could go red and the build stayed green.
+
+A check that cannot fail the build is a comment with extra steps. All fourteen
+count failures now and exit on them.
+
+The check it was hiding was `aim`'s ninth: a never-aiming assisted player
+finishes about a third of its fights, so over six fights it expects **two**
+culls, and zero came up about half the time against an assertion wanting at
+least one. It was failing two runs in three on `main`, invisibly. At 24 fights
+the count is 7 to 11 against free aim's flat zero — a signal rather than a coin
+toss. The threshold is 3, with margin.
+
+That makes it three bugs in this section found by measuring something else:
+the 118-turn apex was found by a Study diagnostic, and the dead check was found
+by a flake in an unrelated suite.
+
+### And one it surfaced that is not yet explained
+
+With failures counting, a full run turned up a phase 1 (arena) failure that had
+never been visible before:
+
+```
+FAIL  fight reaches an outcome — unresolved after 59 loops, stopped on "no live target"
+  {"pack":["escaped 210/210","escaped 133/210","escaped 193/210"],"outcome":"driven_off",
+   "restraint":"0/265","shots":24,"hits":4,"ammo":"L 0+0 / C 8+4","playerHp":0}
+```
+
+The scripted player lost a Voltfang ×3 fight — legitimate — the engine set
+`driven_off` correctly, and `finishFight()` ran (the next check confirms the
+profile recorded it). But the result overlay never became visible inside the
+three seconds the suite waits, so the encounter is a soft-lock for as long as it
+lasts: the fight is over and the screen does not say so.
+
+**What is known:** it is rare — once in about thirteen `phase1` runs. It is in
+the real-time arena, which this section's diff does not touch: the arena reads
+no `battle_rules`, `game.js`/`rules.js`/`render.js` are unchanged, and `smoke1`
+pins itself to arena mode so none of the turn-based code runs. Six targeted runs
+on the branch point and six on this work both passed 6/6, including seven
+`driven_off` endings between them that displayed correctly.
+
+**What is not known:** why that one did not. Forcing `driven_off` two other ways
+— running the magazines dry, and standing still at 1 HP against an aware pack —
+would not reproduce it, and there were no console errors, which rules out the
+obvious candidate of an exception in `showOutcome` being swallowed by the frame
+loop's catch.
+
+It is left open rather than guessed at. It is listed below.
+
 ## Still open
 
 1. **Party play** and the server-side half of Codex sharing, unchanged.
-2. Battles are one-on-one against a single wild monster; pack spawns still route
-   through the arena, and a turn-based pack fight is undesigned.
-3. The apexes' phased fights are arena-only. A phased turn-based apex needs its
-   own design pass.
-4. Levels are derived from Study, so a resident you have raised is stronger — but
-   nothing yet *awards* Study for winning a battle, which is the obvious loop.
-5. Moves are two per element plus a universal. No status moves, no PP, no
+2. The apexes' phased fights are arena-only. `battle.js` has no concept of a
+   phase, so a rift boss is currently a large stat block with a correct number
+   of turns in it. A phased turn-based apex needs its own design pass, starting
+   with what a phase *means* in a turn system — a forced move, a stat shift, a
+   mid-fight type change.
+3. Moves are two per element plus a universal. No status moves, no PP, no
    switching costs beyond the turn.
+4. Study is granted per participant with no cap, so a three-monster rotation
+   earns three times a solo run for the price of two turns. That is deliberate —
+   it rewards raising a stable rather than one favourite — but it has not been
+   measured over a long horizon and may want a share term.
+5. **The arena's unexplained `driven_off` soft-lock**, above. Rare, pre-existing
+   as far as six runs either side of the change can show, and now at least
+   visible instead of silently green. It needs a reproduction before it needs a
+   fix, and the arena is the legacy combat mode, so it is not urgent — but it is
+   a real hole and it should not be closed by loosening the check.

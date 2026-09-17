@@ -20,7 +20,14 @@ page.on('console', (m) => {
   if (/404/.test(text) && /Not Found/.test(text)) return;
   errors.push(text);
 });
-const ok = (l, c, x = '') => console.log(`${c ? 'PASS' : 'FAIL'}  ${l}${x ? '  — ' + x : ''}`);
+/*
+ * A failing check must FAIL THE RUN. Until this counted, every suite exited on
+ * console errors alone: a red FAIL line printed, the runner read exit code 0,
+ * and the run announced "all suites passed" underneath it. A check that cannot
+ * fail the build is a comment with extra steps.
+ */
+let fails = 0;
+const ok = (l, c, x = '') => { if (!c) fails++; console.log(`${c ? 'PASS' : 'FAIL'}  ${l}${x ? '  — ' + x : ''}`); };
 
 /*
  * Point the app at the runner's fake tile server. Real providers are not used by
@@ -341,4 +348,5 @@ ok('no horizontal overflow at 390px', overflow === 0, `${overflow}px`);
 await page.screenshot({ path: process.argv[2] ?? 'map.png' });
 await browser.close();
 console.log(errors.length ? `\nCONSOLE ERRORS:\n${errors.join('\n')}` : '\nno console errors');
-process.exit(errors.length ? 1 : 0);
+if (fails) console.log(`${fails} check(s) FAILED`);
+process.exit(errors.length || fails ? 1 : 0);

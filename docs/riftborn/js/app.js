@@ -19,13 +19,13 @@ import { drawFieldReport, toPng } from './report.js';
 import { buildModel, modelFor, fitModel, spriteFor, clearVoxelCache } from './voxel.js';
 import {
   createBattle, makeCombatant, takeTurn, options, catchChance,
-  levelOf, wildLevel, activeMon, movesFor, computeMoveDamage,
+  levelOf, wildLevel, activeMon, movesFor, computeMoveDamage, remaining,
 } from './battle.js';
 import {
   buildPool, apexForecast, riftForCell, placementFits, inTimeWindow, weatherIs, biomeAt,
   PLACEMENT_VOCABULARY, WEATHER, RIFT_RANK, RIFT_RADIUS_M, TILE_M, visibleSpawns,
 } from './world.js';
-import { blockers, escortAbility } from './sanctuary.js';
+import { blockers, escortAbility, studyFromBattle, studyAsMinutes } from './sanctuary.js';
 import {
   createPatrol, stepPatrol, drawPatrol, patrolClock, biomeUnderfoot, biomeAtWorld, placePatrol,
   VIEW as MAP_VIEW, ELEMENT_COLOUR,
@@ -380,14 +380,26 @@ function boot(data) {
       })
       .filter(Boolean);
 
-    const wild = makeCombatant(sp, wildLevel(sp, profile.rank), data, { wild: true });
-    battle = createBattle({ data, team, wild, weapon });
+    /*
+     * A pack comes up one at a time. Each member is its own individual — its own
+     * measured height, its own Restraint requirement — because the Codex records
+     * specimens and a pack of three is three specimens, not one fought thrice.
+     */
+    const packSize = Math.max(1, spawn.packSize ?? 1);
+    const level = wildLevel(sp, profile.rank);
+    const wilds = Array.from({ length: packSize }, () => makeCombatant(sp, level, data, { wild: true }));
+
+    battle = createBattle({ data, team, wilds, weapon });
     battleSpawn = spawn;
+    // Captured once, at engage: the card names a biome and never a position.
+    fightBiome = biomeUnderfoot(patrol);
     battleMenu = 'root';
     battleBusy = false;
 
-    $('battle-where').textContent = `${title(biomeUnderfoot(patrol))} · ${WEATHER[patrol.weather]?.name ?? ''}`;
-    $('battle-log').innerHTML = `<p data-kind="info">A wild ${sp.name} blocks your way.</p>`;
+    $('battle-where').textContent = `${title(fightBiome)} · ${WEATHER[patrol.weather]?.name ?? ''}`;
+    $('battle-log').innerHTML = `<p data-kind="info">${packSize > 1
+      ? `A pack of ${packSize} ${sp.name} blocks your way. They come at you one at a time.`
+      : `A wild ${sp.name} blocks your way.`}</p>`;
     renderBattle();
     show('battle');
   }
@@ -401,6 +413,15 @@ function boot(data) {
     const mine = activeMon(b);
 
     $('battle-turn').textContent = `Turn ${Math.max(1, b.turn)}`;
+    const packed = b.wilds.length > 1;
+    $('battle-pack').hidden = !packed;
+    $('battle-pack-sep').hidden = !packed;
+    if (packed) {
+      // Filled pips for what is still coming, hollow for what is dealt with.
+      const done = b.results.length;
+      $('battle-pack').textContent = `${'●'.repeat(b.wilds.length - done)}${'○'.repeat(done)} `
+        + `${remaining(b)} of ${b.wilds.length} left`;
+    }
     $('wild-name').textContent = w.species.name;
     $('wild-level').textContent = `Lv.${w.level}`;
     $('wild-hp').style.width = `${(w.hp / w.maxHp) * 100}%`;
@@ -531,13 +552,25 @@ function boot(data) {
     }
   }
 
-  const outcomeLine = (b) => ({
-    caught: 'It is yours.',
-    defeated: 'It goes down.',
-    fled: 'You broke off.',
-    escaped: 'It got away.',
-    wiped: 'You have nothing left.',
-  }[b.outcome] ?? '');
+  const outcomeLine = (b) => {
+    if (b.wilds.length > 1) {
+      // A pack can end as two culls and a capture; say which, not just "caught".
+      const n = (o) => b.results.filter((r) => r.outcome === o).length;
+      const bits = [
+        n('caught') && `${n('caught')} caught`,
+        n('defeated') && `${n('defeated')} down`,
+        n('escaped') && `${n('escaped')} got away`,
+      ].filter(Boolean);
+      if (bits.length) return bits.join(' · ');
+    }
+    return {
+      caught: 'It is yours.',
+      defeated: 'It goes down.',
+      fled: 'You broke off.',
+      escaped: 'It got away.',
+      wiped: 'You have nothing left.',
+    }[b.outcome] ?? '';
+  };
 
   /** Take a turn and play its log out, a line at a time, so the fight reads. */
   async function act(action) {
@@ -561,29 +594,69 @@ function boot(data) {
     renderBattle();
   }
 
+  /** How a member's battle ending is written into the Codex. */
+  const CODEX_OUTCOME = { caught: 'catalogued', defeated: 'culled', escaped: 'escaped', wiped: 'escaped' };
+
   function finishBattle() {
     const b = battle;
     const sp = b.wild.species;
+    const biome = fightBiome ?? biomeUnderfoot(patrol);
     const before = { xp: profile.state.xp, ess: profile.state.essence, rp: profile.state.researchPoints };
 
     // Every round fired is gone, landed or not.
     for (const [id, n] of Object.entries(b.spent)) profile.spendAmmo(id, n);
 
-    if (b.outcome === 'caught') {
-      profile.recordOutcome(sp, 'catalogued', {
-        clean: b.wild.hp / b.wild.maxHp > 0.8,
-        hpFraction: b.wild.hp / b.wild.maxHp,
-        method: `${weaponLabel()} · ${data.ammo.capture.find((a) => a.id === b.caughtWith)?.name ?? ''}`,
-        methodAmmo: b.caughtWith,
-        weaponId: profile.slots[0]?.weaponId ?? null,
-        heightM: b.wild.heightM, percentile: b.wild.percentile,
-        biome: fightBiome ?? biomeUnderfoot(patrol),
+    /*
+     * Members that reached an ending, plus the one still standing when the
+     * encounter was called. Being driven off or backing out is an ending too —
+     * for the Codex it reads as "it got away", and for Study it is worth less
+     * than a win but more than nothing, because you were in the fight.
+     */
+    const resolved = [...b.results];
+    if ((b.outcome === 'wiped' || b.outcome === 'fled') && b.wild && !b.wild.resolved) {
+      resolved.push({
+        speciesId: b.wild.speciesId, outcome: b.outcome, level: b.wild.level,
+        clean: false, hpFraction: b.wild.hp / b.wild.maxHp,
+        heightM: b.wild.heightM, percentile: b.wild.percentile, caughtWith: null,
       });
-    } else if (b.outcome === 'defeated') {
-      profile.recordOutcome(sp, 'culled', { biome: fightBiome ?? biomeUnderfoot(patrol) });
-    } else if (b.outcome === 'escaped' || b.outcome === 'wiped') {
-      profile.recordOutcome(sp, 'escaped', {});
     }
+
+    // A pack resolves per member, exactly as the arena does, so the Codex cannot
+    // tell which combat mode you played.
+    for (const r of resolved) {
+      const kind = CODEX_OUTCOME[r.outcome];
+      if (!kind) continue;                              // 'fled' records nothing
+      // Per result rather than per battle: packs are one species today, and
+      // reading it off the member costs nothing and stops being a trap later.
+      const rsp = speciesById[r.speciesId] ?? sp;
+      profile.recordOutcome(rsp, kind, kind === 'catalogued' ? {
+        clean: r.clean,
+        hpFraction: r.hpFraction,
+        method: `${weaponLabel()} · ${data.ammo.capture.find((a) => a.id === r.caughtWith)?.name ?? ''}`,
+        methodAmmo: r.caughtWith,
+        weaponId: profile.slots[0]?.weaponId ?? null,
+        heightM: r.heightM, percentile: r.percentile,
+        biome,
+      } : kind === 'culled' ? { biome } : {});
+    }
+
+    /*
+     * Study for whoever was on the field. Before this, winning a battle taught
+     * your monsters nothing at all — level is a function of Study, and Study
+     * only came from habitat time, walking and feeding, so a monster got
+     * stronger by sitting in its pen while the thing you spend the whole game
+     * doing counted for zero.
+     */
+    const taught = [];
+    for (const c of b.team) {
+      if (!c.participated || !c.resident) continue;
+      let gained = 0;
+      for (const r of resolved) gained += studyFromBattle(r.level, c.level, r.outcome);
+      if (gained <= 0) continue;
+      c.resident.study += gained;
+      taught.push({ name: c.species.name, gained });
+    }
+
     if (b.outcome !== 'fled') profile.resolve(battleSpawn.id);
     profile.save();
 
@@ -592,6 +665,7 @@ function boot(data) {
       after.xp - before.xp && `+${fmt(after.xp - before.xp)} XP`,
       after.essence - before.ess && `+${fmt(after.essence - before.ess)} essence`,
       after.researchPoints - before.rp && `+${fmt(after.researchPoints - before.rp)} RP`,
+      taught.length && `${taught.map((t) => `${t.name} +${fmt(t.gained)} Study`).join(' · ')}`,
     ].filter(Boolean).join(' · ');
     if (gains) flash(gains);
 
@@ -1664,7 +1738,7 @@ function boot(data) {
     finishBattle, renderBattle,
     catchChance: (ammo) => catchChance(battle, ammo),
     makeCombatant, createBattle, levelOf, wildLevel, movesFor, activeMon,
-    computeMoveDamage,
+    computeMoveDamage, remaining, studyFromBattle, studyAsMinutes,
     loadLoadout, applyMods, modUnlocked, fittedMods,
     speciesHeight, rollSpecimen, heightPercentile, createFight, drawFieldReport,
     escortAbility, useEscort, cycleLock, assistPhase, assistMiss, ringSeconds,

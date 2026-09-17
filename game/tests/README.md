@@ -19,7 +19,7 @@ they cover every phase that has been built.
 | `placement.mjs` | that the engine speaks every placement term the bestiary uses, that no biome is dead ground, that each apex appears only where and when its entry allows, and that the forecast finds it |
 | `map.mjs` | the Web Mercator projection against known figures, tile addressing, biome-by-colour, GPS and drag-to-move, and every way a basemap can fail |
 | `voxel.mjs` | that all 43 species build a solid model with their weak points on it, that the shapes derive from the Codex entry rather than a fresh roll, and that a Titan and a Mote both fit their frame |
-| `battle.mjs` | the turn-based fight: move sets, the type chart beating the stat gap, the catch roll inheriting the Restraint maths, priority, swapping, and that a Warden with no monsters can still win their first fight |
+| `battle.mjs` | the turn-based fight: move sets, the type chart beating the stat gap, the catch roll inheriting the Restraint maths, priority, swapping, packs fought and recorded one member at a time, an apex fight that is a fight rather than an endurance test, Study going only to whoever was on the field, and that a Warden with no monsters can still win their first fight |
 
 ## Running them
 
@@ -35,6 +35,19 @@ woodland, parkland and built ground in known positions — so the whole map path
 (fetch, decode, classify, draw) is testable without the internet. A suite that
 needs OpenStreetMap to be up fails for reasons that are not the code's. Set `CHROMIUM=/path/to/chrome` if Playwright cannot find a browser,
 or `RIFTBORN_URL` to point a single suite at an already-running copy.
+
+## For a long time, a failing check did not fail the run
+
+Every suite ended `process.exit(errors.length ? 1 : 0)`. It exited on console
+errors and on nothing else; `ok()` printed `PASS` or `FAIL` and threw the result
+away. So across fourteen suites and several hundred checks, a check could go red
+and the run would still print `all suites passed` underneath it.
+
+It was caught by eye, not by the tooling, while reading output for another
+reason. The check it was hiding had been failing two runs in three.
+
+Every suite counts failures now and exits on them. **A check that cannot fail
+the build is a comment with extra steps.**
 
 ## A warning about these suites
 
@@ -57,6 +70,13 @@ intermittently on "0 spawns in range" for weeks, and a comment — mine — expl
 away as the world working as designed. It was not: 16% of the map had no species
 that could spawn on it. A comment that explains away a failure is worth exactly as
 much as the measurement behind it.
+
+A check can also be honest and still be useless, by asking for a signal too rare
+to see. `aim`'s ninth check wanted a never-aiming assisted player to finish at
+least one of six fights. That player finishes about a third of its fights, so six
+fights expects two — and zero turns up about half the time. The claim was true;
+the sample could not show it. Twenty-four fights gives 7 to 11 against free aim's
+flat zero, and the threshold sits at 3 with margin.
 
 When a suite tells you something surprising, suspect the suite first — and then go
 and check.

@@ -212,7 +212,7 @@
   },
   "dual_element_rule": "Multiply the attacker's multiplier against each of the defender's elements. A Tide/Gale defender hit by Volt takes 2.0 x 2.0 = 4.0.",
   "escort_ability_rules": {
-    "$comment": "Answers decision 1 in 09-risks-and-roadmap.md: 'Limited — one resident gives an active ability.' One escort, one charge per encounter, no autonomous action. The escort never attacks on its own; that is the line between a limited companion and a pet sim.",
+    "$comment": "Answers decision 1 in 09-risks-and-roadmap.md: 'Limited \u2014 one resident gives an active ability.' One escort, one charge per encounter, no autonomous action. The escort never attacks on its own; that is the line between a limited companion and a pet sim.",
     "charges_per_encounter": 1,
     "stage_scale": [
       1.0,
@@ -274,7 +274,7 @@
     "lumen": {
       "id": "kindle",
       "name": "Kindle",
-      "blurb": "Lights what hides — including a weak point that has none.",
+      "blurb": "Lights what hides \u2014 including a weak point that has none.",
       "effect": "illuminate",
       "seconds": 7
     },
@@ -288,9 +288,10 @@
     }
   },
   "battle_rules": {
-    "$comment": "Turn-based battle. Your Sanctuary residents fight; weapons became the capture step. Damage reuses the element chart above, and the catch roll reuses the Restraint maths in ammo.json, so four phases of balance work carry over instead of being thrown away.",
+    "$comment": "Turn-based battle. Your Sanctuary residents fight; weapons became the capture step. Damage reuses the element chart above, and the catch roll reuses the Restraint maths in ammo.json, so four phases of balance work carry over instead of being thrown away. hp_fraction_damage is the share of the DEFENDER's health a power-50 move takes at equal attack stats: damage is relative because health is not, and an absolute base made a mirror match 6 turns at stage 1 and 118 turns against Karrahk.",
     "party_size": 3,
-    "base_damage": 12,
+    "hp_fraction_damage": 0.15,
+    "attack_ratio_exponent": 0.55,
     "stab_multiplier": 1.5,
     "crit_chance": 0.0625,
     "crit_multiplier": 1.75,
