@@ -61,6 +61,59 @@ export function movesFor(species, data) {
   return out;
 }
 
+// ---------------------------------------------------------------- apex phases
+
+/*
+ * An apex is not one fight, it is three or four. The bestiary has always said so
+ * — "phase 1 breaks armour, phase 2 floods the arena, phase 3 exposes the core" —
+ * and the real-time arena has always implemented it. The turn-based battle did
+ * not, so a rift boss was a large stat block with the right number of turns in
+ * it and none of the shape.
+ *
+ * A phase is an HP band, exactly as the arena computes it. What changes at a
+ * boundary is everything that decides how the next stretch plays:
+ *
+ *   armour_scale        how much of what you throw actually lands
+ *   catch_scale         whether it can be taken AT ALL yet — Karrahk's core is
+ *                       exposed only in phase 3, so darting it early is wasted
+ *   moves               it fights differently, rather than harder
+ *   flat_effectiveness  Aeonrend answers the type chart with 1.0 both ways
+ *   conceal             Nyxhollow puts the lights out
+ *
+ * weak_points and armour_scale are read by the arena out of the same table, so
+ * the two combat modes cannot drift apart on what a phase means.
+ */
+export function apexPhaseTable(data, speciesId) {
+  return data.elements.apex_phases?.[speciesId] ?? null;
+}
+
+export function phaseCount(species, data) {
+  if (!species?.apex) return 1;
+  const table = apexPhaseTable(data, species.id);
+  return Math.max(1, table?.length ?? species.phases ?? 1);
+}
+
+/** Which phase an apex is in at this health. Identical banding to game.js. */
+export function phaseAt(hp, maxHp, phases) {
+  if (phases < 2) return 1;
+  return Math.min(phases, 1 + Math.floor((1 - hp / maxHp) * phases));
+}
+
+/** Apply a phase's effects to the combatant. Returns the phase definition. */
+function applyPhase(w, data) {
+  const table = apexPhaseTable(data, w.species.id);
+  const def = table?.[w.phase - 1];
+  if (!def) return null;
+  w.phaseLabel = def.label ?? `Phase ${w.phase}`;
+  w.armour = (w.species.stats.armour_reduction ?? 0) * (def.armour_scale ?? 1);
+  w.catchScale = def.catch_scale ?? 1;
+  w.flatEffectiveness = Boolean(def.flat_effectiveness);
+  w.conceal = Boolean(def.conceal);
+  w.weakPoints = def.weak_points ?? w.species.weak_points;
+  if (def.moves?.length) w.moves = def.moves;
+  return def;
+}
+
 export function makeCombatant(species, level, data, { resident = null, wild = false, specimenRng = Math.random } = {}) {
   const rules = data.elements.battle_rules;
   const stats = statsFor(species, level, rules);
@@ -85,6 +138,13 @@ export function makeCombatant(species, level, data, { resident = null, wild = fa
     armour: stats.armour,
     speed: stats.speed,
     moves: movesFor(species, data),
+    // Apexes only; `armWild` fills these in when the battle starts.
+    phases: 1,
+    phase: 1,
+    phaseLabel: null,
+    catchScale: 1,
+    flatEffectiveness: false,
+    conceal: false,
     statuses: {},          // id -> turns remaining
     restraint: 0,
     required: 0,           // set for the wild side when the battle starts
@@ -106,7 +166,15 @@ export function makeCombatant(species, level, data, { resident = null, wild = fa
  */
 export function computeMoveDamage(attacker, defender, move, data, rng = Math.random) {
   const rules = data.elements.battle_rules;
-  const eff = elementMultiplier(data.elements.effectiveness, move.element, defender.species.elements);
+  /*
+   * Aeonrend's phases answer the type chart with 1.0 in both directions, which
+   * the bestiary calls its whole identity: "no loadout counters it". It is the
+   * only thing in the game that turns the chart off, and it does it here rather
+   * than by owning a special element, so nothing else has to know about it.
+   */
+  const eff = defender.flatEffectiveness
+    ? 1
+    : elementMultiplier(data.elements.effectiveness, move.element, defender.species.elements);
   const stab = move.element && attacker.species.elements.includes(move.element)
     ? (rules.stab_multiplier ?? 1.5) : 1;
   const crit = rng() < (rules.crit_chance ?? 0.0625);
@@ -151,12 +219,31 @@ export function computeMoveDamage(attacker, defender, move, data, rng = Math.ran
   const ratio = Math.max(1, attacker.attack) / Math.max(1, defender.attack);
   const power = Math.pow(ratio, rules.attack_ratio_exponent ?? 0.55);
 
-  const raw = defender.maxHp * (rules.hp_fraction_damage ?? 0.15)
+  let raw = defender.maxHp * (rules.hp_fraction_damage ?? 0.15)
     * (move.power / 50)
     * power
     * eff * stab * roll
     * (crit ? (rules.crit_multiplier ?? 1.75) : 1)
     * (1 - defender.armour);
+
+  /*
+   * An apex's health bar is a designed fight, so a single move is held inside a
+   * band of it. Relative damage means the type chart multiplies a FRACTION of
+   * health, and against a dual-element apex a quadruple weakness with the
+   * same-element bonus came to 0.9 of the bar in one hit — four hits to fell
+   * Karrahk with the right party, against thirty-eight with the wrong one. One
+   * end skips the phases the fight exists for; the other is a slog. The band
+   * keeps the chart pointing the right way without letting it decide whether
+   * the fight happens at all.
+   *
+   * Ordinary monsters are not banded. Karrahk one-shotting a Glimmerfly is the
+   * correct answer to bringing a Mote to an apex, and it stays.
+   */
+  const band = defender.phases > 1
+    ? (data.elements.apex_phase_rules?.damage_fraction_band ?? null) : null;
+  if (band) {
+    raw = Math.min(Math.max(raw, defender.maxHp * band[0]), defender.maxHp * band[1]);
+  }
 
   return {
     damage: Math.max(1, Math.round(raw)),
@@ -181,6 +268,11 @@ function armWild(data, w) {
     data.sizes.sizes.find((s) => s.id === w.species.size),
     data.ammo.restraint_required_scale ?? 1,
   );
+  w.phases = phaseCount(w.species, data);
+  if (w.phases > 1) {
+    w.phase = 1;
+    applyPhase(w, data);
+  }
   return w;
 }
 
@@ -251,6 +343,38 @@ function say(b, text, kind = 'info') {
   return b.log;
 }
 
+// ---------------------------------------------------------------- the break
+
+/**
+ * Has the apex crossed into a new band this turn? If so, break to it.
+ *
+ * Returns true when a phase broke, which ENDS THE TURN: the apex takes no
+ * further damage and does not act while it re-forms. That is the turn-based
+ * reading of the arena's 1.2 seconds of invulnerability, and it exists for the
+ * same reason — without it a burst carries you through two bands at once and
+ * the phases become a caption on a health bar.
+ */
+function checkPhaseBreak(b) {
+  const w = b.wild;
+  if (!w || w.phases < 2 || w.hp <= 0 || b.outcome) return false;
+  const want = phaseAt(w.hp, w.maxHp, w.phases);
+  if (want <= w.phase) return false;
+
+  const rules = b.data.elements.apex_phase_rules ?? {};
+  // One band per turn, so a burst cannot skip a phase the fight exists to show.
+  w.phase = rules.one_band_per_turn === false ? want : w.phase + 1;
+  const def = applyPhase(w, b.data);
+
+  if (rules.transition_clears_statuses !== false) {
+    // It shrugs off whatever hold you had, exactly as the arena wipes Restraint.
+    w.statuses = {};
+  }
+  say(b, `${w.species.name} breaks — ${w.phaseLabel}.`, 'phase');
+  if (def?.blurb) say(b, def.blurb, 'phase');
+  b.phaseBroke = true;
+  return rules.transition_ends_turn !== false;
+}
+
 // ---------------------------------------------------------------- the queue
 
 /** The verdict for the whole encounter, read off what happened to each member. */
@@ -303,6 +427,14 @@ function resolveMember(b, outcome) {
 /** How many of the pack are still to be dealt with, the current one included. */
 export const remaining = (b) => Math.max(0, b.wilds.length - b.results.length);
 
+/** Is the apex hiding its numbers from you, and is anything you brought answering it? */
+export function concealed(b) {
+  const w = b.wild;
+  if (!w?.conceal) return false;
+  // "Countered by a Lumen carrier keeping a flare up" — so bring one.
+  return !b.team.some((c) => !c.fainted && c.species.elements.includes('lumen'));
+}
+
 // ---------------------------------------------------------------- statuses
 
 const STATUS_EFFECT = {
@@ -344,17 +476,50 @@ const speedOf = (c) => {
  * fight used — and the result is compared against the same
  * `restraint_required_scale` the bestiary is balanced on.
  */
-export function catchChance(b, ammo) {
+function restraintValue(b, ammo, { hp, statuses }) {
   const wild = b.wild;
   const sizeDef = b.data.sizes.sizes.find((s) => s.id === wild.species.size);
-  const statuses = Object.keys(wild.statuses);
-
-  const value = (ammo.restraint_multiplier ?? 1)
+  return (ammo.restraint_multiplier ?? 1)
     * elementMultiplier(b.data.elements.effectiveness, ammo.element, wild.species.elements)
     * statusProduct(b.data.ammo.statuses, statuses, b.data.ammo.status_product_cap)
-    * woundMultiplier(wild.hp, wild.maxHp, b.data.ammo.wound_multiplier_exponent ?? 1)
+    * woundMultiplier(hp, wild.maxHp, b.data.ammo.wound_multiplier_exponent ?? 1)
     * (ammo.bonus_vs?.some((e) => wild.species.elements.includes(e)) ? ammo.bonus_multiplier : 1)
     / sizeDef.size_resistance;
+}
+
+export function catchChance(b, ammo) {
+  const wild = b.wild;
+  const value = restraintValue(b, ammo, {
+    hp: wild.hp, statuses: Object.keys(wild.statuses),
+  });
+
+  /*
+   * An apex's chance is DESIGNED per phase, not derived.
+   *
+   * The Restraint maths is built for a monster you could plausibly carry home. A
+   * Titan with 1100 base Restraint is not that: the derived chance against
+   * Karrahk is 0.04%, which the 0.02 floor rounds up to 2% — so every phase read
+   * exactly the same and the phase gate did nothing at all.
+   *
+   * `catch_chance` on the phase is the chance at the ideal moment: nearly dead,
+   * every status the rounds can apply, the best dart. The actual roll is that
+   * ceiling scaled by how close this shot is to ideal — a RATIO of the same
+   * Restraint value, so the arbitrary constants cancel and softening, sedating
+   * and picking the right round all still matter. Karrahk's core is exposed in
+   * phase 3 and nowhere else, so a dart in phase 1 is a round thrown away. That
+   * is the mechanic, not a punishment.
+   */
+  const phaseDef = wild.phases > 1
+    ? apexPhaseTable(b.data, wild.species.id)?.[wild.phase - 1] : null;
+  if (phaseDef) {
+    const ceiling = phaseDef.catch_chance ?? 0;
+    if (ceiling <= 0) return { chance: 0, value, ceiling, sealed: true };
+    const ideal = restraintValue(b, ammo, {
+      hp: 0, statuses: Object.keys(b.data.ammo.statuses ?? {}),
+    });
+    const closeness = ideal > 0 ? Math.min(1, value / ideal) : 0;
+    return { chance: ceiling * closeness, value, ceiling, closeness };
+  }
 
   // 40 is the reference: one tranq dart into a healthy mid-size target. Anything
   // above it is the softening, sedating and element matching paying off.
@@ -449,6 +614,7 @@ export function takeTurn(b, action) {
   const from = b.log.length;
   b.turn += 1;
   b.advanced = false;
+  b.phaseBroke = false;
 
   const mine = activeMon(b);
   const w = b.wild;
@@ -522,6 +688,7 @@ export function takeTurn(b, action) {
         resolveMember(b, 'defeated');
         return b.log.slice(from);
       }
+      if (checkPhaseBreak(b)) return b.log.slice(from);
       wildTurn(b);
     } else {
       const move = mine.moves[action.index] ?? mine.moves[0];
@@ -535,7 +702,7 @@ export function takeTurn(b, action) {
         : wildFirst ? ['wild', 'mine'] : ['mine', 'wild'];
 
       for (const side of order) {
-        if (b.outcome || b.advanced) break;
+        if (b.outcome || b.advanced || b.phaseBroke) break;
         if (side === 'mine') {
           if (mine.fainted) continue;
           // `b.wild` can change under this loop, so read it fresh rather than
@@ -546,6 +713,8 @@ export function takeTurn(b, action) {
             target.fainted = true;
             say(b, `${target.species.name} is down.`, 'good');
             resolveMember(b, 'defeated');
+          } else {
+            checkPhaseBreak(b);
           }
         } else {
           wildTurn(b);

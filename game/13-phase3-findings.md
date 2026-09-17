@@ -1331,14 +1331,96 @@ loop's catch.
 
 It is left open rather than guessed at. It is listed below.
 
+# Phase 4, part 3: what a phase means in a turn system
+
+The apexes were the last thing the turn-based battle had no answer for. The
+bestiary has always described them as staged fights — *"phase 1 breaks armour,
+phase 2 floods the arena, phase 3 exposes the core"* — and the real-time arena
+has always implemented that. The turn battle did not, so a rift boss was a large
+stat block with a sensible number of turns in it and none of the shape.
+
+## The design question, answered from the bestiary rather than invented
+
+A phase in the arena is an HP band that moves the weak point, strips armour and
+wipes your Restraint. Two of those three have no meaning in a turn system —
+there is no aiming, so there is no weak point to move — so the question was what
+a phase should *take away from you* instead.
+
+The bestiary already said, per apex:
+
+| apex | its line | what that becomes in a turn |
+|---|---|---|
+| **Karrahk** | "phase 3 exposes the core" | it **cannot be caught** until phase 3 |
+| **Nyxhollow** | "extinguishes light… countered by a Lumen carrier" | it **hides its own health bar** unless you brought Lumen |
+| **Aeonrend** | "element multipliers are flat 1.0 both ways" | the **type chart is switched off** |
+
+Plus, for all three: armour sheds per phase, and the moveset changes — an apex
+fights *differently* each phase rather than just harder.
+
+## One table, read by both combat modes
+
+The arena owned the phase definitions in a `const` inside `game.js`. Adding
+phases to the turn battle meant either duplicating that table or inventing a
+second one, and those are the same bug with different symptoms. The table moved
+to `apex_phases` in `elements.json`; both modes read it off the loadout, and a
+check holds them to it.
+
+That move is not free: the arena's armour curve was a generic
+`1 - 0.18 × (phase - 1)`, and the per-phase table is not evenly spaced, because
+"exposes the core" is a bigger event than the step before it. Karrahk's final
+phase now strips to 0.4 rather than 0.64. The `rifts` suite passes unchanged.
+
+## Three things measurement changed
+
+**A burst skipped a whole phase.** A Verdant party took Karrahk from phase 1 to
+phase 3 in a single hit — `phaseAt` reads the band off current health, so a big
+enough hit jumps two. The arena gets away with it because its fights are long
+enough to cross bands one at a time. A break now advances **one phase per
+turn**, which makes the phases content rather than probability.
+
+**The type chart nearly deleted the fight.** Relative damage multiplies a
+*fraction of health*, so Karrahk's quadruple Verdant weakness with the
+same-element bonus came to **0.9 of the bar in one hit**. Measured:
+
+| party | hits to fell Karrahk |
+|---|---|
+| Bramblewarden (Verdant, 4× weakness) | **4** |
+| Pyrecrown (Ember, resisted) | **38** |
+
+One end skips the phases the fight exists for; the other is a slog. Apex damage
+is now banded to 6–16% of the bar per move, which lands those two at **7 and 17
+hits** — the counter is still plainly worth bringing, at about 2.4×, without
+deciding whether the fight happens at all. Ordinary monsters are *not* banded:
+Karrahk one-shotting a Glimmerfly is the correct answer to bringing a Mote to an
+apex, and it stays.
+
+**The catch gate did nothing, because every phase read 2%.** An apex's derived
+capture chance is 0.04% — the Restraint maths is built for a monster you could
+plausibly carry home, and a Titan with 1100 base Restraint is not that, so the
+0.02 floor rounded every phase to the same number. An apex's chance is
+**designed per phase** now: a ceiling in the data, scaled by the ratio of your
+Restraint value to the ideal shot, so softening and sedating still matter and no
+new constants are invented.
+
+    Karrahk    Sunken Plating 0% · Floodtide 0% · Spire Core 6.8%
+    Nyxhollow  Shroud 0% · Hollow Eye 9.1%
+    Aeonrend   First/Second/Third Seam 0% · Aeon 3.9%
+
+Sealed is a real answer, not a 0% to squint at, so the bag menu greys the round
+out and says *"nothing to take hold of yet"* rather than letting you spend it
+finding out.
+
+A finished Karrahk now reads: **7 turns, all three phases, defeated** — with the
+plating splitting, the water coming in, and the core opening as separate,
+labelled events in the log.
+
 ## Still open
 
 1. **Party play** and the server-side half of Codex sharing, unchanged.
-2. The apexes' phased fights are arena-only. `battle.js` has no concept of a
-   phase, so a rift boss is currently a large stat block with a correct number
-   of turns in it. A phased turn-based apex needs its own design pass, starting
-   with what a phase *means* in a turn system — a forced move, a stat shift, a
-   mid-fight type change.
+2. Apex **party scaling** is arena-only: `apexHpScale(partySize)` exists there
+   and the turn battle fights every apex at its solo numbers, because a
+   turn-based party is your three residents rather than three Wardens. The
+   bestiary's `party_size` of 4–8 has no turn-based meaning yet.
 3. Moves are two per element plus a universal. No status moves, no PP, no
    switching costs beyond the turn.
 4. Study is granted per participant with no cap, so a three-monster rotation

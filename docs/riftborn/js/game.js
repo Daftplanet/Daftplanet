@@ -157,20 +157,22 @@ const WEAK_POINT_LAYOUT = {
 };
 
 /*
- * Which weak point is exposed in each phase. `05-bestiary.md` says Aeonrend's
- * "weak points move between phases" and Karrahk's phase 1 is an armour break with
- * the core only exposed at the end; this is that, made concrete.
+ * Which weak point is exposed in each phase, and how much armour it is still
+ * wearing. This USED TO BE A LOCAL TABLE here, which meant the arena owned the
+ * definition of a phase and the turn-based battle had to either duplicate it or
+ * invent its own. Both are the same bug with different symptoms, so the table
+ * moved to `apex_phases` in elements.json and both modes read it off the
+ * loadout. `05-bestiary.md` is the source: Aeonrend's "weak points move between
+ * phases", Karrahk's core exposed only at the end.
  */
-const APEX_PHASE_WEAK_POINTS = {
-  karrahk:       [['outer_plating'], ['vent_cluster'], ['spire_core']],
-  nyxhollow:     [['shroud_knot'], ['hollow_eye']],
-  aeonrend_apex: [['rift_seam_a'], ['rift_seam_b'], ['rift_seam_c'], ['phase_dependent']],
-};
+function apexPhase(loadout, phase) {
+  const table = loadout?.apexPhases;
+  if (!table?.length) return null;
+  return table[Math.min(phase, table.length) - 1] ?? null;
+}
 
-function apexWeakPoints(speciesId, phase, fallback) {
-  const table = APEX_PHASE_WEAK_POINTS[speciesId];
-  if (!table) return fallback;
-  return table[Math.min(phase, table.length) - 1] ?? fallback;
+function apexWeakPoints(loadout, phase, fallback) {
+  return apexPhase(loadout, phase)?.weak_points ?? fallback;
 }
 
 /*
@@ -210,7 +212,8 @@ function makeMonster(loadout, index, count, rng, partySize = 1, specimenRng = Ma
   // height is a Codex record, never a bigger hitbox. See rollSpecimen in rules.js.
   const radius = SIZE_RADIUS[sp.size] ?? 26;
   const specimen = rollSpecimen(sp, loadout.sizeDef, specimenRng);
-  const phases = sp.apex ? (sp.phases ?? 1) : 1;
+  // Table length first, so the count cannot disagree with the phases defined.
+  const phases = sp.apex ? (loadout.apexPhases?.length ?? sp.phases ?? 1) : 1;
   /*
    * Apexes scale to the party on both sides. Scaling only health left Karrahk
    * hitting for 165 against a 100 HP Warden — a one-shot, which makes a solo apex
@@ -249,7 +252,7 @@ function makeMonster(loadout, index, count, rng, partySize = 1, specimenRng = Ma
      * Shadelet `weak_point_requires: illumination` and an empty list. A Thermal
      * sight, or a Lumen-element hit, exposes one.
      */
-    weakPoints: phases > 1 ? apexWeakPoints(sp.id, 1, sp.weak_points) : sp.weak_points,
+    weakPoints: phases > 1 ? apexWeakPoints(loadout, 1, sp.weak_points) : sp.weak_points,
     hiddenWeakPoints: sp.weak_point_requires === 'illumination' ? ['core'] : null,
     illuminated: 0,
     state: 'unaware', stateT: 0,
@@ -862,8 +865,14 @@ function advancePhase(f, m) {
 
   m.phase = want;
   m.phaseShield = 1.2;
-  m.weakPoints = apexWeakPoints(f.loadout.species.id, m.phase, f.loadout.species.weak_points);
-  m.armourScale = Math.max(0.4, 1 - 0.18 * (m.phase - 1));
+  const def = apexPhase(f.loadout, m.phase);
+  m.weakPoints = apexWeakPoints(f.loadout, m.phase, f.loadout.species.weak_points);
+  /*
+   * The armour curve used to be a flat `1 - 0.18 * (phase - 1)` computed here.
+   * Per-phase now, because the bestiary's phases are not evenly spaced: Karrahk
+   * "exposes the core" at phase 3, and a generic step cannot say that.
+   */
+  m.armourScale = def?.armour_scale ?? Math.max(0.4, 1 - 0.18 * (m.phase - 1));
   m.restraint = 0;                       // it shrugs off whatever hold you had
   m.phaseBlocked = false;
   f.shake = 12;

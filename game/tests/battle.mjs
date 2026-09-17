@@ -460,7 +460,172 @@ ok('a raised monster stops learning from what it has outgrown',
    + grind.rows.map((x) => `Lv.${x.level}: ${x.got}`).join(' · ')
    + ' — worth about a fifth once you have outgrown it, never zero');
 
-// --- 17. phone layout
+// --- 17. an apex is a sequence of different problems, and every phase happens
+const apex = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['bramblewarden', 'pyrecrown', 'solafaun'], 'karrahk', { study: 3000 });
+  const b = r.battle;
+  const seen = [];
+  const armour = [];
+  for (let i = 0; i < 120 && !b.outcome; i++) {
+    const w = b.wild;
+    if (!seen.includes(w.phase)) { seen.push(w.phase); armour.push(Number(w.armour.toFixed(2))); }
+    const mine = r.activeMon(b);
+    if (mine.fainted) {
+      const j = b.team.findIndex((c) => !c.fainted);
+      if (j < 0) break;
+      r.takeTurn({ kind: 'swap', index: j });
+      continue;
+    }
+    let best = 0, bestI = 0;
+    r.battleOptions().moves.forEach((m, k) => {
+      const d = r.computeMoveDamage(mine, w, m, r.data, () => 0.5).damage;
+      if (d > best) { best = d; bestI = k; }
+    });
+    r.takeTurn({ kind: 'move', index: bestI });
+  }
+  return {
+    phases: b.wild.phases,
+    seen,
+    armour,
+    labels: r.data.elements.apex_phases.karrahk.map((x) => x.label),
+    turns: b.turn,
+    outcome: b.outcome,
+    breaks: b.log.filter((l) => l.kind === 'phase').length,
+  };
+});
+ok('a three-phase apex passes through all three, and sheds armour as it goes',
+   apex.phases === 3 && apex.seen.join() === '1,2,3'
+   && apex.armour[0] > apex.armour[1] && apex.armour[1] > apex.armour[2]
+   && apex.turns >= 5 && apex.turns <= 30,
+   `${apex.labels.join(' → ')} · armour ${apex.armour.join(' → ')}`
+   + ` · resolved as "${apex.outcome}" in ${apex.turns} turns`);
+
+// --- 18. a burst cannot skip a phase
+const skip = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['bramblewarden'], 'karrahk', { study: 3000 });
+  const b = r.battle;
+  /*
+   * Drop it into the LAST health band and hit it once. 30% is band 3 of 3 and
+   * still survives a hit — the first version of this check used 5%, where the
+   * hit simply kills it, so no phase ever broke and the check failed on its own
+   * setup rather than on the rule.
+   */
+  b.wild.hp = b.wild.maxHp * 0.30;
+  const bandBefore = r.phaseAt(b.wild.hp, b.wild.maxHp, b.wild.phases);
+  const before = b.wild.phase;
+  r.takeTurn({ kind: 'move', index: 0 });
+  return {
+    before, bandBefore,
+    after: b.wild.phase,
+    alive: b.wild.hp > 0,
+    band: r.phaseAt(b.wild.hp, b.wild.maxHp, b.wild.phases),
+  };
+});
+ok('a hit that crosses two bands still only advances one phase',
+   skip.alive && skip.before === 1 && skip.bandBefore === 3 && skip.after === 2,
+   `health sat in band ${skip.bandBefore} and the apex advanced 1 → ${skip.after}`
+   + ' — without this the whole of phase 2 never happens');
+
+// --- 19. the phase decides whether it can be taken at all
+const gate = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['bramblewarden'], 'karrahk', { study: 3000 });
+  const b = r.battle;
+  const dart = r.data.ammo.capture.find((a) => a.id === 'heavy_sedative_dart')
+    ?? r.data.ammo.capture[0];
+  const at = (phase, frac, sedate) => {
+    b.wild.phase = phase;
+    b.wild.hp = b.wild.maxHp * frac;
+    b.wild.statuses = sedate ? { sedated: 3 } : {};
+    b.wild.catchScale = undefined;
+    return r.catchChance(dart);
+  };
+  const early = at(1, 0.05, true);
+  const mid = at(2, 0.05, true);
+  const lateHealthy = at(3, 0.45, false);
+  const lateReady = at(3, 0.05, true);
+  return {
+    early: early.chance, sealed: early.sealed === true,
+    mid: mid.chance,
+    lateHealthy: lateHealthy.chance, lateReady: lateReady.chance,
+  };
+});
+ok('Karrahk cannot be taken until the core is exposed, and softening still matters',
+   gate.sealed && gate.early === 0 && gate.mid === 0
+   && gate.lateReady > gate.lateHealthy && gate.lateReady > 0.03,
+   `phase 1 and 2 are sealed at 0% · phase 3 reads `
+   + `${(gate.lateHealthy * 100).toFixed(1)}% healthy and ${(gate.lateReady * 100).toFixed(1)}% wounded and sedated`);
+
+// --- 20. Aeonrend answers the type chart with 1.0 both ways
+const flat = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['bramblewarden'], 'aeonrend_apex', { study: 3000 });
+  const b = r.battle;
+  const mine = r.activeMon(b);
+  const hits = mine.moves.map((m) => ({
+    name: m.name,
+    element: m.element,
+    ...r.computeMoveDamage(mine, b.wild, m, r.data, () => 0.5),
+  }));
+  const spread = Math.max(...hits.map((h) => h.damage)) / Math.min(...hits.map((h) => h.damage));
+  return { hits, spread, noted: hits.filter((h) => h.note).length, eff: hits.map((h) => h.effectiveness) };
+});
+ok('no loadout counters Aeonrend — the chart reads 1.0 in both directions',
+   flat.eff.every((e) => e === 1) && flat.noted === 0,
+   `every move comes back neutral (${flat.eff.join(', ')}), so nothing is super effective or resisted`);
+
+// --- 21. Nyxhollow takes your information away, and Lumen takes it back
+const shroud = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['bramblewarden'], 'nyxhollow', { study: 3000 });
+  const withoutLumen = { concealed: r.concealed(r.battle), text: document.getElementById('wild-hp-text').textContent };
+  await window.battleWith(['solafaun'], 'nyxhollow', { study: 3000 });   // solafaun is Lumen
+  const withLumen = { concealed: r.concealed(r.battle), text: document.getElementById('wild-hp-text').textContent };
+  // and the shroud lifts on its own in the last phase
+  r.battle.wild.phase = 2;
+  r.battle.wild.conceal = r.data.elements.apex_phases.nyxhollow[1].conceal === true;
+  const lastPhase = r.concealed(r.battle);
+  return { withoutLumen, withLumen, lastPhase };
+});
+ok('Nyxhollow blanks its own health bar, and a Lumen carrier lights it back up',
+   shroud.withoutLumen.concealed && shroud.withoutLumen.text === '???'
+   && !shroud.withLumen.concealed && shroud.withLumen.text !== '???'
+   && !shroud.lastPhase,
+   `shrouded it reads "${shroud.withoutLumen.text}" · with a Lumen resident "${shroud.withLumen.text}"`
+   + ' · and the shroud is gone once the eye opens');
+
+// --- 22. both combat modes read the same definition of a phase
+const oneTable = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const table = r.data.elements.apex_phases;
+  const out = [];
+  for (const id of ['karrahk', 'nyxhollow', 'aeonrend_apex']) {
+    const sp = r.data.monsters.monsters.find((m) => m.id === id);
+    const lo = r.loadLoadout(r.data, {
+      speciesId: id, weaponId: 'marker_pistol', lethalId: 'ball_round', captureId: 'tranq_dart',
+    });
+    const f = r.createFight(lo, { partySize: 4 });
+    const m = f.monsters[0];
+    out.push({
+      id,
+      arenaPhases: m.phases,
+      dataPhases: table[id].length,
+      declared: sp.phases ?? null,
+      arenaWeak: m.weakPoints,
+      dataWeak: table[id][0].weak_points,
+    });
+  }
+  return out;
+});
+ok('the arena and the turn battle read apex phases out of the same table',
+   oneTable.every((x) => x.arenaPhases === x.dataPhases
+     && JSON.stringify(x.arenaWeak) === JSON.stringify(x.dataWeak)),
+   oneTable.map((x) => `${x.id} ${x.arenaPhases} phases, opens on ${x.arenaWeak.join('/')}`).join(' · ')
+   + ' — the table used to be a const inside game.js');
+
+// --- 23. phone layout
 await page.setViewportSize({ width: 390, height: 844 });
 await page.evaluate(async () => { await window.battleWith(['brinelet'], 'cinderfang'); });
 await page.waitForTimeout(400);

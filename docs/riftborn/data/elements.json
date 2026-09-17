@@ -490,5 +490,279 @@
       "uses_weapon": true,
       "$comment": "Before you have a monster, you fight with the gun. It is deliberately weaker than a monster's move: the game wants you to catch something."
     }
-  ]
+  ],
+  "apex_phase_rules": {
+    "$comment": "Apex phases, shared by both combat modes. A phase is an HP band: phase = 1 + floor((1 - hp/maxHp) * phases), which is what the real-time arena already did. The point of a phase, in the bestiary's words, is that a long fight should be a sequence of different problems rather than the same shot repeated \u2014 so each one changes what the apex does, what it is wearing, and whether it can be taken at all.",
+    "transition_ends_turn": true,
+    "transition_clears_statuses": true,
+    "$transition_comment": "The arena gives the apex 1.2 seconds of invulnerability while it re-forms, and wipes the Restraint you had built. The turn-based reading of that is: the turn a band breaks, the apex takes no further damage and does not act, and every status on it is shrugged off. Both rules exist to stop a burst carrying you through two phases at once, which is the one thing that would make phases decorative.",
+    "one_band_per_turn": true,
+    "$band_comment": "A break advances ONE phase, even if the hit crossed two health bands. Measured before this rule, a Verdant party took Karrahk from phase 1 to phase 3 in a single hit and the whole of phase 2 never happened \u2014 the phases were a caption on a health bar. Guaranteeing one band per turn makes them content rather than probability.",
+    "damage_fraction_band": [
+      0.06,
+      0.16
+    ],
+    "$damage_comment": "The share of an apex's health any single move may take. Relative damage means the type chart multiplies a FRACTION of health, so a quadruple weakness with same-element bonus came to 0.9 of the bar in one hit while a resisted move came to 0.03 \u2014 measured, 4 hits to kill Karrahk with the right element against 38 with the wrong one. Both ends ruin a designed fight: one skips the phases, the other is a slog. The band keeps the chart pointing the right way (about 2.4x for bringing the counter) without letting it decide whether the fight happens at all. It applies to apexes only \u2014 Karrahk one-shotting a Glimmerfly is correct and stays.",
+    "$catch_comment": "An apex's capture chance is DESIGNED per phase rather than derived. The Restraint maths is built for a monster you could plausibly carry home; a Titan with 1100 base Restraint is not that, and the derived chance against Karrahk is 0.04% \u2014 indistinguishable from the 2% floor, so every phase read the same and the phase gate did nothing. catch_chance below is the chance at the ideal moment: badly wounded, sedated, heavy dart. The actual roll scales down from there by the ratio of your Restraint value to that ideal, so softening and sedating still matter and no new constants are invented."
+  },
+  "apex_phases": {
+    "$comment": "One entry per phase, in order. weak_points and armour_scale are read by the real-time arena too, so the two modes cannot drift apart. catch_scale, moves, flat_effectiveness and conceal are the turn-based battle's.",
+    "karrahk": [
+      {
+        "label": "Sunken Plating",
+        "weak_points": [
+          "outer_plating"
+        ],
+        "armour_scale": 1.0,
+        "catch_chance": 0.0,
+        "blurb": "Karrahk surfaces still sheathed in plating. Nothing you fire is reaching anything that matters.",
+        "moves": [
+          {
+            "id": "tidal_slam",
+            "name": "Tidal Slam",
+            "power": 85,
+            "accuracy": 0.85,
+            "priority": 0,
+            "element": "tide"
+          },
+          {
+            "id": "sediment_guard",
+            "name": "Sediment Guard",
+            "power": 55,
+            "accuracy": 1.0,
+            "priority": 0,
+            "element": "stone"
+          }
+        ]
+      },
+      {
+        "label": "Floodtide",
+        "weak_points": [
+          "vent_cluster"
+        ],
+        "armour_scale": 0.72,
+        "catch_chance": 0.0,
+        "blurb": "The plating splits and the water comes with it. The ground is gone \u2014 everything is slower now.",
+        "moves": [
+          {
+            "id": "undertow_crush",
+            "name": "Undertow Crush",
+            "power": 95,
+            "accuracy": 0.75,
+            "priority": -2,
+            "element": "tide"
+          },
+          {
+            "id": "drowning_weight",
+            "name": "Drowning Weight",
+            "power": 45,
+            "accuracy": 0.95,
+            "priority": 0,
+            "element": "tide",
+            "applies": "anchored"
+          }
+        ]
+      },
+      {
+        "label": "Spire Core",
+        "weak_points": [
+          "spire_core"
+        ],
+        "armour_scale": 0.4,
+        "catch_chance": 0.1,
+        "blurb": "The spire cracks open and the core is finally in the light. This is the window.",
+        "moves": [
+          {
+            "id": "core_lash",
+            "name": "Core Lash",
+            "power": 110,
+            "accuracy": 0.7,
+            "priority": 0,
+            "element": "stone"
+          },
+          {
+            "id": "spire_break",
+            "name": "Spire Break",
+            "power": 60,
+            "accuracy": 0.95,
+            "priority": 1,
+            "element": "tide"
+          }
+        ]
+      }
+    ],
+    "nyxhollow": [
+      {
+        "label": "Shroud",
+        "weak_points": [
+          "shroud_knot"
+        ],
+        "armour_scale": 1.0,
+        "catch_chance": 0.0,
+        "conceal": true,
+        "blurb": "Nyxhollow puts the light out. You can hear where it is and that is all.",
+        "moves": [
+          {
+            "id": "smother",
+            "name": "Smother",
+            "power": 70,
+            "accuracy": 0.9,
+            "priority": 0,
+            "element": "gloom"
+          },
+          {
+            "id": "night_terror",
+            "name": "Night Terror",
+            "power": 50,
+            "accuracy": 0.95,
+            "priority": 0,
+            "element": "gloom",
+            "applies": "sedated"
+          }
+        ]
+      },
+      {
+        "label": "Hollow Eye",
+        "weak_points": [
+          "hollow_eye"
+        ],
+        "armour_scale": 0.55,
+        "catch_chance": 0.14,
+        "blurb": "The shroud tears and the eye opens. It can see you, and you can finally see it.",
+        "moves": [
+          {
+            "id": "eye_of_the_hollow",
+            "name": "Eye of the Hollow",
+            "power": 100,
+            "accuracy": 0.8,
+            "priority": 0,
+            "element": "gloom"
+          },
+          {
+            "id": "unlight",
+            "name": "Unlight",
+            "power": 65,
+            "accuracy": 0.9,
+            "priority": 1,
+            "element": "gloom"
+          }
+        ]
+      }
+    ],
+    "aeonrend_apex": [
+      {
+        "label": "First Seam",
+        "weak_points": [
+          "rift_seam_a"
+        ],
+        "armour_scale": 1.0,
+        "catch_chance": 0.0,
+        "flat_effectiveness": true,
+        "blurb": "A seam opens. Whatever you brought, it does not care \u2014 nothing is strong or weak against this.",
+        "moves": [
+          {
+            "id": "seam_split",
+            "name": "Seam Split",
+            "power": 80,
+            "accuracy": 0.9,
+            "priority": 0,
+            "element": "rift"
+          },
+          {
+            "id": "unmake",
+            "name": "Unmake",
+            "power": 55,
+            "accuracy": 1.0,
+            "priority": 1,
+            "element": "rift"
+          }
+        ]
+      },
+      {
+        "label": "Second Seam",
+        "weak_points": [
+          "rift_seam_b"
+        ],
+        "armour_scale": 0.82,
+        "catch_chance": 0.0,
+        "flat_effectiveness": true,
+        "blurb": "The seam moves. Wherever you were aiming, it is not there any more.",
+        "moves": [
+          {
+            "id": "hour_collapse",
+            "name": "Hour Collapse",
+            "power": 95,
+            "accuracy": 0.8,
+            "priority": -1,
+            "element": "rift"
+          },
+          {
+            "id": "stutter",
+            "name": "Stutter",
+            "power": 45,
+            "accuracy": 1.0,
+            "priority": 3,
+            "element": "rift"
+          }
+        ]
+      },
+      {
+        "label": "Third Seam",
+        "weak_points": [
+          "rift_seam_c"
+        ],
+        "armour_scale": 0.64,
+        "catch_chance": 0.0,
+        "flat_effectiveness": true,
+        "blurb": "Three seams now, and it is bleeding something that is not blood.",
+        "moves": [
+          {
+            "id": "rend",
+            "name": "Rend",
+            "power": 105,
+            "accuracy": 0.78,
+            "priority": 0,
+            "element": "rift"
+          },
+          {
+            "id": "displace",
+            "name": "Displace",
+            "power": 60,
+            "accuracy": 0.95,
+            "priority": 0,
+            "element": "rift",
+            "applies": "stunned"
+          }
+        ]
+      },
+      {
+        "label": "Aeon",
+        "weak_points": [
+          "phase_dependent"
+        ],
+        "armour_scale": 0.45,
+        "catch_chance": 0.06,
+        "flat_effectiveness": true,
+        "blurb": "It stops pretending to have a shape. This is the last of it, one way or the other.",
+        "moves": [
+          {
+            "id": "aeonrend",
+            "name": "Aeonrend",
+            "power": 125,
+            "accuracy": 0.72,
+            "priority": 0,
+            "element": "rift"
+          },
+          {
+            "id": "endless",
+            "name": "Endless",
+            "power": 70,
+            "accuracy": 0.92,
+            "priority": 0,
+            "element": "rift"
+          }
+        ]
+      }
+    ]
+  }
 }

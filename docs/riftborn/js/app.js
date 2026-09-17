@@ -19,7 +19,8 @@ import { drawFieldReport, toPng } from './report.js';
 import { buildModel, modelFor, fitModel, spriteFor, clearVoxelCache } from './voxel.js';
 import {
   createBattle, makeCombatant, takeTurn, options, catchChance,
-  levelOf, wildLevel, activeMon, movesFor, computeMoveDamage, remaining,
+  levelOf, wildLevel, activeMon, movesFor, computeMoveDamage, remaining, concealed,
+  phaseAt, phaseCount, apexPhaseTable,
 } from './battle.js';
 import {
   buildPool, apexForecast, riftForCell, placementFits, inTimeWindow, weatherIs, biomeAt,
@@ -424,11 +425,27 @@ function boot(data) {
     }
     $('wild-name').textContent = w.species.name;
     $('wild-level').textContent = `Lv.${w.level}`;
-    $('wild-hp').style.width = `${(w.hp / w.maxHp) * 100}%`;
-    $('wild-hp').dataset.state = hpClass(w.hp / w.maxHp);
-    $('wild-hp-text').textContent = `${Math.ceil(w.hp)} / ${w.maxHp}`;
-    $('wild-statuses').innerHTML = Object.entries(w.statuses)
-      .map(([id, t]) => `<span class="chip chip--good">${id} ${t}</span>`).join('');
+
+    // An apex says which of its phases you are in, and how many are left.
+    const phased = w.phases > 1;
+    $('wild-phase').hidden = !phased;
+    if (phased) {
+      $('wild-phase').textContent = `${'◆'.repeat(w.phase)}${'◇'.repeat(w.phases - w.phase)} ${w.phaseLabel}`;
+    }
+
+    /*
+     * Nyxhollow "extinguishes light in a radius, blanking the weak-point
+     * overlay... countered by a Lumen carrier keeping a flare up." In a turn
+     * battle the thing it can take from you is information, so while the shroud
+     * is up you do not get to see its health — unless you brought the counter.
+     */
+    const hide = concealed(b);
+    $('wild-hp').style.width = hide ? '100%' : `${(w.hp / w.maxHp) * 100}%`;
+    $('wild-hp').dataset.state = hide ? 'shrouded' : hpClass(w.hp / w.maxHp);
+    $('wild-hp-text').textContent = hide ? '???' : `${Math.ceil(w.hp)} / ${w.maxHp}`;
+    $('wild-statuses').innerHTML = (hide ? '<span class="chip chip--warn">shrouded — bring a Lumen</span>' : '')
+      + Object.entries(w.statuses)
+        .map(([id, t]) => `<span class="chip chip--good">${id} ${t}</span>`).join('');
 
     if (b.wardenOnly) {
       $('mine-name').textContent = 'Warden';
@@ -524,12 +541,15 @@ function boot(data) {
     } else if (battleMenu === 'bag') {
       const rounds = data.ammo.capture.filter((a) => profile.ammoCount(a.id) > 0);
       items = rounds.map((a) => {
-        const { chance } = catchChance(b, a);
-        return bchoice(
-          a.name,
-          `${profile.ammoCount(a.id)} left · about ${Math.round(chance * 100)}% to take it`,
-          () => act({ kind: 'catch', ammoId: a.id }),
-        );
+        const { chance, sealed } = catchChance(b, a);
+        // A sealed phase is a real answer, not a 0% to squint at: there is no way
+        // into Karrahk until the core is exposed, and the menu should say so
+        // rather than let you spend the round finding out.
+        const sub = sealed
+          ? `${profile.ammoCount(a.id)} left · nothing to take hold of yet`
+          : `${profile.ammoCount(a.id)} left · about ${
+            chance < 0.01 ? '<1' : Math.round(chance * 100)}% to take it`;
+        return bchoice(a.name, sub, () => act({ kind: 'catch', ammoId: a.id }), { disabled: Boolean(sealed) });
       });
       if (!items.length) items = [bchoice('No capture rounds', 'craft some at the bench', () => {}, { disabled: true })];
       items.push(bchoice('Back', '', () => { battleMenu = 'root'; renderBattleMenu(); }, { kind: 'back' }));
@@ -1738,7 +1758,8 @@ function boot(data) {
     finishBattle, renderBattle,
     catchChance: (ammo) => catchChance(battle, ammo),
     makeCombatant, createBattle, levelOf, wildLevel, movesFor, activeMon,
-    computeMoveDamage, remaining, studyFromBattle, studyAsMinutes,
+    computeMoveDamage, remaining, studyFromBattle, studyAsMinutes, concealed,
+    phaseAt, phaseCount, apexPhaseTable,
     loadLoadout, applyMods, modUnlocked, fittedMods,
     speciesHeight, rollSpecimen, heightPercentile, createFight, drawFieldReport,
     escortAbility, useEscort, cycleLock, assistPhase, assistMiss, ringSeconds,

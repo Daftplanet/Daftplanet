@@ -135,6 +135,9 @@ export function loadLoadout(data, { speciesId, weaponId, lethalId, captureId, mo
     subdueWindow: data.ammo.subdue_window_seconds,
     failedSubdue: data.ammo.failed_subdue,
     effectiveness: data.elements.effectiveness,
+    // Apex phases live in elements.json so BOTH combat modes read the same
+    // definition of what a phase is. See apex_phases there.
+    apexPhases: data.elements.apex_phases?.[species.id] ?? null,
     chamberSwapSeconds: data.weapons.chamber_swap_seconds,
     required: restraintRequired(species, sizeDef, data.ammo.restraint_required_scale ?? 1),
     decay: restraintDecayPerSecond(species),

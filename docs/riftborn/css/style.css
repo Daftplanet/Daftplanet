@@ -717,6 +717,39 @@ select {
 .battle-log p[data-kind="bad"] { color: var(--warn); }
 .battle-log p[data-kind="weak"], .battle-log p[data-kind="miss"] { color: var(--ink-faint); }
 
+/* An apex breaking to its next phase is the loudest thing in the log. */
+.battle-log p[data-kind="phase"] {
+  color: var(--accent, #e8b44a);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  margin-top: 4px;
+}
+
+/* Which of an apex's phases you are in: filled for reached, hollow for left. */
+.nameplate__phase {
+  display: inline-block;
+  font-size: 11px;
+  color: var(--accent, #e8b44a);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/*
+ * Nyxhollow's shroud. The bar reads full because you genuinely cannot tell —
+ * that is the mechanic, and the hatching is what says "this is not a reading".
+ */
+.meter__fill--hp[data-state="shrouded"] {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--ink-faint) 0 6px,
+    transparent 6px 12px
+  );
+  opacity: 0.55;
+}
+
 .battle-menu { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 @media (max-width: 720px) { .battle-menu { grid-template-columns: repeat(2, 1fr); } }
 .bchoice {
