@@ -59,10 +59,15 @@ I–III, contracts and weather — and now pack spawns, scheduled rift events, t
 three phased apexes, a two-weapon loadout, the full weapon-mod table, measured
 specimens with shareable field reports, the first of the Codex completion rewards,
 an escort that brings one resident's ability into the fight, and both answers to the
-aim question — free aim and an assisted mode built for a thumb. Apexes now appear
-only where and when the bestiary says they do, and a rift forecast says where the
-next one is due. Party play and the server-side half of Codex sharing are what
-remain. It runs the design's real formulas out of `data/`, and the same
+aim question. Apexes appear only where and when the bestiary says they do, and a
+rift forecast says where the next one is due.
+
+**Phase 4** put it on the real world — Web Mercator, live GPS or a dragged marker,
+and biomes read off the map tiles — built all 43 monsters as procedural voxel
+models from their own Codex entries, and made the encounter a turn-based battle
+where your Sanctuary residents fight and the weapons became the capture step. The
+real-time arena is still there as a setting. Party play and the server-side half of
+Codex sharing are what remain. It runs the design's real formulas out of `data/`, and the same
 fight and world code runs headlessly in a balance sim so tuning claims can be
 checked rather than asserted.
 
@@ -75,7 +80,7 @@ ESCORT=1 node game/tools/balance_sim.mjs     # what one resident's ability is wo
 ESCORT=1 SPECIES=railmane WEAPON=longtooth LETHAL=slug node game/tools/balance_sim.mjs
 AIM=1 node game/tools/balance_sim.mjs        # free aim vs assisted, by input quality
 python3 game/tools/stamp_sw.py --check  # service worker cache stamp is current
-node game/tests/run.mjs                 # eleven browser suites against the real UI
+node game/tests/run.mjs                 # fourteen browser suites against the real UI
 ```
 
 It is an installable PWA that plays fully offline, published from `main` → `docs/`

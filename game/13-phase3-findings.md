@@ -1045,3 +1045,118 @@ canvas above.
    The board is a board; it is not a notification.
 5. Residential's six species are a first pass. The design says "mixed", and six
    families out of twelve is only half a mix.
+
+---
+
+# Phase 4: the real world, 3D pixels, and a turn-based battle
+
+Three requests at once, and one of them reverses a lot of what came before.
+
+## The map is the Earth now
+
+Positions are Web Mercator metres, so a position in the game is a position on a
+real street and the spawn grid is anchored to the globe. The original `patrol.js`
+header had predicted this would be easy — *"swapping the simulated walk for real
+GPS is a matter of feeding different coordinates in"* — and it was, because nothing
+downstream had ever cared where the metres came from. Three sources feed them now:
+GPS via `watchPosition`, a dragged marker, and the simulated walk the tests use.
+
+**Mercator metres are not ground metres.** At Westminster one is 0.62 of the other.
+Every distance a player reads goes through `groundMetres`, the scale bar is in
+ground metres, and the simulated walk divides the factor back out so a step is a
+step at any latitude. Spawn tiles stay in Mercator metres deliberately: that keeps
+the grid identical worldwide, which is what makes serverless deterministic spawns
+work at all.
+
+**Biome is read off the rendered tile.** Blue is water, green is vegetation, and
+the built biomes — all grey, indistinguishable by colour — are still decided by the
+synthetic generator. That is not a compromise; it is what keeps all nine biomes
+reachable, and the placement suite's "no dead ground" check would fail if the map
+were allowed to collapse them into one.
+
+**The basemap defaults to off**, which is a privacy decision before a technical one.
+Asking for a tile tells the tile host roughly where you are, and nothing should do
+that before the player has asked for a map. The coordinate itself never leaves the
+device.
+
+A provider that sends no CORS header gets an `<img>` rather than a `fetch`. This
+matters more than it sounds: `fetch(mode: 'cors')` *refuses* such a response
+outright, so the map would not have drawn at all — and the module's own comments
+were confidently describing a fallback it did not have.
+
+## The monsters are built from their own Codex entries
+
+Forty-three species, no artist, so each one is generated from what the bestiary
+already says: family picks the silhouette, size the proportions, elements the
+palette, stage the extra mass, and the weak points become glowing voxels snapped to
+the nearest solid cube in the region the fight makes you shoot at.
+
+The apexes had no family of their own — `apex` is a bucket, not a lineage — so all
+three fell through to the default blob. They take their plan from their element
+now: Karrahk coils, Nyxhollow looms.
+
+The first renderer anchored every model at a fixed point, and since isometric
+projection grows *upward*, a Titan ran off the top of its frame while a Mote
+floated in the middle of its own. Measuring the projected box first and centring
+second is the fix, and it is what every caller wanted anyway.
+
+## The fight is turn-based, and the old balance work came with it
+
+Your Sanctuary residents fight; the weapons became the capture step. That is the
+shape the game was already pointing at — you raise monsters, so the monsters should
+be what you bring — and it let four phases of measured work carry over instead of
+being thrown away:
+
+- `elements.json`'s effectiveness table is the type chart;
+- `restraintRequired`, `woundMultiplier` and the status product from `ammo.json`
+  became the **catch roll**, so a wounded sedated target is still easier to take
+  and softening still beats leading with darts: 11% healthy → 22% wounded → 40%
+  wounded and sedated;
+- `skittishness` still decides whether it bolts.
+
+### The type chart was invisible, and the attack stat was why
+
+A Mote's attack of 10 against a Strider's 34 is a 3.4× swing, which buried the 2×
+type chart underneath it. Measured: Tide-on-Ember did **8** damage while
+Ember-on-Tide did **11** — "super effective" hitting for less than "not very
+effective", with the headline mechanic of the entire game inverted.
+
+Compressing the attack term to an exponent of 0.55 keeps a bigger monster
+meaningfully stronger and leaves the type chart the loudest term. The same pairing
+now reads 12 against 8, the right way round.
+
+### The opening battle was unwinnable
+
+At rank 1 you own no monsters, so the Warden fights with the gun. That was a flat
+number, and it lost: twelve turns to be driven off with the wild monster on 2 HP.
+The `uses_weapon: true` flag had been in the move data from the start and nothing
+read it. Wired to the equipped weapon's damage, the opening is won 63% of the time
+in about nine turns — winnable, not a formality.
+
+### The arena is still here
+
+Retiring it would mean deleting four phases of balance work and five test suites to
+make a point. It is a setting in the world panel, the aim modes still apply to it,
+and the phase 1 suite now says which combat it is testing rather than relying on
+whichever is the default — which is how this was caught.
+
+## What the sandbox could not verify
+
+Tile hosts are blocked by this container's network policy, so the map has never
+been seen rendering real streets from here. The suite serves its own tiles instead
+— a quartered PNG with water, woodland, parkland and built ground in known
+positions, plus a no-CORS variant and a 404 variant — which exercises the whole
+path end to end and does not depend on OpenStreetMap being up. **The real basemap
+is unverified by eye and will need a look on a device with a normal connection.**
+
+## Still open
+
+1. **Party play** and the server-side half of Codex sharing, unchanged.
+2. Battles are one-on-one against a single wild monster; pack spawns still route
+   through the arena, and a turn-based pack fight is undesigned.
+3. The apexes' phased fights are arena-only. A phased turn-based apex needs its
+   own design pass.
+4. Levels are derived from Study, so a resident you have raised is stronger — but
+   nothing yet *awards* Study for winning a battle, which is the obvious loop.
+5. Moves are two per element plus a universal. No status moves, no PP, no
+   switching costs beyond the turn.

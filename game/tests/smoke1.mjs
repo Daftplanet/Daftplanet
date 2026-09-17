@@ -16,6 +16,16 @@ const ok = (label, cond, extra = '') => console.log(`${cond ? 'PASS' : 'FAIL'}  
 await page.goto(URL, { waitUntil: 'networkidle' });
 await page.waitForFunction(() => window.__riftborn !== undefined, null, { timeout: 8000 });
 
+/*
+ * This suite is the real-time arena's, and the engage button now routes to the
+ * turn-based battle by default. Say which combat is under test rather than
+ * relying on whichever one happens to be the default.
+ */
+await page.evaluate(() => {
+  window.__riftborn.profile.state.combatMode = 'arena';
+  window.__riftborn.profile.save();
+});
+
 // --- 1. patrol boots with spawns
 await page.waitForTimeout(400);
 let st = await page.evaluate(() => ({

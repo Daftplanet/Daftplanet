@@ -18,6 +18,10 @@ import { createProfile, AMMO_COST, RANK_XP, WEAPON_UNLOCK, RESEARCH_COST } from 
 import { drawFieldReport, toPng } from './report.js';
 import { buildModel, modelFor, fitModel, spriteFor, clearVoxelCache } from './voxel.js';
 import {
+  createBattle, makeCombatant, takeTurn, options, catchChance,
+  levelOf, wildLevel, activeMon, movesFor, computeMoveDamage,
+} from './battle.js';
+import {
   buildPool, apexForecast, riftForCell, placementFits, inTimeWindow, weatherIs, biomeAt,
   PLACEMENT_VOCABULARY, WEATHER, RIFT_RANK, RIFT_RADIUS_M, TILE_M, visibleSpawns,
 } from './world.js';
@@ -181,11 +185,12 @@ function boot(data) {
   };
 
   // ---------------------------------------------------------------- routing
-  const VIEWS = ['patrol', 'fight', 'codex', 'sanctuary', 'loadout'];
+  const VIEWS = ['patrol', 'fight', 'battle', 'codex', 'sanctuary', 'loadout'];
   function show(next) {
     view = next;
     for (const v of VIEWS) $(`view-${v}`).hidden = v !== next;
     for (const t of document.querySelectorAll('.tab')) t.dataset.active = String(t.dataset.view === next);
+    if (next === 'battle') renderBattle();
     if (next === 'codex') renderCodex();
     if (next === 'sanctuary') renderSanctuary();
     if (next === 'loadout') renderLoadout();
@@ -252,7 +257,15 @@ function boot(data) {
       location.reload();
     }
   });
-  $('engage-go').addEventListener('click', () => { if (patrol.nearest) startFight(patrol.nearest); });
+  $('engage-go').addEventListener('click', () => {
+    if (!patrol.nearest) return;
+    if ((profile.state.combatMode ?? 'turn') === 'arena') startFight(patrol.nearest);
+    else startBattle(patrol.nearest);
+  });
+  $('opt-combat').addEventListener('change', (e) => {
+    profile.state.combatMode = e.target.value === 'arena' ? 'arena' : 'turn';
+    profile.save();
+  });
 
   let flashTimer = null;
   function flash(text) {
@@ -334,6 +347,256 @@ function boot(data) {
     for (const b of document.querySelectorAll('[data-claim]')) {
       b.addEventListener('click', () => { profile.claimContract(b.dataset.claim); renderContracts(); });
     }
+  }
+
+  // ---------------------------------------------------------------- battle
+  /*
+   * The turn-based battle, and the default way an encounter plays. Your Sanctuary
+   * residents fight; the weapons became the capture step.
+   *
+   * The real-time arena is still here and still reachable from the world panel,
+   * because it is four phases of measured balance work and five test suites, and
+   * retiring it would mean deleting all of that to make a point.
+   */
+  let battle = null;
+  let battleSpawn = null;
+  let battleBusy = false;
+  let battleMenu = 'root';
+
+  function startBattle(spawn) {
+    const sp = speciesById[spawn.speciesId];
+    const slot = profile.slots[0];
+    const weapon = slot ? weaponById[slot.weaponId] : null;
+
+    // Your party is the Sanctuary, escort first — what you chose to bring.
+    const size = data.elements.battle_rules.party_size ?? 3;
+    const residents = [...profile.state.residents]
+      .sort((a, c) => (a.uid === profile.state.escortUid ? -1 : c.uid === profile.state.escortUid ? 1 : 0))
+      .slice(0, size);
+    const team = residents
+      .map((r) => {
+        const rsp = speciesById[r.speciesId];
+        return rsp ? makeCombatant(rsp, levelOf(r, rsp), data, { resident: r }) : null;
+      })
+      .filter(Boolean);
+
+    const wild = makeCombatant(sp, wildLevel(sp, profile.rank), data, { wild: true });
+    battle = createBattle({ data, team, wild, weapon });
+    battleSpawn = spawn;
+    battleMenu = 'root';
+    battleBusy = false;
+
+    $('battle-where').textContent = `${title(biomeUnderfoot(patrol))} · ${WEATHER[patrol.weather]?.name ?? ''}`;
+    $('battle-log').innerHTML = `<p data-kind="info">A wild ${sp.name} blocks your way.</p>`;
+    renderBattle();
+    show('battle');
+  }
+
+  const hpClass = (frac) => (frac > 0.5 ? 'ok' : frac > 0.2 ? 'low' : 'critical');
+
+  function renderBattle() {
+    const b = battle;
+    if (!b) return;
+    const w = b.wild;
+    const mine = activeMon(b);
+
+    $('battle-turn').textContent = `Turn ${Math.max(1, b.turn)}`;
+    $('wild-name').textContent = w.species.name;
+    $('wild-level').textContent = `Lv.${w.level}`;
+    $('wild-hp').style.width = `${(w.hp / w.maxHp) * 100}%`;
+    $('wild-hp').dataset.state = hpClass(w.hp / w.maxHp);
+    $('wild-hp-text').textContent = `${Math.ceil(w.hp)} / ${w.maxHp}`;
+    $('wild-statuses').innerHTML = Object.entries(w.statuses)
+      .map(([id, t]) => `<span class="chip chip--good">${id} ${t}</span>`).join('');
+
+    if (b.wardenOnly) {
+      $('mine-name').textContent = 'Warden';
+      $('mine-level').textContent = weaponLabel();
+      $('mine-hp').style.width = `${(b.warden.hp / b.warden.maxHp) * 100}%`;
+      $('mine-hp-text').textContent = `${Math.ceil(b.warden.hp)} / ${b.warden.maxHp}`;
+      $('mine-statuses').innerHTML = '<span class="chip chip--warn">no monster — catch one</span>';
+      $('mine-model').hidden = true;
+    } else {
+      $('mine-model').hidden = false;
+      $('mine-name').textContent = mine.species.name;
+      $('mine-level').textContent = `Lv.${mine.level}`;
+      $('mine-hp').style.width = `${(mine.hp / mine.maxHp) * 100}%`;
+      $('mine-hp').dataset.state = hpClass(mine.hp / mine.maxHp);
+      $('mine-hp-text').textContent = `${Math.ceil(mine.hp)} / ${mine.maxHp}`;
+      $('mine-statuses').innerHTML = Object.entries(mine.statuses)
+        .map(([id, t]) => `<span class="chip chip--good">${id} ${t}</span>`).join('');
+    }
+
+    paintBattleModels();
+    renderBattleMenu();
+  }
+
+  const weaponLabel = () => {
+    const slot = profile.slots[0];
+    return slot ? (weaponById[slot.weaponId]?.name ?? '—') : 'unarmed';
+  };
+
+  let battleTurns = 0.12;
+  function paintBattleModels() {
+    const b = battle;
+    if (!b) return;
+    /*
+     * The hit flash decays here rather than being cleared by whoever played the
+     * animation. Relying on the caller left every model painted solid white
+     * whenever a turn was taken by anything other than the click handler — a test,
+     * the console, a future auto-battler.
+     */
+    const fade = (c) => { if (c && c.flash > 0) c.flash = Math.max(0, c.flash - 0.18); };
+    fade(b.wild);
+    for (const c of b.team) fade(c);
+    const wildC = $('wild-model');
+    const wc = wildC.getContext('2d');
+    wc.clearRect(0, 0, wildC.width, wildC.height);
+    fitModel(wc, modelFor(b.wild.species), {
+      turns: battleTurns, width: wildC.width, height: wildC.height, pad: 0.88,
+      alpha: b.wild.fainted ? 0.25 : 1, flash: b.wild.flash,
+    });
+
+    const mine = activeMon(b);
+    if (!b.wardenOnly && mine) {
+      const c = $('mine-model');
+      const mc = c.getContext('2d');
+      mc.clearRect(0, 0, c.width, c.height);
+      // Your own monster faces away, which is the convention and also reads as
+      // "this one is on your side" without needing a label.
+      fitModel(mc, modelFor(mine.species), {
+        turns: battleTurns + 0.5, width: c.width, height: c.height, pad: 0.88,
+        alpha: mine.fainted ? 0.25 : 1, flash: mine.flash,
+      });
+    }
+  }
+
+  function bchoice(label, sub, handler, { disabled = false, kind = '' } = {}) {
+    return { label, sub, handler, disabled, kind };
+  }
+
+  function renderBattleMenu() {
+    const b = battle;
+    if (!b) return;
+    const o = options(b);
+    let items = [];
+
+    if (b.outcome) {
+      items = [bchoice('Continue', outcomeLine(b), () => finishBattle())];
+    } else if (battleMenu === 'root') {
+      items = [
+        bchoice('Fight', 'attack with a move', () => { battleMenu = 'moves'; renderBattleMenu(); }),
+        bchoice('Bag', 'throw a capture round', () => { battleMenu = 'bag'; renderBattleMenu(); },
+                { disabled: !o.canCatch }),
+        bchoice('Swap', 'send out another', () => { battleMenu = 'swap'; renderBattleMenu(); },
+                { disabled: !o.canSwap }),
+        bchoice('Run', 'break off', () => act({ kind: 'run' })),
+      ];
+    } else if (battleMenu === 'moves') {
+      items = o.moves.map((m, i) => bchoice(
+        m.name,
+        `${m.element ? title(m.element) : 'untyped'} · ${m.power} pw · ${Math.round((m.accuracy ?? 1) * 100)}%`
+        + `${m.priority > 0 ? ' · quick' : m.priority < 0 ? ' · slow' : ''}`,
+        () => act({ kind: 'move', index: i }),
+      ));
+      items.push(bchoice('Back', '', () => { battleMenu = 'root'; renderBattleMenu(); }, { kind: 'back' }));
+    } else if (battleMenu === 'bag') {
+      const rounds = data.ammo.capture.filter((a) => profile.ammoCount(a.id) > 0);
+      items = rounds.map((a) => {
+        const { chance } = catchChance(b, a);
+        return bchoice(
+          a.name,
+          `${profile.ammoCount(a.id)} left · about ${Math.round(chance * 100)}% to take it`,
+          () => act({ kind: 'catch', ammoId: a.id }),
+        );
+      });
+      if (!items.length) items = [bchoice('No capture rounds', 'craft some at the bench', () => {}, { disabled: true })];
+      items.push(bchoice('Back', '', () => { battleMenu = 'root'; renderBattleMenu(); }, { kind: 'back' }));
+    } else if (battleMenu === 'swap') {
+      items = b.team.map((c, i) => bchoice(
+        c.species.name,
+        c.fainted ? 'down' : `Lv.${c.level} · ${Math.ceil(c.hp)}/${c.maxHp}`,
+        () => act({ kind: 'swap', index: i }),
+        { disabled: c.fainted || i === b.active },
+      ));
+      items.push(bchoice('Back', '', () => { battleMenu = 'root'; renderBattleMenu(); }, { kind: 'back' }));
+    }
+
+    $('battle-menu').innerHTML = items.map((it, i) => `
+      <button class="bchoice" data-i="${i}" data-kind="${it.kind}" type="button" ${it.disabled ? 'disabled' : ''}>
+        <b>${it.label}</b>${it.sub ? `<small>${it.sub}</small>` : ''}
+      </button>`).join('');
+    for (const el of document.querySelectorAll('.bchoice')) {
+      el.addEventListener('click', () => { if (!battleBusy) items[Number(el.dataset.i)].handler(); });
+    }
+  }
+
+  const outcomeLine = (b) => ({
+    caught: 'It is yours.',
+    defeated: 'It goes down.',
+    fled: 'You broke off.',
+    escaped: 'It got away.',
+    wiped: 'You have nothing left.',
+  }[b.outcome] ?? '');
+
+  /** Take a turn and play its log out, a line at a time, so the fight reads. */
+  async function act(action) {
+    const b = battle;
+    if (!b || battleBusy) return;
+    battleBusy = true;
+    battleMenu = 'root';
+    $('battle-menu').innerHTML = '';
+
+    const lines = takeTurn(b, action);
+    for (const line of lines) {
+      const p = document.createElement('p');
+      p.dataset.kind = line.kind;
+      p.textContent = line.text;
+      $('battle-log').append(p);
+      $('battle-log').scrollTop = $('battle-log').scrollHeight;
+      renderBattle();
+      await new Promise((r) => setTimeout(r, 520));
+    }
+    battleBusy = false;
+    renderBattle();
+  }
+
+  function finishBattle() {
+    const b = battle;
+    const sp = b.wild.species;
+    const before = { xp: profile.state.xp, ess: profile.state.essence, rp: profile.state.researchPoints };
+
+    // Every round fired is gone, landed or not.
+    for (const [id, n] of Object.entries(b.spent)) profile.spendAmmo(id, n);
+
+    if (b.outcome === 'caught') {
+      profile.recordOutcome(sp, 'catalogued', {
+        clean: b.wild.hp / b.wild.maxHp > 0.8,
+        hpFraction: b.wild.hp / b.wild.maxHp,
+        method: `${weaponLabel()} · ${data.ammo.capture.find((a) => a.id === b.caughtWith)?.name ?? ''}`,
+        methodAmmo: b.caughtWith,
+        weaponId: profile.slots[0]?.weaponId ?? null,
+        heightM: b.wild.heightM, percentile: b.wild.percentile,
+        biome: fightBiome ?? biomeUnderfoot(patrol),
+      });
+    } else if (b.outcome === 'defeated') {
+      profile.recordOutcome(sp, 'culled', { biome: fightBiome ?? biomeUnderfoot(patrol) });
+    } else if (b.outcome === 'escaped' || b.outcome === 'wiped') {
+      profile.recordOutcome(sp, 'escaped', {});
+    }
+    if (b.outcome !== 'fled') profile.resolve(battleSpawn.id);
+    profile.save();
+
+    const after = profile.state;
+    const gains = [
+      after.xp - before.xp && `+${fmt(after.xp - before.xp)} XP`,
+      after.essence - before.ess && `+${fmt(after.essence - before.ess)} essence`,
+      after.researchPoints - before.rp && `+${fmt(after.researchPoints - before.rp)} RP`,
+    ].filter(Boolean).join(' · ');
+    if (gains) flash(gains);
+
+    battle = null;
+    show('patrol');
   }
 
   // ---------------------------------------------------------------- fight
@@ -990,6 +1253,11 @@ function boot(data) {
   function startSpin() {
     if (spinning) return;
     spinning = setInterval(() => {
+      if (view === 'battle') {
+        battleTurns = (battleTurns + 0.006) % 1;
+        paintBattleModels();
+        return;
+      }
       if (view !== 'codex' && view !== 'sanctuary') return;
       modelTurns = (modelTurns + 0.012) % 1;
       paintModels();
@@ -1390,7 +1658,13 @@ function boot(data) {
     profile, patrol, speciesById, data,
     get view() { return view; },
     get fight() { return fight; },
-    show, startFight, renderSanctuary, renderContracts,
+    show, startFight, startBattle, renderSanctuary, renderContracts,
+    get battle() { return battle; },
+    takeTurn: (a) => takeTurn(battle, a), battleOptions: () => options(battle),
+    finishBattle, renderBattle,
+    catchChance: (ammo) => catchChance(battle, ammo),
+    makeCombatant, createBattle, levelOf, wildLevel, movesFor, activeMon,
+    computeMoveDamage,
     loadLoadout, applyMods, modUnlocked, fittedMods,
     speciesHeight, rollSpecimen, heightPercentile, createFight, drawFieldReport,
     escortAbility, useEscort, cycleLock, assistPhase, assistMiss, ringSeconds,
@@ -1406,6 +1680,7 @@ function boot(data) {
     teleportTo(spawn) { patrol.x = spawn.x; patrol.y = spawn.y; },
   };
 
+  $('opt-combat').value = profile.state.combatMode ?? 'turn';
   $('opt-aim').value = profile.state.aimMode ?? 'free';
   $('opt-unlock').checked = Boolean(profile.state.devUnlockAll);
   $('opt-study').value = profile.state.devStudyRate;

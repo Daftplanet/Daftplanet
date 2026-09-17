@@ -84,6 +84,11 @@
         <label>Study rate <em id="study-label">×1</em>
           <input type="range" id="opt-study" min="1" max="500" step="1" value="1"></label>
         <p class="dev__note">Spawns come from (tile, 15-minute bucket, weather, world seed). Shift the clock and the map repopulates — Ember and Volt come out at dusk, Stone is the daytime constant. Study accrues in real time at 1/minute, so crank the rate to see an evolution without waiting seven hours.</p>
+        <label>Combat <select id="opt-combat">
+          <option value="turn">Turn-based battle</option>
+          <option value="arena">Arena (real-time)</option>
+        </select></label>
+        <p class="dev__note">The turn-based battle is the game: your Sanctuary residents fight, and the weapons became the capture step. The real-time arena is the earlier shooter — it still works, and the aim setting below only applies to it.</p>
         <label>Aim <select id="opt-aim">
           <option value="free">Free aim — steer the reticle</option>
           <option value="assisted">Assisted — lock on, fire on the ring</option>
@@ -197,6 +202,44 @@
       <span class="keys__desktop"><b>WASD</b> move · <b>mouse</b> aim · <b>hold click</b> fire · <b>Space</b> chamber · <b>Q</b>/<b>1</b>/<b>2</b> weapon · <b>R</b> reload · <b>E</b> tag · <b>F</b> escort · <b>T</b> target · <b>Esc</b> withdraw</span>
       <span class="keys__touch">Drag left to move · hold right to aim and fire · LEAVE to withdraw</span>
     </p>
+  </section>
+
+  <!-- ---------------------------------------------------------- battle -->
+  <section class="view view--battle" id="view-battle" hidden>
+    <div class="bar bar--strip">
+      <span id="battle-where">—</span>
+      <span class="sep">·</span>
+      <span id="battle-turn">Turn 1</span>
+      <span class="flash" id="battle-flash" hidden></span>
+    </div>
+
+    <div class="field">
+      <div class="side side--wild">
+        <div class="nameplate">
+          <b id="wild-name">—</b>
+          <span class="nameplate__lv" id="wild-level">Lv.1</span>
+          <div class="meter__track meter__track--slim"><div class="meter__fill meter__fill--hp" id="wild-hp"></div></div>
+          <span class="nameplate__hp" id="wild-hp-text">—</span>
+          <div class="statuses" id="wild-statuses"></div>
+        </div>
+        <canvas class="portrait portrait--wild" id="wild-model" width="260" height="260"></canvas>
+      </div>
+
+      <div class="side side--mine">
+        <canvas class="portrait portrait--mine" id="mine-model" width="220" height="220"></canvas>
+        <div class="nameplate nameplate--mine">
+          <b id="mine-name">—</b>
+          <span class="nameplate__lv" id="mine-level">Lv.1</span>
+          <div class="meter__track meter__track--slim"><div class="meter__fill meter__fill--warden" id="mine-hp"></div></div>
+          <span class="nameplate__hp" id="mine-hp-text">—</span>
+          <div class="statuses" id="mine-statuses"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="battle-log" id="battle-log"></div>
+
+    <div class="battle-menu" id="battle-menu"></div>
   </section>
 
   <!-- ---------------------------------------------------------- codex -->
