@@ -814,7 +814,77 @@ ok('the cap does not save a Mote that walked into a Titan',
    `Karrahk hits a Glimmerfly for ${mismatch.best} against ${mismatch.hp} health — still one hit,`
    + ' because the cap only applies between monsters that are comparable');
 
-// --- 29. phone layout
+// --- 29. you can choose who goes out, and in what order
+const party = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['cinderfang', 'brinelet', 'sporelet', 'pebblit'], 'sootpup', { study: 900 });
+  const ids = r.profile.state.residents.map((x) => x.uid);
+  const names = r.profile.state.residents.map((x) => r.speciesById[x.speciesId].name);
+
+  // Nothing chosen: the old behaviour, first three in storage order.
+  r.profile.state.partyUids = [];
+  r.profile.save();
+  r.startBattle({ id: 'p1', speciesId: 'sootpup', x: r.patrol.x, y: r.patrol.y });
+  const byDefault = r.battle.team.map((c) => c.species.name);
+
+  // Choose a party, in a deliberately different order.
+  r.profile.toggleParty(ids[3]);
+  r.profile.toggleParty(ids[1]);
+  r.profile.save();
+  r.startBattle({ id: 'p2', speciesId: 'sootpup', x: r.patrol.x, y: r.patrol.y });
+  const chosen = r.battle.team.map((c) => c.species.name);
+  const lead = r.battle.team[r.battle.active].species.name;
+
+  // The cap replaces rather than silently refusing.
+  r.profile.toggleParty(ids[0]); r.profile.toggleParty(ids[2]);
+  const full = r.profile.party.length;
+  r.profile.toggleParty(ids[1]);   // already in — this removes
+  const afterRemove = r.profile.party.length;
+  return { names, byDefault, chosen, lead, full, afterRemove, cap: r.data.elements.battle_rules.party_size };
+});
+ok('you pick who goes out, and the lead is the one you put first',
+   party.chosen.length === 2 && party.chosen[0] === party.names[3] && party.chosen[1] === party.names[1]
+   && party.lead === party.names[3] && party.byDefault.length === 3
+   && party.full === party.cap && party.afterRemove === party.cap - 1,
+   `no choice → ${party.byDefault.join(', ')} (storage order) · chosen → ${party.chosen.join(' then ')}`
+   + ` · the party caps at ${party.cap} and a full one replaces rather than refusing`);
+
+// --- 30. releasing a monster takes it off the team sheet
+const released = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['cinderfang', 'brinelet'], 'sootpup', { study: 900 });
+  const ids = r.profile.state.residents.map((x) => x.uid);
+  r.profile.state.partyUids = [];
+  r.profile.toggleParty(ids[0]);
+  r.profile.toggleParty(ids[1]);
+  const before = r.profile.party.length;
+  r.profile.release(ids[0]);
+  return { before, after: r.profile.party.length, stale: r.profile.state.partyUids.includes(ids[0]) };
+});
+ok('a released monster comes off the party as well as out of the Sanctuary',
+   released.before === 2 && released.after === 1 && !released.stale,
+   `${released.before} in the party, released one, ${released.after} left and no dangling id`);
+
+// --- 31. the Sanctuary says what a monster can actually do
+const sheet = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['cinderfang'], 'sootpup', { study: 900 });
+  r.show('sanctuary');
+  await new Promise((d) => setTimeout(d, 300));
+  const card = document.querySelector('.resident');
+  const head = card?.querySelector('.kit__head')?.textContent ?? '';
+  const moves = [...(card?.querySelectorAll('.kit__moves li') ?? [])].map((li) => li.textContent);
+  const partyBtn = card?.querySelector('[data-party]')?.textContent?.trim() ?? null;
+  const summary = document.getElementById('sanctuary-summary').textContent;
+  return { head, moves, partyBtn, mentionsParty: /party|first three/.test(summary) };
+});
+ok('the Sanctuary shows a level, the stats and all four moves',
+   /Lv\.\d+/.test(sheet.head) && /HP/.test(sheet.head) && sheet.moves.length === 4
+   && sheet.moves.some((t) => /PP/.test(t)) && sheet.partyBtn && sheet.mentionsParty,
+   `"${sheet.head.trim()}" · ${sheet.moves.length} moves listed · button reads "${sheet.partyBtn}"`
+   + ' — none of this was anywhere in the game before');
+
+// --- 32. phone layout
 await page.setViewportSize({ width: 390, height: 844 });
 await page.evaluate(async () => { await window.battleWith(['brinelet'], 'cinderfang'); });
 await page.waitForTimeout(400);

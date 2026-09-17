@@ -90,6 +90,15 @@ const DEFAULT = () => ({
   contracts: { day: null, list: [] },
   showcase: [],
   escortUid: null,
+  /*
+   * Who goes out, and in what order. The turn-based battle fields three
+   * monsters, and before this it took whichever three came first in storage
+   * order with the escort sorted to the front — so the party was an accident of
+   * capture sequence and there was no way to change it. An empty list still
+   * falls back to that, because a Warden who has never opened the Sanctuary
+   * should still be able to fight.
+   */
+  partyUids: [],
   aimMode: 'free',
   combatMode: 'turn',
   mapProvider: null,
@@ -412,6 +421,33 @@ export function createProfile(content) {
       return state.escortUid;
     },
 
+    // ---------------------------------------------------------- the party
+    /** The residents that go out, in order. Lead first. */
+    get party() {
+      return state.partyUids
+        .map((uid) => state.residents.find((r) => r.uid === uid))
+        .filter(Boolean);
+    },
+
+    /** Where this one sits in the party, or -1. */
+    partyIndex(uid) {
+      return state.partyUids.indexOf(uid);
+    },
+
+    /**
+     * Add or remove one. Adding past the cap replaces the last slot rather than
+     * silently doing nothing, which is what a full party would otherwise feel
+     * like — a button that stops working with no explanation.
+     */
+    toggleParty(uid, max = 3) {
+      const at = state.partyUids.indexOf(uid);
+      if (at >= 0) state.partyUids.splice(at, 1);
+      else if (state.partyUids.length < max) state.partyUids.push(uid);
+      else state.partyUids[max - 1] = uid;
+      notify();
+      return [...state.partyUids];
+    },
+
     // ---------------------------------------------------------- showcase
     /** Up to three pinned residents, per 07's "specimen showcase". */
     get showcase() { return (state.showcase ?? []).filter((uid) => state.residents.some((r) => r.uid === uid)); },
@@ -473,6 +509,9 @@ export function createProfile(content) {
       const r = state.residents[i];
       state.essence += Math.round(r.study * 0.4);      // ~40% of Study back as Essence
       if (state.escortUid === uid) state.escortUid = null;
+      // A released monster cannot still be on the team sheet.
+      const inParty = state.partyUids.indexOf(uid);
+      if (inParty >= 0) state.partyUids.splice(inParty, 1);
       state.showcase = (state.showcase ?? []).filter((u) => u !== uid);
       state.residents.splice(i, 1);
       notify();

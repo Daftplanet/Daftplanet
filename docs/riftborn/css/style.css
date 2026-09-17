@@ -717,6 +717,36 @@ select {
 .battle-log p[data-kind="bad"] { color: var(--warn); }
 .battle-log p[data-kind="weak"], .battle-log p[data-kind="miss"] { color: var(--ink-faint); }
 
+/* What a resident brings to a battle: its level, its stats, its four moves. */
+.kit {
+  margin: 6px 0;
+  padding: 6px 8px;
+  border: 1px solid var(--line, #2a2f36);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.02);
+}
+.kit__head {
+  margin: 0 0 4px;
+  font-size: 11px;
+  color: var(--ink-dim);
+  font-variant-numeric: tabular-nums;
+}
+.kit__moves { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
+.kit__moves li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.kit__moves b { color: var(--c, #ddd); font-weight: 600; }
+.kit__moves span { color: var(--ink-faint); text-align: right; white-space: nowrap; }
+
+@media (max-width: 460px) {
+  .kit__moves li { flex-direction: column; gap: 0; }
+  .kit__moves span { text-align: left; white-space: normal; }
+}
+
 /* An apex breaking to its next phase is the loudest thing in the log. */
 .battle-log p[data-kind="phase"] {
   color: var(--accent, #e8b44a);

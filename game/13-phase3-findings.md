@@ -1529,9 +1529,55 @@ Playing well beats playing the chart beats pressing the big button beats
 guessing, and the spread is 17.3 points where it was 11.2. Reproduce it with
 `MOVES=1 node game/tools/balance_sim.mjs`.
 
+# Phase 4, part 5: a party you could not choose, and monsters you could not read
+
+Three sections of work went into the turn-based battle: three monsters a side,
+four moves each with their own PP, a type chart, statuses that now cost a turn.
+None of it was visible or adjustable from anywhere in the game.
+
+## The party was an accident of capture order
+
+`startBattle` took the first three residents in storage order, with the escort
+sorted to the front:
+
+```js
+const residents = [...profile.state.residents]
+  .sort((a, c) => (a.uid === escortUid ? -1 : c.uid === escortUid ? 1 : 0))
+  .slice(0, size);
+```
+
+So your party was whichever three you happened to catch first, and the only
+lever on it was the **Escort** button — which exists for the *real-time arena's*
+one-ability escort and had quietly acquired a second meaning nobody documented.
+
+There is a party now: up to three, in the order you choose, lead first. An empty
+party still falls back to the old behaviour, because a Warden who has never
+opened the Sanctuary should still be able to fight. A full party **replaces its
+last slot** rather than refusing — a button that silently stops working is worse
+than one that does something.
+
+## You could not find out what your own monster could do
+
+The resident card showed a Study bar, a measured height, lineage, evolution
+gates, and the arena escort ability. It showed **no level, no stats, and no
+moves** — despite level being a function of Study and every monster having four
+moves with distinct PP since the last section.
+
+The only way to discover that your Cinderfang knew Cinderbrand, that it left
+things burning, and that you got two of them per battle was to take it into a
+fight and open the menu.
+
+Each card now carries its kit: `Lv.19 · 287 HP · 62 atk · 15% armour · 22 spd`,
+and the four moves with element, power or effect, priority and PP.
+
+That is not new mechanics — it is the existing mechanics, said out loud. But
+three sections of combat depth are worth very little if the only place to read
+them is mid-fight.
+
 ## Still open
 
-1. **Party play** and the server-side half of Codex sharing, unchanged.
+1. **Party play** (the multiplayer kind) and the server-side half of Codex
+   sharing, unchanged.
 2. Apex **party scaling** is arena-only: `apexHpScale(partySize)` exists there
    and the turn battle fights every apex at its solo numbers, because a
    turn-based party is your three residents rather than three Wardens. The

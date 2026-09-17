@@ -369,11 +369,19 @@ function boot(data) {
     const slot = profile.slots[0];
     const weapon = slot ? weaponById[slot.weaponId] : null;
 
-    // Your party is the Sanctuary, escort first — what you chose to bring.
+    /*
+     * Who goes out. A party chosen in the Sanctuary if there is one, in the
+     * order it was chosen; otherwise the old behaviour — escort first, then
+     * whatever comes next in storage order — so a Warden who has never opened
+     * the Sanctuary can still fight.
+     */
     const size = data.elements.battle_rules.party_size ?? 3;
-    const residents = [...profile.state.residents]
-      .sort((a, c) => (a.uid === profile.state.escortUid ? -1 : c.uid === profile.state.escortUid ? 1 : 0))
-      .slice(0, size);
+    const chosen = profile.party;
+    const residents = chosen.length
+      ? chosen.slice(0, size)
+      : [...profile.state.residents]
+        .sort((a, c) => (a.uid === profile.state.escortUid ? -1 : c.uid === profile.state.escortUid ? 1 : 0))
+        .slice(0, size);
     const team = residents
       .map((r) => {
         const rsp = speciesById[r.speciesId];
@@ -1382,6 +1390,13 @@ function boot(data) {
       + ` · ${s.stats.evolutions} evolutions · ${complete.length} / ${profile.familyCount} families complete`
       + (complete.length ? ` (+${complete.length} habitat)` : '')
       + ` · ${stageOne.length} / ${profile.familyCount} first stages`
+      + (() => {
+        // Say who actually goes out, since the answer used to be "whoever was
+        // caught first" and nothing anywhere said so.
+        const party = profile.party;
+        if (party.length) return ` · party: ${party.map((r) => speciesById[r.speciesId]?.name ?? '?').join(' → ')}`;
+        return s.residents.length ? ' · no party chosen — the first three go out' : '';
+      })()
       + (profile.permanentMods.length ? ' · Bio-Scanner earned' : '')
       + (profile.escort ? ` · escorting ${speciesById[profile.escort.speciesId]?.name} (${profile.escortAbility?.name ?? '—'})` : ' · no escort');
     $('bonus-list').innerHTML = Object.entries(bonuses).length
@@ -1450,6 +1465,33 @@ function boot(data) {
               if (a.effect === 'illuminate') bits.push(`${a.seconds.toFixed(1)}s`);
               return `<p class="entry__first ability"><b style="--c:${ELEMENT_COLOUR[sp.elements[0]]}">${a.name}</b> — ${a.blurb}${bits.length ? ` (${bits.join(' · ')})` : ''}</p>`;
             })()}
+            ${(() => {
+              /*
+               * What this one brings to a battle. None of it was anywhere in the
+               * game: the turn-based fight reads level off Study and gives every
+               * monster four moves with their own PP, and the Sanctuary showed a
+               * Study bar and the ARENA's escort ability and nothing else. You
+               * could not find out what your own monster could do without taking
+               * it into a fight and opening the menu.
+               */
+              const lvl = levelOf(r, sp);
+              const c = makeCombatant(sp, lvl, data, { resident: r });
+              const moves = movesFor(sp, data).map((m) => {
+                const what = m.applies ? `leaves it ${m.applies}`
+                  : m.applies_self ? `${m.applies_self} on itself`
+                  : `${m.power} pw`;
+                const pp = m.pp == null ? '∞' : m.pp;
+                return `<li><b style="--c:${ELEMENT_COLOUR[m.element] ?? '#888'}">${m.name}</b>`
+                  + `<span>${m.element ? title(m.element) : 'untyped'} · ${what}`
+                  + `${m.priority > 0 ? ' · quick' : m.priority < 0 ? ' · slow' : ''} · ${pp} PP</span></li>`;
+              }).join('');
+              return `
+                <div class="kit">
+                  <p class="kit__head">Lv.${lvl} · ${c.maxHp} HP · ${c.attack.toFixed(0)} atk`
+                   + ` · ${Math.round(c.armour * 100)}% armour · ${c.speed} spd</p>
+                  <ul class="kit__moves">${moves}</ul>
+                </div>`;
+            })()}
             ${(r.evolvedFrom ?? []).length
               ? `<p class="entry__first">Raised from ${r.evolvedFrom.map((id) => speciesById[id]?.name ?? id).join(' → ')} → ${sp.name}</p>`
               : ''}
@@ -1461,6 +1503,11 @@ function boot(data) {
                   `<option value="${i}" ${r.habitat === i ? 'selected' : ''}>Habitat ${i + 1}${s.habitats[i]?.element ? ` (${s.habitats[i].element})` : ''}</option>`).join('')}
               </select>
               ${sp.elements.map((el) => `<button class="ghost" data-feed="${r.uid}" data-el="${el}" type="button" ${profile.canFeed(r, el) ? '' : 'disabled'}>Feed ${el}</button>`).join('')}
+              ${(() => {
+                const at = profile.partyIndex(r.uid);
+                const label = at < 0 ? 'Add to party' : ['Lead', '2nd', '3rd'][at] ?? `#${at + 1}`;
+                return `<button class="ghost" data-party="${r.uid}" data-active="${at >= 0}" type="button">${label}</button>`;
+              })()}
               <button class="ghost" data-escort="${r.uid}" data-active="${escortUid === r.uid}" type="button">${escortUid === r.uid ? 'Escorting' : 'Escort'}</button>
               <button class="ghost" data-pin="${r.uid}" data-active="${pinned.includes(r.uid)}" type="button">${pinned.includes(r.uid) ? 'Unpin' : 'Showcase'}</button>
               <button class="ghost" data-release="${r.uid}" type="button">Release</button>
@@ -1478,6 +1525,12 @@ function boot(data) {
     }
     for (const b of document.querySelectorAll('[data-escort]')) {
       b.addEventListener('click', () => { profile.setEscort(b.dataset.escort); renderSanctuary(); });
+    }
+    for (const b of document.querySelectorAll('[data-party]')) {
+      b.addEventListener('click', () => {
+        profile.toggleParty(b.dataset.party, data.elements.battle_rules.party_size ?? 3);
+        renderSanctuary();
+      });
     }
     for (const b of document.querySelectorAll('[data-pin]')) {
       b.addEventListener('click', () => {
