@@ -89,7 +89,9 @@ const moves = await page.evaluate(() => {
     total: rows.length,
     min: Math.min(...rows.map((x) => x.n)),
     untypedOnly: rows.filter((x) => x.typed === 0).map((x) => x.id),
-    dual: rows.filter((x) => x.n > 3).length,
+    // Every species now has at least four moves, so "more than the base kit"
+    // is what marks a dual-element one: two typed pairs plus a status each.
+    dual: rows.filter((x) => x.n > 4).length,
   };
 });
 ok('every species knows a move set drawn from its elements',
@@ -200,7 +202,13 @@ ok('you can swap, and a wiped bench ends the battle',
 const opening = await page.evaluate(async () => {
   const r = window.__riftborn;
   let won = 0, turns = 0;
-  const N = 60;
+  /*
+   * Thirty, not sixty. Each opening walks the patrol to find a spawn and then
+   * fights it out, and once the comparable-damage cap doubled fight length this
+   * one check was taking longer than the other twenty-eight put together. Thirty
+   * still separates "winnable" from "a formality" at the band this asserts.
+   */
+  const N = 30;
   for (let i = 0; i < N; i++) {
     await window.battleWith([], 'sootpup');
     const b = r.battle;
@@ -625,7 +633,188 @@ ok('the arena and the turn battle read apex phases out of the same table',
    oneTable.map((x) => `${x.id} ${x.arenaPhases} phases, opens on ${x.arenaWeak.join('/')}`).join(' · ')
    + ' — the table used to be a const inside game.js');
 
-// --- 23. phone layout
+// --- 23. every element has something to do that is not damage
+const kit = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const out = {};
+  for (const [el, moves] of Object.entries(r.data.elements.element_moves)) {
+    out[el] = {
+      n: moves.length,
+      status: moves.filter((m) => m.applies || m.applies_self).map((m) => m.name),
+      pp: moves.map((m) => m.pp),
+    };
+  }
+  const known = Object.keys(r.data.ammo.statuses);
+  const reachable = new Set(Object.values(r.data.elements.element_moves)
+    .flat().map((m) => m.applies).filter(Boolean));
+  return { out, elements: Object.keys(out).length, known, reachable: [...reachable] };
+});
+ok('every element can do something other than damage, and the statuses are reachable',
+   Object.values(kit.out).every((x) => x.n >= 3 && x.status.length >= 1)
+   && Object.values(kit.out).every((x) => x.pp.every((v) => v > 0))
+   && kit.reachable.length >= 6,
+   `${kit.elements} elements, ${kit.reachable.length} of ${kit.known.length} statuses now reachable from the FIGHT menu`
+   + ` (they were 0 — only capture rounds could apply one)`);
+
+// --- 24. PP is spent, and Strike is what is left
+const pp = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['cinderfang'], 'brinelet', { study: 900 });
+  const b = r.battle;
+  const mine = r.activeMon(b);
+  // Find the heavy move and use it until it is gone.
+  let heavy = 0, best = -1;
+  mine.moves.forEach((m, i) => { if (m.power > best) { best = m.power; heavy = i; } });
+  const start = r.ppLeft(mine, heavy);
+  const seen = [];
+  /*
+   * Hold the fight open. This is a harness for one mechanic, and the fight
+   * kept ending before the mechanic could be reached: a raised Cinderfang
+   * against a rank-1 Brinelet is level 25 against level 3, which outclasses the
+   * cap and one-shots it, so the loop exited on turn one with PP untouched.
+   * Two earlier versions of this check failed for two different versions of
+   * that same problem.
+   */
+  for (let i = 0; i < start + 2; i++) {
+    b.outcome = null;
+    b.results.length = 0;
+    b.wild.fainted = false; b.wild.hp = b.wild.maxHp; b.wild.statuses = {};
+    mine.fainted = false; mine.hp = mine.maxHp; mine.statuses = {};
+    const before = r.ppLeft(mine, heavy);
+    const lines = r.takeTurn({ kind: 'move', index: heavy }).map((l) => l.text);
+    seen.push({ before, after: r.ppLeft(mine, heavy), fellBack: lines.some((t) => /falls back/.test(t)) });
+  }
+  const strikeIndex = mine.moves.findIndex((m) => m.pp == null);
+  return {
+    start, seen,
+    ranOut: seen.some((x) => x.after === 0),
+    fellBack: seen.some((x) => x.fellBack),
+    strikeUnlimited: strikeIndex >= 0 && r.ppLeft(mine, strikeIndex) === Infinity,
+  };
+});
+ok('the heavy move runs out, and Strike is what you are left with',
+   pp.start > 0 && pp.start <= 6 && pp.ranOut && pp.fellBack && pp.strikeUnlimited,
+   `${pp.start} PP on the heavy move · spent ${pp.seen.filter((x) => x.after < x.before).length}`
+   + ` · ran dry: ${pp.ranOut} · fell back to Strike: ${pp.fellBack}`
+   + ` · Strike has no PP at all: ${pp.strikeUnlimited}`);
+
+// --- 25. a status move actually lands a status, and it bites
+const status = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['cinderfang'], 'brinelet', { study: 900 });   // Ember: burning
+  const b = r.battle;
+  const mine = r.activeMon(b);
+  const i = mine.moves.findIndex((m) => m.applies);
+  if (i < 0) return { note: 'no status move' };
+  const name = mine.moves[i].name, applies = mine.moves[i].applies;
+  let landed = false;
+  for (let t = 0; t < 6 && !landed && !b.outcome; t++) {
+    b.wild.hp = b.wild.maxHp;
+    r.takeTurn({ kind: 'move', index: i });
+    landed = Boolean(b.wild.statuses[applies]);
+  }
+  const before = b.wild.hp;
+  // a turn where we do nothing damaging: the burn should still bite
+  const strike = b.wild.statuses[applies];
+  const lines = r.takeTurn({ kind: 'move', index: mine.moves.findIndex((m) => m.pp == null) })
+    .map((l) => l.text);
+  return {
+    name, applies, landed, strike,
+    tickLine: lines.find((t) => new RegExp(applies).test(t)) ?? null,
+    lostHp: before - b.wild.hp,
+  };
+});
+ok('a status move lands its status, and burning actually burns',
+   status.landed && status.lostHp > 0 && status.tickLine,
+   `${status.name} left it ${status.applies} for ${status.strike} turns, and it lost ${status.lostHp} HP`
+   + ` — "${status.tickLine}"`);
+
+// --- 26. being held costs the turn, not just the turn order
+const held = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['thornhide'], 'pebblit', { study: 900 });    // Verdant: ensnared
+  const b = r.battle;
+  const mine = r.activeMon(b);
+  const i = mine.moves.findIndex((m) => m.applies === 'ensnared');
+  if (i < 0) return { note: 'no ensnare' };
+  /*
+   * Enough samples for a 40% effect. The first version measured six turns and
+   * asserted "at least one lost", which is a 5% coin-flip (0.6^6) — and it came
+   * up on a full run. It also ran out of PP after two ensnares, which is why it
+   * only got six turns out of sixty rounds in the first place.
+   */
+  const strike = mine.moves.findIndex((m) => m.pp == null);
+  let lost = 0, turns = 0;
+  for (let round = 0; round < 400 && turns < 60 && !b.outcome; round++) {
+    b.wild.hp = b.wild.maxHp;
+    mine.hp = mine.maxHp;
+    mine.pp = {}; mine.moves.forEach((m, k) => { mine.pp[k] = m.pp ?? null; });   // top up
+    if (!b.wild.statuses.ensnared) { r.takeTurn({ kind: 'move', index: i }); continue; }
+    const lines = r.takeTurn({ kind: 'move', index: strike }).map((l) => l.text);
+    turns++;
+    // The wild's line specifically: our own monster can be held too (Pebblit
+    // anchors), and counting both sides inflated the rate above its design.
+    if (lines.some((t) => t.startsWith(`${b.wild.species.name} cannot get free`))) lost++;
+  }
+  return { lost, turns, rate: turns ? lost / turns : 0 };
+});
+ok('a held monster loses its turn, rather than just going second',
+   held.turns >= 30 && held.lost >= 4 && held.rate > 0.15 && held.rate < 0.7,
+   `held for ${held.turns} measured turns, lost ${held.lost} of them (${(held.rate * 100).toFixed(0)}%,`
+   + ' against a designed 40%) — speed used to be read in one line of the engine, and decided the order only');
+
+// --- 27. a fair fight is long enough to have a decision in it
+const length = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const pool = r.data.monsters.monsters.filter((m) => !m.apex);
+  const pairs = [];
+  for (const a of pool) for (const z of pool) {
+    if (a.id === z.id || a.stage !== z.stage || a.size !== z.size) continue;
+    if (a.elements[0] === z.elements[0]) continue;
+    pairs.push([a, z]);
+  }
+  let turns = 0, quick = 0, n = 0;
+  for (const [A, Z] of pairs.slice(0, 40)) {
+    const mine = r.makeCombatant(A, 20, r.data, { resident: { study: 900 } });
+    const wild = r.makeCombatant(Z, 20, r.data, { wild: true });
+    const b = r.createBattle({ data: r.data, team: [mine], wilds: [wild] });
+    let g = 0;
+    while (!b.outcome && g++ < 200) {
+      const m = r.activeMon(b);
+      if (!m || m.fainted) break;
+      let bi = 0, bd = -1;
+      m.moves.forEach((mv, i) => {
+        if (!r.canUse(m, i)) return;
+        const d = r.computeMoveDamage(m, b.wild, mv, r.data, () => 0.5).damage * (mv.accuracy ?? 1);
+        if (d > bd) { bd = d; bi = i; }
+      });
+      r.takeTurnOn(b, { kind: 'move', index: bi });
+    }
+    turns += b.turn; if (b.turn <= 2) quick++; n++;
+  }
+  return { avg: turns / n, quick: quick / n, n };
+});
+ok('a fight between comparable monsters is not over in two turns',
+   length.avg >= 5 && length.quick < 0.05,
+   `${length.n} fair matchups average ${length.avg.toFixed(1)} turns, ${(length.quick * 100).toFixed(0)}% end inside two`
+   + ' — it was 3.3 turns and 35% before the comparable-damage cap');
+
+// --- 28. a mismatch still ends in one hit
+const mismatch = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const find = (id) => r.data.monsters.monsters.find((m) => m.id === id);
+  const titan = r.makeCombatant(find('karrahk'), 30, r.data, { resident: { study: 3000 } });
+  const mote = r.makeCombatant(find('glimmerfly'), 8, r.data, { wild: true });
+  r.createBattle({ data: r.data, team: [titan], wilds: [mote] });
+  const best = Math.max(...titan.moves.map((m) => r.computeMoveDamage(titan, mote, m, r.data, () => 0.5).damage));
+  return { best, hp: mote.maxHp, hits: Math.ceil(mote.maxHp / best) };
+});
+ok('the cap does not save a Mote that walked into a Titan',
+   mismatch.hits === 1,
+   `Karrahk hits a Glimmerfly for ${mismatch.best} against ${mismatch.hp} health — still one hit,`
+   + ' because the cap only applies between monsters that are comparable');
+
+// --- 29. phone layout
 await page.setViewportSize({ width: 390, height: 844 });
 await page.evaluate(async () => { await window.battleWith(['brinelet'], 'cinderfang'); });
 await page.waitForTimeout(400);

@@ -1414,6 +1414,121 @@ A finished Karrahk now reads: **7 turns, all three phases, defeated** — with t
 plating splitting, the water coming in, and the core opening as separate,
 labelled events in the log.
 
+# Phase 4, part 4: was the FIGHT menu a decision?
+
+The battle had a type chart, priority, swapping, statuses and a catch roll. What
+it did not have was a reason to read the menu. This section is the measurement
+that showed that, a correction to the first version of that measurement, and the
+work that followed.
+
+## The measurement, and the way I got it wrong first
+
+Four policies over the same fights, same seeds: press the biggest number, pick
+the best expected damage (type chart and accuracy), always use the quick move,
+and pick at random. If the first two score the same, the moves are decoration
+and the only real choice in a battle is which monster you brought.
+
+The first run said exactly that — **67.4% for both, identical to the decimal**.
+
+That run was wrong, and wrong in a way worth recording. My six matchups included
+stage 2 monsters against stage 1: Cinderfang against Brinelet, Tidecoil against
+Sootpup. Those are not fights, they are executions, and when one side one-shots
+the other the move you pick genuinely does not matter. I had measured a rigged
+sample and read it as a property of the game.
+
+Re-run over **fair** matchups — same evolution stage, same size class, different
+element — it came out:
+
+| policy | win % | turns |
+|---|---|---|
+| best expected damage | 45.2% | 3.3 |
+| biggest power | 40.1% | 3.6 |
+| random | 34.0% | 4.0 |
+
+So the decision existed; it was **thin**, not absent. Five points, and the two
+damage policies picked the same move on 83% of turns. The reason is structural:
+both of a monster's typed moves share its element, so the type chart multiplies
+both equally and cancels, leaving power as the only differentiator.
+
+## And the fight was three turns long
+
+The same re-run gave the more damning number. A fair fight averaged **3.3 turns,
+and 35% were over inside two**. There is no room in three turns for a status, a
+swap, or anything else the battle offers.
+
+I had validated the damage curve at seven turns, but that figure came from a
+*mirror match* — the same species on both sides. A mirror has an attack ratio of
+1 and usually resists its own element, so it is the longest case there is. I had
+measured the friendliest case and reported it as typical. That is the same
+mistake as the stage-2-against-stage-1 sample, pointing the other way.
+
+## The fix: a cap that knows what a mismatch is
+
+Four terms in the damage formula each reach about 2× — move power, the
+same-element bonus, the type chart, the attack ratio — and they multiply.
+
+A flat cap would have fixed the length and broken something I had deliberately
+protected two sections earlier: *Karrahk one-shotting a Glimmerfly is the correct
+answer to bringing a Mote to an apex*. So the cap is **conditional on the attack
+ratio**, which is already the formula's own measure of who outclasses whom:
+
+| cap | fair-fight turns | ≤2 turns | mirror | Karrahk → Glimmerfly |
+|---|---|---|---|---|
+| none | 3.3 | 35% | 9.5 | 1 hit |
+| 0.30 | 4.7 | 2% | 9.5 | 1 hit |
+| **0.20** | **6.1** | **0%** | **9.7** | **1 hit** |
+| 0.16 | 7.6 | 0% | 9.8 | 1 hit |
+
+At 0.20 the fair fight nearly doubles, two-turn fights disappear, the mirror
+match is untouched, and the mismatch still ends in one hit.
+
+## Four moves, and PP that binds
+
+Every element had exactly two moves and both were damage. Now there are three
+plus Strike:
+
+- a **quick** one (8 PP), a **heavy** one (3 PP), and something that is **not
+  damage** (2 PP);
+- **Strike**, untyped, with no PP at all — what you are left with when
+  everything else is spent.
+
+PP is per battle and deliberately tight: three heavies in a fight that now runs
+seven turns. That is what makes the menu a sequencing decision rather than a
+button you hold.
+
+The status moves also fixed a quieter hole. Nine statuses are defined in
+`ammo.json` and **not one of them was reachable from the FIGHT menu** — only a
+capture round could apply one. Ember burns, Verdant roots, Volt stuns, Gloom
+lulls, Lumen becalms. Rift, which by design has no counterplay, turns inward
+instead and enrages itself.
+
+## Four of the new moves did nothing, and the reason was one line
+
+First measurement after adding them: status-first tied with best-expected-damage
+at 48.3%. The status moves were not paying for the turn they cost.
+
+`speedOf` appears in **exactly one line of the engine** — deciding who acts
+first. Both sides act every turn regardless. So `ensnared`, `anchored`,
+`sedated` and `chilled` — four of the eight statuses the new moves apply — did
+almost nothing at all. "Held" did not hold anything.
+
+A speed penalty now costs the turn itself, in proportion: held 40%, anchored
+45%, sedated 25%, chilled 20%. That is the paralysis model, and it is what makes
+a status move worth a turn.
+
+## The answer
+
+| policy | win % | turns | status turns |
+|---|---|---|---|
+| **status first, then damage** | **52.5%** | 7.6 | 2.6 |
+| best expected damage | 45.3% | 7.0 | 0 |
+| biggest power | 41.5% | 7.6 | 0 |
+| random | 35.2% | 8.5 | 1.8 |
+
+Playing well beats playing the chart beats pressing the big button beats
+guessing, and the spread is 17.3 points where it was 11.2. Reproduce it with
+`MOVES=1 node game/tools/balance_sim.mjs`.
+
 ## Still open
 
 1. **Party play** and the server-side half of Codex sharing, unchanged.
@@ -1421,6 +1536,20 @@ labelled events in the log.
    and the turn battle fights every apex at its solo numbers, because a
    turn-based party is your three residents rather than three Wardens. The
    bestiary's `party_size` of 4–8 has no turn-based meaning yet.
+3. PP does not persist between battles, so there is no resource to manage across
+   a patrol — only within a fight. Whether it should is a design question about
+   how punishing a walking game is allowed to be.
+4. The wild monster's move choice is a one-line heuristic with a random factor.
+   It now respects PP and will not re-apply a status it has already landed, but
+   it does not plan.
+5. **The suites take about ninety minutes to run.** Two changes in this branch
+   did it: `aim` went from 6 fights to 24 to fix a sample too small to see its
+   own effect, and the comparable-damage cap doubled every turn-based fight.
+   `battle`'s opening-battle check is down from 60 openings to 30, which helped,
+   but `aim` simulates 24 fights x 45 seconds x four input profiles and now
+   dominates the whole run. It wants a cheaper way to reach the same confidence —
+   a shorter guard per fight, or the headless path the fight layer already
+   supports — rather than a smaller sample, which is what made it flaky before.
 3. Moves are two per element plus a universal. No status moves, no PP, no
    switching costs beyond the turn.
 4. Study is granted per participant with no cap, so a three-monster rotation

@@ -138,6 +138,8 @@ export function makeCombatant(species, level, data, { resident = null, wild = fa
     armour: stats.armour,
     speed: stats.speed,
     moves: movesFor(species, data),
+    // PP is per battle. `null` means unlimited, which only Strike is.
+    pp: {},
     // Apexes only; `armWild` fills these in when the battle starts.
     phases: 1,
     phase: 1,
@@ -216,7 +218,8 @@ export function computeMoveDamage(attacker, defender, move, data, rng = Math.ran
    * dead long before, and that is the correct answer to bringing a Mote to an
    * apex rather than a number to tune away.
    */
-  const ratio = Math.max(1, attacker.attack) / Math.max(1, defender.attack);
+  // attackOf, not attacker.attack: `enraged` and `calmed` exist to move this.
+  const ratio = Math.max(1, attackOf(attacker)) / Math.max(1, attackOf(defender));
   const power = Math.pow(ratio, rules.attack_ratio_exponent ?? 0.55);
 
   let raw = defender.maxHp * (rules.hp_fraction_damage ?? 0.15)
@@ -243,6 +246,27 @@ export function computeMoveDamage(attacker, defender, move, data, rng = Math.ran
     ? (data.elements.apex_phase_rules?.damage_fraction_band ?? null) : null;
   if (band) {
     raw = Math.min(Math.max(raw, defender.maxHp * band[0]), defender.maxHp * band[1]);
+  } else {
+    /*
+     * A fight between COMPARABLE monsters cannot end in one hit.
+     *
+     * Four terms in the formula each reach about 2x — the move's power, the
+     * same-element bonus, the type chart and the attack ratio — and they
+     * multiply. Measured over 60 fair matchups (same stage, same size class,
+     * different element), 35% of fights ended inside two turns and the average
+     * was 3.3. There is no room in three turns for a status, a swap, or any of
+     * the things the battle offers.
+     *
+     * The cap is conditional on `outclass_ratio` rather than universal, because
+     * a mismatch SHOULD end in one hit: Karrahk one-shotting a Glimmerfly is
+     * the correct answer to bringing a Mote to an apex. The attack ratio is
+     * already the formula's measure of who outclasses whom, so it decides.
+     */
+    const rules2 = data.elements.battle_rules ?? {};
+    const cap = rules2.comparable_damage_cap;
+    if (cap && ratio < (rules2.outclass_ratio ?? 2.5)) {
+      raw = Math.min(raw, defender.maxHp * cap);
+    }
   }
 
   return {
@@ -292,6 +316,7 @@ export function createBattle(opts) {
    * between members, so the third one meets whatever the first two left of you.
    */
   const wilds = (opts.wilds ?? [opts.wild]).filter(Boolean).map((w) => armWild(data, w));
+  for (const c of [...(opts.team ?? []), ...wilds]) stockPP(c);
 
   return {
     data, rng, rules,
@@ -333,6 +358,30 @@ export function createBattle(opts) {
     // the capture landed — a dart that bounces is still a dart you no longer have.
     spent: {},
   };
+}
+
+/** Fill every combatant's PP from its move list. Called once, at the start. */
+function stockPP(c) {
+  c.pp = {};
+  c.moves.forEach((m, i) => { c.pp[i] = m.pp ?? null; });
+}
+
+/** Can this move be used right now? Strike always can. */
+export const ppLeft = (c, i) => (c?.pp?.[i] === null ? Infinity : (c?.pp?.[i] ?? 0));
+export const canUse = (c, i) => ppLeft(c, i) > 0;
+
+/** Spend a point of PP for the move this combatant just used. */
+function spend(c, move) {
+  const i = c.moves.indexOf(move);
+  if (i < 0) return;                       // Strike, or a move not on the list
+  if (c.pp[i] === null || c.pp[i] === undefined) return;
+  c.pp[i] = Math.max(0, c.pp[i] - 1);
+}
+
+/** Whatever this one can still do. Strike when everything else is spent. */
+export function usableMoves(b, c) {
+  const out = c.moves.map((m, i) => ({ move: m, index: i, pp: ppLeft(c, i) }));
+  return out.filter((x) => x.pp > 0);
 }
 
 const alive = (b) => b.team.filter((c) => !c.fainted);
@@ -437,6 +486,11 @@ export function concealed(b) {
 
 // ---------------------------------------------------------------- statuses
 
+/*
+ * `dot` is a share of the sufferer's MAX health per turn, not a flat number, for
+ * the same reason move damage is: a flat burn is lethal to a Mote and a rounding
+ * error to a Titan.
+ */
 const STATUS_EFFECT = {
   sedated: { speed: 0.5, label: 'sedated' },
   ensnared: { speed: 0.2, label: 'held' },
@@ -445,10 +499,67 @@ const STATUS_EFFECT = {
   enraged: { attack: 1.4, label: 'enraged' },
   calmed: { attack: 0.7, label: 'calmed' },
   anchored: { speed: 0.1, label: 'anchored' },
+  burning: { dot: 0.06, label: 'burning' },
+  bleeding: { dot: 0.045, label: 'bleeding' },
+};
+
+const attackOf = (c) => {
+  let a = c.attack;
+  for (const id of Object.keys(c.statuses)) a *= STATUS_EFFECT[id]?.attack ?? 1;
+  return a;
 };
 
 export function applyStatus(c, id, turns) {
   c.statuses[id] = Math.max(c.statuses[id] ?? 0, turns);
+}
+
+/**
+ * Burning and bleeding, applied at the end of a turn.
+ *
+ * The order here is the whole of it, and it is written this way because the
+ * arena got it wrong once: a burn that clamped its target to a minimum of 1 HP
+ * ABOVE the death check made every killing shot undo itself, and culls fell from
+ * 85% to 27% before anyone worked out why. Damage first, then the death check,
+ * and nothing clamps.
+ */
+function tickDamage(b) {
+  const bite = (c, who, onDeath) => {
+    if (!c || c.fainted || c.hp <= 0) return;
+    let total = 0;
+    for (const id of Object.keys(c.statuses)) {
+      const dot = STATUS_EFFECT[id]?.dot;
+      if (dot) total += c.maxHp * dot;
+    }
+    if (total <= 0) return;
+    const dealt = Math.max(1, Math.round(total));
+    c.hp = Math.max(0, c.hp - dealt);
+    c.flash = 0.7;
+    say(b, `${who} takes ${dealt} from ${Object.keys(c.statuses)
+      .filter((id) => STATUS_EFFECT[id]?.dot).join(' and ')}.`, 'weak');
+    if (c.hp <= 0) onDeath();
+  };
+
+  bite(b.wild, b.wild.species.name, () => {
+    b.wild.fainted = true;
+    say(b, `${b.wild.species.name} is down.`, 'good');
+    resolveMember(b, 'defeated');
+  });
+  if (b.outcome) return;
+
+  for (const c of b.team) {
+    if (c.fainted) continue;
+    bite(c, c.species.name, () => {
+      c.fainted = true;
+      say(b, `${c.species.name} is down.`, 'bad');
+      if (!alive(b).length) { b.outcome = 'wiped'; say(b, 'You have nothing left to send out.', 'bad'); }
+      else if (c === activeMon(b)) {
+        const next = b.team.findIndex((x) => !x.fainted);
+        b.active = next;
+        say(b, `You send out ${b.team[next].species.name}.`, 'info');
+      }
+    });
+    if (b.outcome) return;
+  }
 }
 
 function tickStatuses(c) {
@@ -456,6 +567,23 @@ function tickStatuses(c) {
     c.statuses[id] -= 1;
     if (c.statuses[id] <= 0) delete c.statuses[id];
   }
+}
+
+/**
+ * Does a slowed monster lose its turn outright?
+ *
+ * Speed was read in exactly one line of this engine — the turn order — and both
+ * sides act every turn regardless, so a status that only slowed its target was
+ * worth nearly nothing. Four of the nine (`ensnared`, `anchored`, `sedated`,
+ * `chilled`) did nothing else, which made four of the new status moves a wasted
+ * turn by construction. A speed penalty now costs the turn itself, in
+ * proportion: held is 40%, anchored 45%, sedated 25%, chilled 20%.
+ */
+function heldStill(b, c) {
+  let factor = 1;
+  for (const id of Object.keys(c.statuses)) factor *= STATUS_EFFECT[id]?.speed ?? 1;
+  if (factor >= 1) return false;
+  return b.rng() < (1 - factor) * (b.rules.hold_scale ?? 0.5);
 }
 
 const speedOf = (c) => {
@@ -534,10 +662,38 @@ function attack(b, attacker, defender, move, who) {
     say(b, `${who} is stunned and cannot move.`, 'bad');
     return;
   }
+  if (heldStill(b, attacker)) {
+    say(b, `${who} cannot get free, and loses the turn.`, 'bad');
+    return;
+  }
   if (b.rng() > (move.accuracy ?? 1)) {
     say(b, `${who} used ${move.name} — it missed.`, 'miss');
     return;
   }
+
+  /*
+   * A move that applies something rather than doing damage. Before this, the
+   * only thing in the game that could inflict a status was a capture round, so
+   * every one of the nine statuses the data defines was unreachable from the
+   * FIGHT menu — and the menu was two damage moves that a "pick the biggest
+   * number" policy solved on 83% of turns.
+   */
+  if (move.applies || move.applies_self) {
+    const turns = b.rules.status_turns ?? 4;
+    if (move.applies_self) {
+      applyStatus(attacker, move.applies_self, turns);
+      say(b, `${who} used ${move.name}. ${who} is ${STATUS_EFFECT[move.applies_self]?.label ?? move.applies_self}.`, 'good');
+    }
+    if (move.applies) {
+      applyStatus(defender, move.applies, turns);
+      defender.flash = 0.6;
+      say(b, `${who} used ${move.name}. ${defender.species.name} is `
+           + `${STATUS_EFFECT[move.applies]?.label ?? move.applies}.`, 'good');
+    }
+    if (!move.power) return;
+  }
+
+  if (!move.power) return;
   const res = computeMoveDamage(attacker, defender, move, b.data, b.rng);
   defender.hp = Math.max(0, defender.hp - res.damage);
   defender.flash = 1;
@@ -546,25 +702,54 @@ function attack(b, attacker, defender, move, who) {
       res.effectiveness > 1.4 ? 'good' : res.effectiveness < 0.7 ? 'weak' : 'hit');
 }
 
+/*
+ * The wild monster's move for THIS TURN, chosen once and remembered.
+ *
+ * It used to be recomputed on every call, and `takeTurn` calls it twice — once
+ * to compare priorities and once to actually act. The scoring has a random
+ * factor, so the move the turn order was decided against was frequently not the
+ * move that got used: a quick move could lose a race to a heavy one it should
+ * have beaten. Choosing once fixes the race and makes PP spending honest.
+ */
+function chooseWildMove(b) {
+  if (b.wildChoice) return b.wildChoice;
+  b.wildChoice = wildMove(b);
+  return b.wildChoice;
+}
+
 function wildMove(b) {
   const w = b.wild;
   // The wild monster favours whatever hurts the current defender most, with a
   // little noise so it is not perfectly predictable.
   const defender = b.wardenOnly ? { species: { elements: [] }, armour: 0 } : activeMon(b);
-  const scored = w.moves.map((m) => {
+  const scored = w.moves.map((m, i) => {
+    if (!canUse(w, i)) return { m, i, score: -1 };
     const eff = elementMultiplier(b.data.elements.effectiveness, m.element, defender.species?.elements ?? []);
-    return { m, score: m.power * eff * (m.accuracy ?? 1) * (0.8 + b.rng() * 0.4) };
-  });
+    /*
+     * A status move is worth something, but only once — a second Coldshock on an
+     * already-chilled target is a wasted turn, and an AI that cannot see that
+     * would spend the whole fight reapplying it.
+     */
+    let score = m.power * eff * (m.accuracy ?? 1);
+    if (m.applies || m.applies_self) {
+      const already = m.applies ? defender.statuses?.[m.applies] : w.statuses?.[m.applies_self];
+      score = already ? 0 : 45 * (m.accuracy ?? 1);
+    }
+    return { m, i, score: score * (0.8 + b.rng() * 0.4) };
+  }).filter((x) => x.score >= 0);
+  if (!scored.length) return { ...(b.data.elements.universal_moves?.[0] ?? w.moves[0]) };
   return scored.sort((x, y) => y.score - x.score)[0].m;
 }
 
 function wildTurn(b) {
   const w = b.wild;
   if (w.fainted || b.outcome) return;
-  const move = wildMove(b);
+  const move = chooseWildMove(b);
+  spend(w, move);
 
   if (b.wardenOnly) {
     if (w.statuses.stunned) { say(b, `${w.species.name} is stunned and cannot move.`, 'bad'); return; }
+    if (heldStill(b, w)) { say(b, `${w.species.name} cannot get free, and loses the turn.`, 'bad'); return; }
     if (b.rng() > (move.accuracy ?? 1)) { say(b, `${w.species.name} used ${move.name} — it missed.`, 'miss'); return; }
     const dmg = Math.max(1, Math.round((move.power / 50) * (w.attack / 30) * 12));
     b.warden.hp = Math.max(0, b.warden.hp - dmg);
@@ -615,6 +800,7 @@ export function takeTurn(b, action) {
   b.turn += 1;
   b.advanced = false;
   b.phaseBroke = false;
+  b.wildChoice = null;
 
   const mine = activeMon(b);
   const w = b.wild;
@@ -691,10 +877,17 @@ export function takeTurn(b, action) {
       if (checkPhaseBreak(b)) return b.log.slice(from);
       wildTurn(b);
     } else {
-      const move = mine.moves[action.index] ?? mine.moves[0];
+      let move = mine.moves[action.index] ?? mine.moves[0];
+      if (!canUse(mine, action.index)) {
+        // Out of PP: Strike is what is left, and it says so rather than refusing.
+        move = b.data.elements.universal_moves?.[0] ?? move;
+        say(b, `${mine.species.name} is out of that one — it falls back to ${move.name}.`, 'miss');
+      } else {
+        spend(mine, move);
+      }
       const wildFirst = speedOf(w) > speedOf(mine)
         || (speedOf(w) === speedOf(mine) && b.rng() < 0.5);
-      const byPriority = (move.priority ?? 0) - (wildMove(b).priority ?? 0);
+      const byPriority = (move.priority ?? 0) - (chooseWildMove(b).priority ?? 0);
 
       // Priority beats speed, which is the whole reason a quick move exists.
       const order = byPriority > 0 ? ['mine', 'wild']
@@ -725,9 +918,12 @@ export function takeTurn(b, action) {
 
   if (!b.outcome) {
     // `b.wild` and not `w`: a member may have been resolved during this turn.
-    tickStatuses(b.wild);
-    for (const c of b.team) tickStatuses(c);
-    checkFlee(b);
+    tickDamage(b);
+    if (!b.outcome) {
+      tickStatuses(b.wild);
+      for (const c of b.team) tickStatuses(c);
+      checkFlee(b);
+    }
   }
   return b.log.slice(from);
 }
@@ -737,6 +933,7 @@ export function options(b) {
   const mine = activeMon(b);
   return {
     moves: b.wardenOnly ? b.warden.moves : (mine?.moves ?? []),
+    pp: b.wardenOnly ? [] : (mine?.moves ?? []).map((m, i) => ppLeft(mine, i)),
     canSwap: b.team.filter((c) => !c.fainted).length > 1,
     canCatch: !b.wild.fainted,
     canRun: true,

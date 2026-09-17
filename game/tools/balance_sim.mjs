@@ -16,6 +16,7 @@ import { escortAbility } from '../../docs/riftborn/js/sanctuary.js';
 import { createFight, step, weakPointPositions, assistMiss, ARENA } from '../../docs/riftborn/js/game.js';
 import {
   makeCombatant, createBattle, takeTurn, levelOf, wildLevel, computeMoveDamage, catchChance,
+  activeMon, canUse,
 } from '../../docs/riftborn/js/battle.js';
 import { studyFromBattle, STUDY_PER_MINUTE } from '../../docs/riftborn/js/sanctuary.js';
 
@@ -613,4 +614,94 @@ if (process.env.STUDY) {
   for (const o of ['caught', 'defeated', 'escaped', 'wiped', 'fled']) {
     console.log(`  ${o.padEnd(10)} ${String(studyFromBattle(16, 14, o)).padStart(5)} Study`);
   }
+}
+
+
+/*
+ * ---------------------------------------------------------------- MOVES=1
+ *
+ * Is the FIGHT menu a decision, or a button you hold?
+ *
+ * Four policies over the same fair matchups — same evolution stage, same size
+ * class, different element, so neither side simply outclasses the other. If
+ * "press the biggest number" scores what a thinking policy scores, the moves are
+ * decoration and the only real choice in a battle is which monster you brought.
+ *
+ * That is what it measured before this section existed: two damage moves per
+ * element, both the same element, so the type chart multiplied both equally and
+ * cancelled — "biggest power" and "best expected damage" agreed on 83% of turns
+ * and finished within 5 points of each other.
+ */
+if (process.env.MOVES) {
+  const byId = Object.fromEntries(data.monsters.monsters.map((m) => [m.id, m]));
+  const pool = data.monsters.monsters.filter((m) => !m.apex);
+  const pairs = [];
+  for (const a of pool) {
+    for (const z of pool) {
+      if (a.id === z.id || a.stage !== z.stage || a.size !== z.size) continue;
+      if (a.elements[0] === z.elements[0]) continue;
+      pairs.push([a.id, z.id]);
+    }
+  }
+  const use = pairs.slice(0, Number(process.env.PAIRS ?? 60));
+  const N = Number(process.env.RUNS ?? 60);
+
+  const bestDamage = (b, mine) => {
+    let bi = 0, bd = -1;
+    mine.moves.forEach((mv, i) => {
+      if (!canUse(mine, i)) return;
+      const d = computeMoveDamage(mine, b.wild, mv, data, () => 0.5).damage * (mv.accuracy ?? 1);
+      if (d > bd) { bd = d; bi = i; }
+    });
+    return bi;
+  };
+
+  const POLICIES = {
+    'biggest power        ': (b, mine) => {
+      let bi = 0, bp = -1;
+      mine.moves.forEach((mv, i) => { if (canUse(mine, i) && mv.power > bp) { bp = mv.power; bi = i; } });
+      return bi;
+    },
+    'best expected damage ': bestDamage,
+    'status first         ': (b, mine) => {
+      const si = mine.moves.findIndex((mv, i) => canUse(mine, i) && (mv.applies || mv.applies_self)
+        && !(mv.applies ? b.wild.statuses[mv.applies] : mine.statuses[mv.applies_self]));
+      return si >= 0 ? si : bestDamage(b, mine);
+    },
+    'random               ': (b, mine, rng) => {
+      const ok = mine.moves.map((mv, i) => i).filter((i) => canUse(mine, i));
+      return ok[Math.floor(rng() * ok.length)] ?? 0;
+    },
+  };
+
+  console.log(`\nMOVE POLICIES — ${use.length} fair matchups x ${N} seeds each`);
+  console.log('policy                  win%   turns   status turns');
+  const scores = [];
+  for (const [name, pick] of Object.entries(POLICIES)) {
+    let win = 0, turns = 0, n = 0, statusTurns = 0;
+    for (const [A, Z] of use) {
+      for (let s = 0; s < N; s++) {
+        const rng = mulberry32(s * 7919 + 13);
+        const mine = makeCombatant(byId[A], 20, data, { resident: { study: 900 }, specimenRng: rng });
+        const wild = makeCombatant(byId[Z], 20, data, { wild: true, specimenRng: rng });
+        const b = createBattle({ data, team: [mine], wilds: [wild], rng });
+        let g = 0;
+        while (!b.outcome && g++ < 200) {
+          const m = activeMon(b);
+          if (!m || m.fainted) break;
+          const i = pick(b, m, rng);
+          if (m.moves[i]?.applies || m.moves[i]?.applies_self) statusTurns++;
+          takeTurn(b, { kind: 'move', index: i });
+        }
+        if (b.outcome === 'defeated') win++;
+        turns += b.turn; n++;
+      }
+    }
+    scores.push(win / n);
+    console.log(`${name} ${`${((win / n) * 100).toFixed(1)}%`.padStart(7)} `
+      + `${(turns / n).toFixed(1).padStart(7)} ${(statusTurns / n).toFixed(2).padStart(14)}`);
+  }
+  const spread = (Math.max(...scores) - Math.min(...scores)) * 100;
+  console.log(`\nspread best to worst: ${spread.toFixed(1)} points.`);
+  console.log('If the top two rows tie, the moves are decoration and only the monster you bring matters.');
 }

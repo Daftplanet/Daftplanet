@@ -302,7 +302,12 @@
     "level_scale_per_stage": 0.55,
     "switch_costs_turn": true,
     "flee_base": 0.35,
-    "status_turns": 4
+    "status_turns": 4,
+    "comparable_damage_cap": 0.2,
+    "outclass_ratio": 2.5,
+    "$cap_comment": "A fight between comparable monsters cannot end in one hit. Four terms in the damage formula each reach about 2x \u2014 move power, the same-element bonus, the type chart, the attack ratio \u2014 and they multiply. Measured over 60 fair matchups (same stage, same size class, different element), 35% of fights ended inside two turns and the average was 3.3, which leaves no room for a status, a swap or anything else the battle offers. The cap is conditional on outclass_ratio rather than universal because a mismatch SHOULD end in one hit: at cap 0.20 fair fights run 6.1 turns, two-turn fights drop to 0%, mirror matches are untouched at 9.7, and Karrahk still one-shots a Glimmerfly.",
+    "hold_scale": 0.5,
+    "$hold_comment": "How much a speed penalty costs a monster its TURN, not just its place in the order. Speed was read in exactly one line of the engine \u2014 who acts first \u2014 and both sides act every turn regardless, so 'held', 'anchored', 'chilled' and 'sedated' were four status moves that did essentially nothing. A slowed monster now loses its turn with probability (1 - speed factor) * hold_scale: held is 40%, anchored 45%, sedated 25%, chilled 20%. That is the paralysis model, and it is what makes a status move worth the turn it costs."
   },
   "element_moves": {
     "ember": [
@@ -312,7 +317,8 @@
         "power": 38,
         "accuracy": 0.95,
         "priority": 3,
-        "element": "ember"
+        "element": "ember",
+        "pp": 8
       },
       {
         "id": "magma_lash",
@@ -320,7 +326,19 @@
         "power": 78,
         "accuracy": 0.75,
         "priority": -2,
-        "element": "ember"
+        "element": "ember",
+        "pp": 3
+      },
+      {
+        "id": "cinderbrand",
+        "name": "Cinderbrand",
+        "power": 0,
+        "accuracy": 0.9,
+        "priority": 1,
+        "element": "ember",
+        "applies": "burning",
+        "pp": 2,
+        "blurb": "Sets it alight. It keeps burning."
       }
     ],
     "tide": [
@@ -330,7 +348,8 @@
         "power": 36,
         "accuracy": 0.95,
         "priority": 3,
-        "element": "tide"
+        "element": "tide",
+        "pp": 8
       },
       {
         "id": "undertow_crush",
@@ -338,7 +357,19 @@
         "power": 80,
         "accuracy": 0.75,
         "priority": -2,
-        "element": "tide"
+        "element": "tide",
+        "pp": 3
+      },
+      {
+        "id": "coldshock",
+        "name": "Coldshock",
+        "power": 0,
+        "accuracy": 0.9,
+        "priority": 1,
+        "element": "tide",
+        "applies": "chilled",
+        "pp": 2,
+        "blurb": "Cold enough to slow anything down."
       }
     ],
     "verdant": [
@@ -348,7 +379,8 @@
         "power": 34,
         "accuracy": 1.0,
         "priority": 4,
-        "element": "verdant"
+        "element": "verdant",
+        "pp": 8
       },
       {
         "id": "bramble_wrack",
@@ -356,7 +388,19 @@
         "power": 76,
         "accuracy": 0.8,
         "priority": -2,
-        "element": "verdant"
+        "element": "verdant",
+        "pp": 3
+      },
+      {
+        "id": "rootgrasp",
+        "name": "Rootgrasp",
+        "power": 0,
+        "accuracy": 0.9,
+        "priority": 1,
+        "element": "verdant",
+        "applies": "ensnared",
+        "pp": 2,
+        "blurb": "Roots it where it stands."
       }
     ],
     "stone": [
@@ -366,7 +410,8 @@
         "power": 40,
         "accuracy": 0.95,
         "priority": 1,
-        "element": "stone"
+        "element": "stone",
+        "pp": 8
       },
       {
         "id": "tectonic_slam",
@@ -374,7 +419,19 @@
         "power": 88,
         "accuracy": 0.7,
         "priority": -4,
-        "element": "stone"
+        "element": "stone",
+        "pp": 3
+      },
+      {
+        "id": "ballast",
+        "name": "Ballast",
+        "power": 0,
+        "accuracy": 0.9,
+        "priority": 1,
+        "element": "stone",
+        "applies": "anchored",
+        "pp": 2,
+        "blurb": "Buries its feet."
       }
     ],
     "gale": [
@@ -384,7 +441,8 @@
         "power": 34,
         "accuracy": 1.0,
         "priority": 6,
-        "element": "gale"
+        "element": "gale",
+        "pp": 8
       },
       {
         "id": "cyclone_rake",
@@ -392,7 +450,19 @@
         "power": 74,
         "accuracy": 0.8,
         "priority": 0,
-        "element": "gale"
+        "element": "gale",
+        "pp": 3
+      },
+      {
+        "id": "razorwind",
+        "name": "Razorwind",
+        "power": 0,
+        "accuracy": 0.9,
+        "priority": 1,
+        "element": "gale",
+        "applies": "bleeding",
+        "pp": 2,
+        "blurb": "A thousand small cuts that do not close."
       }
     ],
     "volt": [
@@ -402,7 +472,8 @@
         "power": 40,
         "accuracy": 0.95,
         "priority": 5,
-        "element": "volt"
+        "element": "volt",
+        "pp": 8
       },
       {
         "id": "overload",
@@ -410,7 +481,19 @@
         "power": 84,
         "accuracy": 0.7,
         "priority": -1,
-        "element": "volt"
+        "element": "volt",
+        "pp": 3
+      },
+      {
+        "id": "stunlock",
+        "name": "Stunlock",
+        "power": 0,
+        "accuracy": 0.9,
+        "priority": 1,
+        "element": "volt",
+        "applies": "stunned",
+        "pp": 2,
+        "blurb": "One good jolt through the nervous system."
       }
     ],
     "gloom": [
@@ -420,7 +503,8 @@
         "power": 38,
         "accuracy": 0.95,
         "priority": 3,
-        "element": "gloom"
+        "element": "gloom",
+        "pp": 8
       },
       {
         "id": "nightfall",
@@ -428,7 +512,19 @@
         "power": 80,
         "accuracy": 0.75,
         "priority": -2,
-        "element": "gloom"
+        "element": "gloom",
+        "pp": 3
+      },
+      {
+        "id": "lull",
+        "name": "Lull",
+        "power": 0,
+        "accuracy": 0.9,
+        "priority": 1,
+        "element": "gloom",
+        "applies": "sedated",
+        "pp": 2,
+        "blurb": "It gets heavy, and then it gets slow."
       }
     ],
     "lumen": [
@@ -438,7 +534,8 @@
         "power": 36,
         "accuracy": 1.0,
         "priority": 4,
-        "element": "lumen"
+        "element": "lumen",
+        "pp": 8
       },
       {
         "id": "solar_lance",
@@ -446,7 +543,19 @@
         "power": 82,
         "accuracy": 0.75,
         "priority": -1,
-        "element": "lumen"
+        "element": "lumen",
+        "pp": 3
+      },
+      {
+        "id": "becalm",
+        "name": "Becalm",
+        "power": 0,
+        "accuracy": 0.9,
+        "priority": 1,
+        "element": "lumen",
+        "applies": "calmed",
+        "pp": 2,
+        "blurb": "Takes the fight out of it."
       }
     ],
     "rift": [
@@ -456,7 +565,8 @@
         "power": 42,
         "accuracy": 0.9,
         "priority": 2,
-        "element": "rift"
+        "element": "rift",
+        "pp": 8
       },
       {
         "id": "unmake",
@@ -464,7 +574,19 @@
         "power": 92,
         "accuracy": 0.65,
         "priority": -3,
-        "element": "rift"
+        "element": "rift",
+        "pp": 3
+      },
+      {
+        "id": "unbind",
+        "name": "Unbind",
+        "power": 0,
+        "accuracy": 1.0,
+        "priority": 0,
+        "element": "rift",
+        "applies_self": "enraged",
+        "pp": 2,
+        "blurb": "Lets a little of the rift through. It hurts, and it helps."
       }
     ]
   },
@@ -476,7 +598,8 @@
       "accuracy": 1.0,
       "priority": 0,
       "element": null,
-      "$comment": "Every monster knows it. Untyped, so it is never resisted and never boosted."
+      "$comment": "Every monster knows it. Untyped, so it is never resisted and never boosted \u2014 and it has no PP, so it is what you are left with when everything else is spent. That is the whole point of it.",
+      "pp": null
     }
   ],
   "warden_moves": [
@@ -764,5 +887,6 @@
         ]
       }
     ]
-  }
+  },
+  "$moves_comment": "Four moves each: a quick one, a heavy one, something that is not damage, and Strike. PP is PER BATTLE and deliberately tight \u2014 three heavies in a fight that now runs six turns \u2014 so the menu is a sequencing decision rather than a button you hold. Before this, every element had exactly two damage moves and 'pick the biggest number' matched a type-chart-aware policy on 83% of turns."
 }

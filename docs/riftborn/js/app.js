@@ -20,7 +20,7 @@ import { buildModel, modelFor, fitModel, spriteFor, clearVoxelCache } from './vo
 import {
   createBattle, makeCombatant, takeTurn, options, catchChance,
   levelOf, wildLevel, activeMon, movesFor, computeMoveDamage, remaining, concealed,
-  phaseAt, phaseCount, apexPhaseTable,
+  phaseAt, phaseCount, apexPhaseTable, canUse, ppLeft, usableMoves,
 } from './battle.js';
 import {
   buildPool, apexForecast, riftForCell, placementFits, inTimeWindow, weatherIs, biomeAt,
@@ -531,12 +531,22 @@ function boot(data) {
         bchoice('Run', 'break off', () => act({ kind: 'run' })),
       ];
     } else if (battleMenu === 'moves') {
-      items = o.moves.map((m, i) => bchoice(
-        m.name,
-        `${m.element ? title(m.element) : 'untyped'} · ${m.power} pw · ${Math.round((m.accuracy ?? 1) * 100)}%`
-        + `${m.priority > 0 ? ' · quick' : m.priority < 0 ? ' · slow' : ''}`,
-        () => act({ kind: 'move', index: i }),
-      ));
+      items = o.moves.map((m, i) => {
+        const pp = o.pp?.[i];
+        const spent = pp === 0;
+        // A move that is not damage should not advertise "0 pw" — say what it does.
+        const what = (m.applies || m.applies_self)
+          ? (m.applies_self ? `${title(m.applies_self)} — on yourself` : `leaves it ${m.applies}`)
+          : `${m.power} pw`;
+        return bchoice(
+          m.name,
+          `${m.element ? title(m.element) : 'untyped'} · ${what} · ${Math.round((m.accuracy ?? 1) * 100)}%`
+          + `${m.priority > 0 ? ' · quick' : m.priority < 0 ? ' · slow' : ''}`
+          + `${pp === undefined || pp === Infinity ? '' : ` · ${pp} left`}`,
+          () => act({ kind: 'move', index: i }),
+          { disabled: spent },
+        );
+      });
       items.push(bchoice('Back', '', () => { battleMenu = 'root'; renderBattleMenu(); }, { kind: 'back' }));
     } else if (battleMenu === 'bag') {
       const rounds = data.ammo.capture.filter((a) => profile.ammoCount(a.id) > 0);
@@ -1755,11 +1765,13 @@ function boot(data) {
     show, startFight, startBattle, renderSanctuary, renderContracts,
     get battle() { return battle; },
     takeTurn: (a) => takeTurn(battle, a), battleOptions: () => options(battle),
+    // For driving a battle the app does not own — a harness building its own.
+    takeTurnOn: (b, a) => takeTurn(b, a), optionsOn: (b) => options(b),
     finishBattle, renderBattle,
     catchChance: (ammo) => catchChance(battle, ammo),
     makeCombatant, createBattle, levelOf, wildLevel, movesFor, activeMon,
     computeMoveDamage, remaining, studyFromBattle, studyAsMinutes, concealed,
-    phaseAt, phaseCount, apexPhaseTable,
+    phaseAt, phaseCount, apexPhaseTable, canUse, ppLeft, usableMoves,
     loadLoadout, applyMods, modUnlocked, fittedMods,
     speciesHeight, rollSpecimen, heightPercentile, createFight, drawFieldReport,
     escortAbility, useEscort, cycleLock, assistPhase, assistMiss, ringSeconds,
