@@ -7,7 +7,7 @@ These are the ones that change architecture, so they want answering before code.
 | # | Question | Options | Leaning |
 | --- | --- | --- | --- |
 | 1 | Do Sanctuary residents fight alongside you? | Yes (pet sim) / No (pure collection) / Limited: one resident gives an active ability | **Limited — built and measured.** One escort, one ability, one charge per encounter, no autonomous action. Nine abilities, one per element. Measured in [13](13-phase3-findings.md): the biggest swing against a fight you are already winning is ±11 points, and against one you are losing it is +40. It does not trivialise anything |
-| 2 | Is combat real-time aim, or tap-to-shoot? | Free aim / lock-on with a timing bar / hybrid | **Hybrid.** Free aim on a tripod-steady phone is miserable while walking |
+| 2 | Is combat real-time aim, or tap-to-shoot? | Free aim / lock-on with a timing bar / hybrid | **Hybrid — both built and measured.** Free aim stays the default and is still the better instrument with a mouse; assisted aim locks, leads, and puts a timing ring on the shot. Measured in [13](13-phase3-findings.md): a walking player goes 43% → 77% by switching, and the ring's penalty is a straight dial between accessibility and skill expression, so it is set forgiving |
 | 3 | AR camera mandatory? | Always / optional toggle / off by default | **Optional.** AR is the marketing, "field view" is how people actually play |
 | 4 | PvP at all? | None / async Codex competition / live duels | **Async only** at launch. Live PvP needs netcode we don't need yet |
 | 5 | Monetisation | Cosmetics only / ammo + storage / battle pass | Cosmetics + storage. **Never sell capture ammo** — it is the skill currency |
@@ -131,7 +131,8 @@ Findings in [13-phase3-findings.md](13-phase3-findings.md).
 
 - Seasonal species and rotating branch conditions.
 - New families on a content cadence.
-- Whatever question 1 and 4 above resolved to.
+- Whatever question 4 above resolved to. *Questions 1 and 2 are now answered in
+  the build rather than by leaning.*
 
 ## Technical notes (light — not a spec)
 

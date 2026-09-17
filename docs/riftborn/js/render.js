@@ -6,7 +6,7 @@
  * get in the way of that question.
  */
 
-import { ARENA, weakPointPositions, activeStatuses, isDone } from './game.js';
+import { ARENA, weakPointPositions, activeStatuses, isDone, assistPhase, assistMiss, ASSIST_CONFIG } from './game.js';
 
 const C = {
   floor: '#191b1e',
@@ -72,6 +72,7 @@ export function draw(ctx, f, view) {
   for (const m of f.monsters) drawMonster(ctx, f, m, view, m === f.monster);
   drawEscort(ctx, f);
   drawPlayer(ctx, f);
+  if (f.aimMode === 'assisted') drawAssist(ctx, f);
   drawProjectiles(ctx, f);
   drawFloaters(ctx, f);
 
@@ -260,6 +261,55 @@ function drawSubduePrompt(ctx, f, m) {
  * whole point of answering decision 1 with "Limited" is that it is a button the
  * Warden presses, not a second combatant to watch.
  */
+/*
+ * Assisted aim's two pieces of feedback: a bracket on the locked target, and the
+ * timing ring around the Warden. The ring restarts on every shot and the gold arc
+ * is where a release takes a weak point — it is the whole interface for a mode
+ * with no reticle to steer.
+ */
+function drawAssist(ctx, f) {
+  const p = f.player;
+  const m = f.monster;
+
+  if (m && !isDone(m)) {
+    const r = m.radius + 12;
+    ctx.save();
+    ctx.strokeStyle = C.restraint;
+    ctx.lineWidth = 2;
+    for (const [sx, sy] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+      ctx.beginPath();
+      ctx.moveTo(m.x + sx * r, m.y + sy * r - sy * 7);
+      ctx.lineTo(m.x + sx * r, m.y + sy * r);
+      ctx.lineTo(m.x + sx * r - sx * 7, m.y + sy * r);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  const phase = assistPhase(f);
+  const gold = assistMiss(f) === 0;
+  const R = p.radius + 13;
+  const TAU = Math.PI * 2;
+  const top = -Math.PI / 2;
+
+  ctx.save();
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = 'rgba(232,234,237,0.14)';
+  ctx.beginPath(); ctx.arc(p.x, p.y, R, 0, TAU); ctx.stroke();
+
+  // the gold band
+  const c = ASSIST_CONFIG.bandCentre;
+  const hw = ASSIST_CONFIG.bandWidth / 2;
+  ctx.strokeStyle = C.weak;
+  ctx.beginPath(); ctx.arc(p.x, p.y, R, top + (c - hw) * TAU, top + (c + hw) * TAU); ctx.stroke();
+
+  // the sweep so far
+  ctx.strokeStyle = gold ? C.weak : C.restraint;
+  ctx.lineWidth = gold ? 4 : 2;
+  ctx.beginPath(); ctx.arc(p.x, p.y, R, top, top + Math.min(1, phase) * TAU); ctx.stroke();
+  ctx.restore();
+}
+
 function drawEscort(ctx, f) {
   const e = f.escort;
   if (!e) return;

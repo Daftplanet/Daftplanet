@@ -76,6 +76,11 @@
         <label>Study rate <em id="study-label">×1</em>
           <input type="range" id="opt-study" min="1" max="500" step="1" value="1"></label>
         <p class="dev__note">Spawns come from (tile, 15-minute bucket, weather, world seed). Shift the clock and the map repopulates — Ember and Volt come out at dusk, Stone is the daytime constant. Study accrues in real time at 1/minute, so crank the rate to see an evolution without waiting seven hours.</p>
+        <label>Aim <select id="opt-aim">
+          <option value="free">Free aim — steer the reticle</option>
+          <option value="assisted">Assisted — lock on, fire on the ring</option>
+        </select></label>
+        <p class="dev__note">Roadmap decision 2. Free aim is what a mouse wants; assisted is what a thumb wants on a moving bus — it locks a target, leads it for you, and the ring around the Warden says when the next shot takes a weak point. <b>T</b> cycles targets.</p>
         <label class="dev__check"><input type="checkbox" id="opt-unlock"> Unlock all weapons <em>(prototype — skips the rank gates)</em></label>
         <button class="ghost" id="reset-profile" type="button">Reset Warden</button>
       </aside>
@@ -169,13 +174,14 @@
         <button class="pad" id="btn-reload" type="button">RELOAD</button>
         <button class="pad pad--tag" id="btn-tag" type="button">TAG</button>
         <button class="pad pad--escort" id="btn-escort" type="button" hidden>—</button>
+        <button class="pad" id="btn-lock" type="button" hidden>TARGET</button>
         <button class="pad" id="btn-weapon" type="button">WEAPON</button>
         <button class="pad pad--leave" id="withdraw" type="button">LEAVE</button>
       </div>
     </footer>
 
     <p class="keys">
-      <span class="keys__desktop"><b>WASD</b> move · <b>mouse</b> aim · <b>hold click</b> fire · <b>Space</b> chamber · <b>Q</b>/<b>1</b>/<b>2</b> weapon · <b>R</b> reload · <b>E</b> tag · <b>F</b> escort · <b>Esc</b> withdraw</span>
+      <span class="keys__desktop"><b>WASD</b> move · <b>mouse</b> aim · <b>hold click</b> fire · <b>Space</b> chamber · <b>Q</b>/<b>1</b>/<b>2</b> weapon · <b>R</b> reload · <b>E</b> tag · <b>F</b> escort · <b>T</b> target · <b>Esc</b> withdraw</span>
       <span class="keys__touch">Drag left to move · hold right to aim and fire · LEAVE to withdraw</span>
     </p>
   </section>

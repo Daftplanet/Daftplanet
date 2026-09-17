@@ -226,7 +226,9 @@ canvas {
 .warden { display: grid; gap: 3px; min-width: 0; }
 .busy { font-size: 10px; color: var(--warn); min-height: 13px; letter-spacing: 0.08em; }
 
-.touch-controls { display: flex; gap: 6px; }
+/* Six pads is the most this row ever holds (swap, reload, tag, escort, target,
+   leave) and they have to wrap rather than push the page sideways on a phone. */
+.touch-controls { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 .pad {
   background: var(--panel-2);
   border: 1px solid var(--line);
@@ -237,7 +239,8 @@ canvas {
   font-size: 10px;
   letter-spacing: 0.08em;
   cursor: pointer;
-  min-width: 56px;
+  min-width: 52px;
+  flex: 0 1 auto;
 }
 .pad:active { background: var(--line); color: var(--ink); }
 .pad--tag { color: var(--restraint); }

@@ -1,6 +1,6 @@
 # Browser suites
 
-Nine Playwright suites that drive the real prototype in a real browser: they click
+Ten Playwright suites that drive the real prototype in a real browser: they click
 the real buttons, read the real HUD, and fail on any console error. Between them
 they cover every phase that has been built.
 
@@ -15,12 +15,13 @@ they cover every phase that has been built.
 | `mods.mjs` | the barrel/core/sight rails, the Codex gate on the two research sights, and what each mod changes |
 | `codex.mjs` | measured specimens and their percentiles, Your Records, the field-report card and what it refuses to put on it, completion rewards, lineage and the showcase |
 | `escort.mjs` | the escort's one charge, all nine element abilities doing what they claim, stage scaling, the HUD button, and that a burn never resurrects what a bullet killed |
+| `aim.mjs` | free aim unchanged, the assisted lock holding through an aim sweep, the ring's tempo and gold band, and that a player who never aims can still resolve a fight |
 
 ## Running them
 
 ```sh
 npm install playwright        # once, anywhere on your path
-node game/tests/run.mjs       # serves docs/ itself and runs all nine
+node game/tests/run.mjs       # serves docs/ itself and runs all ten
 node game/tests/run.mjs mods rifts
 ```
 
@@ -38,7 +39,10 @@ with the clock. Every one of them reported a green pass or a confident number th
 was not true.
 
 A suite that bulk-catalogued the whole bestiary by *replacing* Codex entries, then
-failed its own persistence check on the records it had just destroyed, is the most
-recent. It reported a real-looking data-loss bug that did not exist.
+failed its own persistence check on the records it had just destroyed. It reported a
+real-looking data-loss bug that did not exist. And an aim check that teleported a
+monster into position without moving its motion history, so the next frame read the
+jump as velocity and reported an 11-degree spray as 163 degrees — the same mistake
+this project had already made once, three suites earlier.
 
 When a suite tells you something surprising, suspect the suite first.

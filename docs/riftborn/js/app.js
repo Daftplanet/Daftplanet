@@ -8,7 +8,10 @@
  */
 
 import { loadLoadout, applyMods, modUnlocked, speciesHeight, rollSpecimen, heightPercentile } from './rules.js';
-import { createFight, step, readouts, activeStatuses, useEscort, applyLethal, WEAPON_SWAP_SECONDS } from './game.js';
+import {
+  createFight, step, readouts, activeStatuses, useEscort, applyLethal, cycleLock,
+  assistPhase, assistMiss, ringSeconds, weakPointPositions, WEAPON_SWAP_SECONDS,
+} from './game.js';
 import { fitCanvas, draw } from './render.js';
 import { createInput } from './input.js';
 import { createProfile, AMMO_COST, RANK_XP, WEAPON_UNLOCK, RESEARCH_COST } from './profile.js';
@@ -199,6 +202,10 @@ function boot(data) {
   $('opt-weather').addEventListener('change', (e) => {
     patrol.weatherOverride = e.target.value || null;
   });
+  $('opt-aim').addEventListener('change', (e) => {
+    profile.state.aimMode = e.target.value === 'assisted' ? 'assisted' : 'free';
+    profile.save();
+  });
   $('opt-unlock').addEventListener('change', (e) => {
     profile.state.devUnlockAll = e.target.checked;
     profile.save();
@@ -329,6 +336,7 @@ function boot(data) {
       carried, bonuses: profile.bonuses,
       packSize: spawn.packSize ?? 1,
       partySize: 1,                       // solo is the only party this build can field
+      aimMode: profile.state.aimMode ?? 'free',
       escort: escortResident ? {
         uid: escortResident.uid,
         speciesId: escortResident.speciesId,
@@ -423,6 +431,7 @@ function boot(data) {
   $('btn-reload').addEventListener('click', () => input.pulse('reload'));
   $('btn-tag').addEventListener('click', () => input.pulse('tag'));
   $('btn-escort').addEventListener('click', () => input.pulse('escort'));
+  $('btn-lock').addEventListener('click', () => input.pulse('cycleLock'));
   for (const el of [$('chamber-lethal'), $('chamber-capture')]) {
     el.addEventListener('click', () => {
       if (fight && fight.weapon.chamber !== el.dataset.chamber) input.pulse('swap');
@@ -519,6 +528,9 @@ function boot(data) {
       $(`${kind}-ammo`).textContent = `${f.weapon.mag[kind]} / ${f.weapon.reserve[kind]}`;
     }
     $('warden-fill').style.width = `${(f.player.hp / f.player.maxHp) * 100}%`;
+
+    // The target-cycle pad only exists in the mode that has a lock to cycle.
+    $('btn-lock').hidden = f.aimMode !== 'assisted' || f.monsters.length < 2;
 
     const esc = f.escort;
     const escBtn = $('btn-escort');
@@ -1155,12 +1167,14 @@ function boot(data) {
     show, startFight, renderSanctuary, renderContracts,
     loadLoadout, applyMods, modUnlocked, fittedMods,
     speciesHeight, rollSpecimen, heightPercentile, createFight, drawFieldReport,
-    escortAbility, useEscort,
+    escortAbility, useEscort, cycleLock, assistPhase, assistMiss, ringSeconds,
+    step, weakPointPositions,
     /** One modelled body shot, for suites that need a damage number without a trigger pull. */
     applyLethalForTest: (f, m) => applyLethal(f, m, f.loadout.ammo.lethal, 'body'),
     teleportTo(spawn) { patrol.x = spawn.x; patrol.y = spawn.y; },
   };
 
+  $('opt-aim').value = profile.state.aimMode ?? 'free';
   $('opt-unlock').checked = Boolean(profile.state.devUnlockAll);
   $('opt-study').value = profile.state.devStudyRate;
   $('study-label').textContent = `×${profile.state.devStudyRate}`;

@@ -742,3 +742,175 @@ column over.
    hurt — and whether that turns "Limited" back into a pet sim — is untested.
 5. Nine abilities, nine elements, one per resident. Dual-element species use their
    first element only, which quietly makes the second element decorative here.
+
+---
+
+# Phase 3, part 7: Decision 2, and the cost of a timing bar
+
+The second architectural question in `09-risks-and-roadmap.md`:
+
+> **Is combat real-time aim, or tap-to-shoot?** Free aim / lock-on with a timing
+> bar / hybrid. *Leaning: **Hybrid.** Free aim on a tripod-steady phone is
+> miserable while walking.*
+
+This is the biggest untested risk in the project. Everything built so far assumes
+free aim with a mouse, and the game is for a phone held in one hand by someone
+walking. So: build the alternative, and measure both against honest input.
+
+## What assisted aim is
+
+A lock, a lead, and a ring.
+
+- **Lock.** Focus holds on one pack member until it is resolved, or `T` cycles it.
+  In free aim, focus follows the crosshair; with no crosshair it has to hold.
+- **Lead.** The assist puts the round where the target will be. This is the part a
+  thumb cannot do and the main reason the mode exists.
+- **Ring.** It restarts on every shot, sweeps two shot intervals, and has a gold
+  band placed *after* the weapon comes off cooldown. Fire inside the band and the
+  round is sent at a weak point; fire early — which is what holding the trigger
+  does — and it sprays.
+
+The projectile system is untouched. An assisted shot is still a real bullet with
+travel time that a monster can still move out of; only its heading changes.
+
+Tying the sweep to the weapon means every gun gets its own tempo for nothing: a
+Marker Pistol beats at 0.67s, a Longtooth at 2.67s.
+
+## Three versions, two of them worse than mashing the trigger
+
+**v1: a fixed 1.15s ring on wall-clock time.** Waiting for the band cost roughly
+three shots in four. Perfect timing scored **7%** on a cull; mashing scored **91%**.
+A 2.5× weak point cannot pay for a 3× loss of rate, so the mechanic was a straight
+tax on playing well.
+
+**v2: the ring tied to the weapon, but still on wall-clock time.** Better — perfect
+timing reached 66% — and still worse than mashing's 87%. Any mechanic that asks you
+to *wait* on a cooldown-limited weapon is spending the only currency that matters.
+
+**v3: the ring restarts on each shot.** Now the band is a fixed offset after the
+previous shot rather than a place on a clock you have to chase, so hitting it costs
+about 44% of your rate instead of 75%, and buys a 2.5× multiplier. That pays.
+
+The lesson generalises past this game: **a timing mechanic layered on a
+cooldown-limited weapon has to be anchored to the cooldown, or it is competing with
+rate of fire and rate of fire wins.**
+
+## The bug that made the whole mode look like a bad idea
+
+Between v2 and v3, assisted aim measured *catastrophically* bad — 0% wins, 56%
+accuracy, timeouts. The cause was four lines of ordering inside `fire()`:
+
+```js
+w.sinceShot = 0;                    // restart the ring
+...
+const a = assistedAngle(f, speed);  // ...then ask the ring how we did
+```
+
+Every assisted shot was judged at phase zero — maximum error, gold never once. The
+mode was never actually switched on, and the diagnostic reported that as "assisted
+aim is bad" rather than "assisted aim is not running". It took instrumenting a
+single fight, shot by shot, to see `gold: 0` next to a run of perfectly-timed
+trigger pulls.
+
+## The ring is a dial between accessibility and skill, and that is the finding
+
+Before settling, the off-beat penalty was swept. It is a straight trade:
+
+| off-beat error | floor (walking) | ceiling | skill spread |
+|---|---|---|---|
+| 0.19 rad | 74% | 85% | 11pt |
+| 0.42 rad | 41% | 89% | 48pt |
+| 0.75 rad | 0% | 89% | 89pt |
+
+Free aim on the same walking input scores **43%**. So a punishing ring hands
+straight back the accessibility the mode exists to provide: at 0.42 a walking
+player is no better off than they were with free aim, and at 0.75 they are ruined.
+There is no setting of this one knob that buys both.
+
+**The lock is what lifts the floor. The ring can only ever spend that floor to buy
+skill expression back.** So it is set forgiving — and one further change gave the
+skill back for free.
+
+## Letting the ring loop gave back the gradient at no cost
+
+The ring originally clamped at the end of its sweep: miss the beat and it sat
+pinned at "missed" until you fired anyway, and the first shot of an encounter could
+never be gold. Making it **loop** means missing the beat costs one sweep — 0.67s on
+a pistol — instead of the whole opportunity.
+
+That single change moved the cull numbers from *floor 74 / ceiling 85 / spread 11*
+to:
+
+```
+CULL                                  win   esc    acc   weak%   time   shots
+  FREE AIM
+    steady   (both hands, sitting)    64%   37%    97%    65%    4.5s    10.4
+    shaky    (one hand, standing)     86%   14%    90%    44%    5.9s    13.8
+    walking  (one thumb, moving)      43%   41%    63%    34%    9.5s    20.1
+  ASSISTED
+    on the beat                       95%    5%    98%    62%    6.5s    11.3
+    roughly                           77%   24%    97%    51%    5.7s    11.7
+    mashing                           85%   15%    89%    46%    6.0s    13.9
+
+  floor: 43% → 77%   ceiling: 86% → 95%   skill spread: 43pt → 19pt
+```
+
+A walking player goes from 43% to 77% by doing nothing but switching mode. A player
+who reads the ring reaches 95%, above anything free aim manages. The gradient is
+smaller than free aim's 43 points, and it should be — that difference is the part
+of free aim's "skill" that was really just input quality.
+
+## And on a capture run, precision is a liability — for the third time
+
+```
+SOFTEN_30            win    esc
+  on the beat        64%    37%
+  roughly            75%    25%
+  mashing            86%    14%
+```
+
+Exactly inverted. Landing weak points wounds the target faster, which walks it past
+its flee threshold before you can swap chambers and dart it, so it bolts.
+
+This is the third time this phase the same shape has appeared from a completely
+different direction: the damage-reducing weapon mods (Suppressor, Flechette,
+Potency Coil) all lose culls and win captures; Scorch is +3 on a cull and −7 on a
+capture; and now precise aim is worth +10 on a cull and −22 on a capture. **This
+game systematically rewards doing less damage when you intend to take something
+alive**, and it falls out of the wound multiplier and the flee threshold
+interacting, not from anything anyone designed. It is the most load-bearing
+accident in the system.
+
+## The answer to decision 2
+
+**Hybrid, with the emphasis moved.** The roadmap's leaning is right that free aim
+is not the answer for a phone, but its framing — a timing bar *as* the skill
+mechanic — is not what the numbers support. The lock and the lead do the work; the
+ring is a reward path for players who want one, and must never become a tax on
+players who do not. Free aim stays, as the default, because with a mouse it is
+still the better instrument at the top end of a cull.
+
+Both modes ship. It is a setting, and the setting persists.
+
+## Also in
+
+- A cap on the monster velocity estimate the assist leads with. A position change
+  that is not movement — a teleport in a test, a future knockback — otherwise reads
+  as enormous speed and throws the shot off the map. This project has now been
+  bitten twice by a position jump being read as velocity; the third time it is
+  impossible.
+- A bracket on the locked target, a `T` key and a `TARGET` pad to cycle it, and the
+  pad row now wraps rather than pushing a phone sideways at six buttons.
+
+## Still open
+
+1. **Party play** — the last untouched phase 3 item, still netcode-bound.
+2. **Public profiles and local leaderboards** — transport, not data.
+3. Assisted aim has never been played by a human on a real phone, which is the only
+   test that actually settles decision 2. Everything here is a bot with a plausible
+   model of a thumb.
+4. The AR camera question (decision 3) is still untouched, and unlike 1 and 2 it
+   cannot be prototyped in a canvas.
+5. Assisted mode ignores the crosshair entirely, so the Splitbore's pellet cone and
+   the Lattice Launcher's area shots have no aim point of their own. Both still
+   work, but neither is *placed* — they just go where the lock is.

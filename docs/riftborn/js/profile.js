@@ -90,6 +90,7 @@ const DEFAULT = () => ({
   contracts: { day: null, list: [] },
   showcase: [],
   escortUid: null,
+  aimMode: 'free',
   biomesVisited: {},
   metresWalked: 0,
   xpFromWalkingKm: 0,

@@ -13,7 +13,7 @@ import { dirname, join } from 'node:path';
 
 import { loadLoadout } from '../../docs/riftborn/js/rules.js';
 import { escortAbility } from '../../docs/riftborn/js/sanctuary.js';
-import { createFight, step, weakPointPositions, ARENA } from '../../docs/riftborn/js/game.js';
+import { createFight, step, weakPointPositions, assistMiss, ARENA } from '../../docs/riftborn/js/game.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DATA = join(HERE, '..', '..', 'docs', 'riftborn', 'data');
@@ -135,6 +135,41 @@ function botIntent(f, strat, rng, skill, memory) {
   const swap = !busy && w.chamber !== want;
   const reload = !busy && !swap && w.mag[w.chamber] === 0 && w.reserve[w.chamber] > 0;
 
+  /*
+   * In assisted mode there is no reticle to steer, so `onTarget` means something
+   * else entirely: how well the bot reads the timing ring. `skill.ringTolerance`
+   * is how close to the gold band it waits for — 0 is a metronome, 1 is someone
+   * mashing the button. That is the axis assisted aim asks a player to be good on,
+   * and it has to be measured separately from the axis free aim asks about.
+   */
+  if (f.aimMode === 'assisted') {
+    /*
+     * A player does not hold fire for a second to catch the band — they nudge
+     * their cadence by a fraction of a beat. `syncWindow` is how long this bot is
+     * willing to sit on a ready trigger to land on the beat, and it is the axis
+     * assisted aim asks a player to be good on.
+     *
+     * Modelling skill as "waits however long it takes" was the first attempt and
+     * it measured the wrong thing entirely: it made perfect timing score 7% on a
+     * cull against mashing's 91%, because the bot was throwing away two thirds of
+     * its rate of fire for a 2.5x multiplier.
+     */
+    const ready = w.cooldown <= 0 && w.mag[w.chamber] > 0;
+    if (ready && memory.readySince === undefined) memory.readySince = f.t;
+    if (!ready) memory.readySince = undefined;
+    const waited = ready ? f.t - memory.readySince : 0;
+    const onBeat = assistMiss(f) <= (skill.beatTolerance ?? 0.001);
+    const sync = skill.syncWindow ?? 0;
+
+    return {
+      moveX: mx, moveY: my, aim: p.aim,
+      firing: !busy && !swap && ready && (onBeat || waited >= sync),
+      swap, reload,
+      escort: Boolean(f.escort && f.escort.charges > 0 && f.escort.readyIn <= 0),
+      tag: m.state === 'subdued',
+    };
+  }
+
   return {
     moveX: mx, moveY: my, aim,
     firing: !busy && !swap && onTarget && w.mag[w.chamber] > 0,
@@ -147,7 +182,7 @@ function botIntent(f, strat, rng, skill, memory) {
   };
 }
 
-function runFight(seed, strat, skill, override, mods, escort) {
+function runFight(seed, strat, skill, override, mods, escort, aimMode) {
   const rng = mulberry32(seed);
   const loadout = loadLoadout(data, { ...LOADOUT, mods });
   if (override) {
@@ -155,6 +190,7 @@ function runFight(seed, strat, skill, override, mods, escort) {
   }
   const f = createFight(loadout, {
     rng,
+    aimMode,
     escort: escort ? { ability: escort } : null,
     escortRules: data.elements.escort_ability_rules,
   });
@@ -390,5 +426,76 @@ if (process.env.ESCORT) {
         + `${name === 'none' ? '    —' : `${d >= 0 ? '+' : ''}${(d*100).toFixed(0)}pt`.padStart(5)}`
         + `${name !== 'none' && Math.abs(d) < 0.025 ? '  (noise)' : ''}`);
     }
+  }
+}
+
+/*
+ * AIM=1 answers decision 2 in 09-risks-and-roadmap.md — "is combat real-time aim
+ * or tap-to-shoot?" — by running the same fights under both.
+ *
+ * The comparison only means something if the input quality is honest. Free aim on
+ * a phone held in one hand, on the move, is not the 0.035-radian tremor of the
+ * SKILLED tier; the WALKING tier below is what the roadmap means when it says
+ * free aim "is miserable while walking".
+ *
+ * What the design needs from assisted aim is a LIFTED FLOOR AND AN INTACT
+ * CEILING. If it flattens the skill gradient it has replaced the game with a
+ * button, and the honest answer would be no.
+ */
+if (process.env.AIM) {
+  const N = 600;
+  const FREE = [
+    { aimSigma: 0.035, targetWeakPoints: true,  label: 'steady    (both hands, sitting)' },
+    { aimSigma: 0.090, targetWeakPoints: false, label: 'shaky     (one hand, standing)' },
+    { aimSigma: 0.230, targetWeakPoints: false, label: 'walking   (one thumb, moving)' },
+  ];
+  /*
+   * syncWindow is how long this bot will sit on a ready trigger waiting for the
+   * band; beatTolerance is how sloppily it reads the band when it does. Mashing
+   * has neither and so always fires early, which is the point.
+   */
+  const ASSISTED = [
+    { syncWindow: 1.5, beatTolerance: 0.001, label: 'on the beat   (waits for the ring)' },
+    { syncWindow: 1.5, beatTolerance: 0.30,  label: 'roughly       (near enough the ring)' },
+    { syncWindow: 0.0, beatTolerance: 0.001, label: 'mashing       (trigger held, no timing)' },
+  ];
+
+  const run = (strat, skill, mode) => {
+    const want = strat === STRATEGIES.cull ? 'culled' : 'catalogued';
+    let win = 0, esc = 0, hits = 0, shots = 0, weak = 0, time = 0;
+    for (let i = 0; i < N; i++) {
+      const f = runFight(i * 7919 + 13, strat, skill, null, undefined, null, mode);
+      if (f.outcome === want) win++;
+      if (f.outcome === 'escaped') esc++;
+      hits += f.stats.hits; shots += f.stats.shots; weak += f.stats.weakHits; time += f.outcomeAt;
+    }
+    return {
+      win: win / N, esc: esc / N, acc: shots ? hits / shots : 0,
+      weak: hits ? weak / hits : 0, time: time / N, shots: shots / N,
+    };
+  };
+
+  for (const [stratName, strat] of [['cull', STRATEGIES.cull], ['soften_30', STRATEGIES.soften_30]]) {
+    console.log(`\n${stratName.toUpperCase()} — free aim vs assisted, ${N} runs each`);
+    console.log('input quality                          win    esc    acc   weak%   time   shots');
+    const row = (label, r) => console.log(
+      `${label.padEnd(38)} ${`${(r.win * 100).toFixed(0)}%`.padStart(4)} `
+      + `${`${(r.esc * 100).toFixed(0)}%`.padStart(6)} ${`${(r.acc * 100).toFixed(0)}%`.padStart(6)} `
+      + `${`${(r.weak * 100).toFixed(0)}%`.padStart(6)} ${r.time.toFixed(1).padStart(7)}s ${r.shots.toFixed(1).padStart(7)}`);
+
+    console.log('  FREE AIM');
+    const free = FREE.map((s) => [s, run(strat, s, 'free')]);
+    for (const [s, r] of free) row(`    ${s.label}`, r);
+    console.log('  ASSISTED  (lock + timing ring)');
+    const assisted = ASSISTED.map((s) => [s, run(strat, s, 'assisted')]);
+    for (const [s, r] of assisted) row(`    ${s.label}`, r);
+
+    const spread = (rows) => Math.max(...rows.map(([, r]) => r.win)) - Math.min(...rows.map(([, r]) => r.win));
+    console.log(`  floor: free ${(Math.min(...free.map(([, r]) => r.win)) * 100).toFixed(0)}%`
+      + ` → assisted ${(Math.min(...assisted.map(([, r]) => r.win)) * 100).toFixed(0)}%`
+      + `   ·   ceiling: free ${(Math.max(...free.map(([, r]) => r.win)) * 100).toFixed(0)}%`
+      + ` → assisted ${(Math.max(...assisted.map(([, r]) => r.win)) * 100).toFixed(0)}%`
+      + `   ·   skill spread: free ${(spread(free) * 100).toFixed(0)}pt`
+      + ` → assisted ${(spread(assisted) * 100).toFixed(0)}pt`);
   }
 }

@@ -36,6 +36,76 @@ const AI = { wanderSpeed: 0.35, fleeSpeedMult: 1.25, fleeEscapeSeconds: 5, noise
  */
 const NOISE_REACH = { silent: 0, low: 0.5, medium: 1, high: 1.4 };
 
+/*
+ * Assisted aim — decision 2 in 09-risks-and-roadmap.md, "lock-on with a timing
+ * bar". The leaning there is that free aim on a phone held in one hand while
+ * walking is miserable, and this is the alternative built so the two can be
+ * measured against each other.
+ *
+ * The projectile system is untouched: an assisted shot is still a real bullet
+ * with travel time that a monster can still move out of. What changes is only
+ * where it is pointed. The ring sweeps, and where you release decides whether
+ * the shot is sent at a weak point, at the body, or wide — so the skill moves
+ * from steering a reticle to reading a rhythm, which is a thing a thumb can do
+ * on a bus.
+ */
+const ASSIST = {
+  sweepBeats: 2,              // the ring restarts on each shot and sweeps two shot intervals
+  bandCentre: 0.72,           // ~1.44 shot intervals in: deliberately AFTER the weapon is ready
+  bandWidth: 0.16,
+  maxErrorRadians: 0.19,      // forgiving on purpose — see 13-phase3-findings.md part 7
+  leadMultiplier: 1.0,        // the assist leads a moving target for you
+};
+
+/*
+ * The ring restarts on every shot and sweeps two shot intervals, with the gold
+ * band placed just past the point the weapon comes off cooldown. Firing inside it
+ * sends the round at a weak point instead of the body.
+ *
+ * `maxErrorRadians` is deliberately small, and that is a finding rather than a
+ * default. It is a straight dial between accessibility and skill expression, and
+ * at every setting one of them loses:
+ *
+ *     off-beat error   floor (walking)   ceiling   skill spread
+ *     0.19             74%               85%       11pt
+ *     0.42             41%               89%       48pt
+ *     0.75              0%               89%       89pt
+ *
+ * Free aim on the same input scores 43%. So a punishing ring hands straight back
+ * the accessibility the whole mode exists to provide, and a forgiving one adds no
+ * measurable skill. The lock is what lifts the floor; the ring rides along as the
+ * weak-point route for players who want it, and never as a tax on players who do
+ * not. The full write-up is part 7 of 13-phase3-findings.md.
+ */
+export function ringSeconds(f) {
+  return ASSIST.sweepBeats * (60 / (f.loadout?.weapon?.rpm ?? 180));
+}
+
+/**
+ * Where in its sweep the timing ring is, 0..1. Restarts on each shot and keeps
+ * looping if you hold off, so missing the beat costs you one sweep rather than
+ * stranding the ring at "missed" until you fire anyway. Clamping instead of
+ * looping also meant the very first shot of an encounter could never be a gold
+ * one, and the ring sat pinned at full for the whole approach.
+ */
+export function assistPhase(f) {
+  const sweep = ringSeconds(f);
+  return ((f.weapon?.sinceShot ?? 0) % sweep) / sweep;
+}
+
+/** How far off the gold band the ring is right now, 0 (perfect) .. 1 (worst). */
+export function assistMiss(f) {
+  const d = Math.abs(assistPhase(f) - ASSIST.bandCentre) - ASSIST.bandWidth / 2;
+  return Math.max(0, Math.min(1, d / (0.5 - ASSIST.bandWidth / 2)));
+}
+
+export const ASSIST_CONFIG = ASSIST;
+
+/** True while the next shot would take a weak point. Drives the ring's colour. */
+export function assistGold(f) {
+  return f.aimMode === 'assisted' && assistMiss(f) === 0;
+}
+
 const AGGRESSION = {
   passive:     { alert: 110, preferred: 210, attacks: false, cooldown: 99, reach: 0 },
   skittish:    { alert: 180, preferred: 240, attacks: true,  cooldown: 2.8, reach: 110 },
@@ -195,6 +265,9 @@ function makeMonster(loadout, index, count, rng, partySize = 1, specimenRng = Ma
     anchorBlocked: false,
     heightM: specimen.heightM,
     percentile: specimen.percentile,
+    // Smoothed velocity, kept for the aim assist's lead. Sampling raw
+    // frame-to-frame movement gave a lead that jittered with every state change.
+    vxEst: 0, vyEst: 0, lastX: null, lastY: null,
   };
 }
 
@@ -217,7 +290,7 @@ function makeWeaponState(loadout, requested) {
     mag: { ...startMag },
     reserve: { lethal: carried.lethal - startMag.lethal, capture: carried.capture - startMag.capture },
     carried,
-    cooldown: 0, reloadT: 0, swapT: 0,
+    cooldown: 0, sinceShot: 0, reloadT: 0, swapT: 0,
     charge: 0, wasFiring: false,
     heat: 0,
   };
@@ -239,6 +312,9 @@ export function createFight(loadouts, opts = {}) {
    * have made every published balance figure irreproducible.
    */
   const specimenRng = opts.specimenRng ?? Math.random;
+  // 'free' is what shipped and stays the default; 'assisted' is decision 2's
+  // lock-on-with-a-timing-bar, chosen by the player in settings.
+  const aimMode = opts.aimMode === 'assisted' ? 'assisted' : 'free';
   const bonuses = opts.bonuses ?? {};
   const ai = profileFor(loadout.species);
   const packSize = Math.max(1, opts.packSize ?? 1);
@@ -250,6 +326,7 @@ export function createFight(loadouts, opts = {}) {
 
   const f = {
     rng,
+    aimMode,
     loadouts: slots,
     activeSlot: 0,
     slotSwapT: 0,
@@ -428,11 +505,52 @@ function startWeaponSwap(f, slot) {
   f.stats.weaponSwaps += 1;
 }
 
+/**
+ * The angle an assisted shot leaves at. Leads the locked target, then adds an
+ * error read off the timing ring — zero inside the gold band, where the shot is
+ * sent at a weak point instead of the body.
+ */
+function assistedAngle(f, speed, miss) {
+  const m = f.monster;
+  if (!m || isDone(m)) return { aim: f.player.aim, gold: false };
+
+  const p = f.player;
+  const gold = miss === 0;
+
+  // Lead: where it will be when the round gets there. This is the part a thumb
+  // cannot do and the part the assist exists to do for you.
+  const flight = dist(m, p) / speed;
+  let tx = m.x + (m.vxEst ?? 0) * flight * ASSIST.leadMultiplier;
+  let ty = m.y + (m.vyEst ?? 0) * flight * ASSIST.leadMultiplier;
+
+  if (gold) {
+    const wps = Object.values(weakPointPositions(m));
+    if (wps.length) {
+      const best = wps.reduce((a, b) => (dist(a, p) < dist(b, p) ? a : b));
+      tx = best.x + (m.vxEst ?? 0) * flight * ASSIST.leadMultiplier;
+      ty = best.y + (m.vyEst ?? 0) * flight * ASSIST.leadMultiplier;
+    }
+  }
+
+  const base = Math.atan2(ty - p.y, tx - p.x);
+  const err = miss * ASSIST.maxErrorRadians * (f.rng() < 0.5 ? -1 : 1);
+  return { aim: base + err, gold };
+}
+
 function fire(f) {
   const w = f.weapon;
   const L = f.loadout;
+  /*
+   * Read the ring BEFORE restarting it. Resetting first evaluated every assisted
+   * shot at phase zero — maximum error, gold never once — which read in the
+   * diagnostic as assisted aim simply being bad rather than as never being
+   * switched on.
+   */
+  const assistMissNow = f.aimMode === 'assisted' ? assistMiss(f) : 1;
+
   w.mag[w.chamber] -= 1;
   w.cooldown = 60 / L.weapon.rpm;
+  w.sinceShot = 0;
   f.stats.shots += 1;
 
   const speed = w.chamber === 'lethal' ? 950 : 760;
@@ -449,11 +567,21 @@ function fire(f) {
   const recoilKick = (L.recoil ?? 0) * 0.5 * w.heat;
   w.heat = Math.min(1, w.heat + 0.34);
 
+  // In assisted mode the reticle is not the Warden's to steer; the lock and the
+  // ring decide where the round goes, and everything downstream is unchanged.
+  let aimAt = f.player.aim;
+  if (f.aimMode === 'assisted') {
+    const a = assistedAngle(f, speed, assistMissNow);
+    aimAt = a.aim;
+    f.player.aim = a.aim;                 // so the barrel and aim line agree with the shot
+    if (a.gold) f.stats.goldShots = (f.stats.goldShots ?? 0) + 1;
+  }
+
   for (let i = 0; i < count; i++) {
     const offset = count > 1 ? -spread / 2 + (spread * i) / (count - 1) : 0;
     const jitter = count > 1 ? (f.rng() - 0.5) * SPREAD_PER_PROJECTILE * (L.spreadScale ?? 1) : 0;
     const kick = recoilKick ? (f.rng() - 0.5) * recoilKick : 0;
-    const a = f.player.aim + offset + jitter + kick;
+    const a = aimAt + offset + jitter + kick;
     f.projectiles.push({
       x: f.player.x + Math.cos(a) * 16,
       y: f.player.y + Math.sin(a) * 16,
@@ -750,6 +878,26 @@ function stepMonster(f, m, dt) {
 
   m.stateT += dt;
   m.hitFlash = Math.max(0, m.hitFlash - dt);
+
+  // Exponential smoothing: fast enough to track a lunge, slow enough that the
+  // assist does not swing wildly on the frame a monster changes state.
+  if (dt > 0 && m.lastX !== null) {
+    const k = Math.min(1, dt * 9);
+    m.vxEst += ((m.x - m.lastX) / dt - m.vxEst) * k;
+    m.vyEst += ((m.y - m.lastY) / dt - m.vyEst) * k;
+    /*
+     * Nothing moves faster than a lunging monster, so nothing may be *estimated*
+     * faster either. Without the cap, any single frame that repositions a monster
+     * without moving it — a teleport in a test, a future knockback, an arena
+     * wrap — reads as enormous velocity and the aim assist leads a shot off the
+     * map. This project has now been bitten twice by a position jump being read
+     * as speed; the third time it should be impossible.
+     */
+    const cap = m.speed * 2.5;
+    const sp = Math.hypot(m.vxEst, m.vyEst);
+    if (sp > cap) { m.vxEst = (m.vxEst / sp) * cap; m.vyEst = (m.vyEst / sp) * cap; }
+  }
+  m.lastX = m.x; m.lastY = m.y;
 
   if (m.burn) {
     /*
@@ -1095,8 +1243,21 @@ function tryTag(f) {
 
 // ---------------------------------------------------------------- main step
 
-/** Whichever live monster the crosshair is closest to. Drives the HUD. */
+/**
+ * Whichever live monster the crosshair is closest to. Drives the HUD.
+ *
+ * In assisted mode there is no crosshair, so focus is a *lock*: it holds on the
+ * chosen target until that target is resolved or the player cycles, which is the
+ * difference between a mode you can play with a thumb and one you cannot.
+ */
 function updateFocus(f) {
+  if (f.aimMode === 'assisted') {
+    const live = (i) => f.monsters[i] && !isDone(f.monsters[i]);
+    if (live(f.focusIndex)) return;
+    const next = f.monsters.findIndex((m) => !isDone(m));
+    if (next >= 0) f.focusIndex = next;
+    return;
+  }
   let best = -1, bestScore = Infinity;
   f.monsters.forEach((m, i) => {
     if (isDone(m)) return;
@@ -1106,6 +1267,16 @@ function updateFocus(f) {
     if (score < bestScore) { bestScore = score; best = i; }
   });
   if (best >= 0) f.focusIndex = best;
+}
+
+/** Cycle the lock to the next live pack member. Assisted mode only. */
+export function cycleLock(f) {
+  const n = f.monsters.length;
+  for (let k = 1; k <= n; k++) {
+    const i = (f.focusIndex + k) % n;
+    if (!isDone(f.monsters[i])) { f.focusIndex = i; return i; }
+  }
+  return f.focusIndex;
 }
 
 export function step(f, dt, intent) {
@@ -1134,9 +1305,11 @@ export function step(f, dt, intent) {
   if (intent.swapWeapon) startWeaponSwap(f, intent.weaponSlot);
   if (f.escort) f.escort.readyIn = Math.max(0, f.escort.readyIn - dt);
   if (intent.escort) useEscort(f);
+  if (intent.cycleLock && f.aimMode === 'assisted') cycleLock(f);
 
   const w = f.weapon;
   w.cooldown = Math.max(0, w.cooldown - dt);
+  w.sinceShot = (w.sinceShot ?? 0) + dt;
   w.heat = Math.max(0, w.heat - dt * 1.6);
   if (w.swapT > 0) {
     w.swapT = Math.max(0, w.swapT - dt);

@@ -21,7 +21,7 @@ const MOVE_KEYS = {
 
 export function createInput(canvas, options = {}) {
   const keys = new Set();
-  const pulses = { swap: false, reload: false, tag: false, swapWeapon: false, escort: false };
+  const pulses = { swap: false, reload: false, tag: false, swapWeapon: false, escort: false, cycleLock: false };
   let weaponSlot;
   let pointer = null;        // arena-space cursor, or null
   let firing = false;
@@ -41,7 +41,7 @@ export function createInput(canvas, options = {}) {
   // ---- keyboard
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
-    if (e.code in MOVE_KEYS || ['Space', 'KeyR', 'KeyE', 'KeyF', 'KeyQ', 'Digit1', 'Digit2'].includes(e.code)) e.preventDefault();
+    if (e.code in MOVE_KEYS || ['Space', 'KeyR', 'KeyE', 'KeyF', 'KeyT', 'KeyQ', 'Digit1', 'Digit2'].includes(e.code)) e.preventDefault();
     keys.add(e.code);
     if (e.code === 'Space') pulses.swap = true;
     // Q cycles weapons, 1/2 pick a slot directly; Space stays the chamber swap.
@@ -51,6 +51,7 @@ export function createInput(canvas, options = {}) {
     if (e.code === 'KeyR') pulses.reload = true;
     if (e.code === 'KeyE') pulses.tag = true;
     if (e.code === 'KeyF') pulses.escort = true;      // the escort's one charge
+    if (e.code === 'KeyT') pulses.cycleLock = true;   // assisted aim: next target
   });
   window.addEventListener('keyup', (e) => keys.delete(e.code));
   window.addEventListener('blur', () => { keys.clear(); firing = false; });
@@ -117,8 +118,9 @@ export function createInput(canvas, options = {}) {
         swap: pulses.swap, reload: pulses.reload, tag: pulses.tag,
         swapWeapon: pulses.swapWeapon, weaponSlot,
         escort: pulses.escort,
+        cycleLock: pulses.cycleLock,
       };
-      pulses.swap = pulses.reload = pulses.tag = pulses.swapWeapon = pulses.escort = false;
+      pulses.swap = pulses.reload = pulses.tag = pulses.swapWeapon = pulses.escort = pulses.cycleLock = false;
       weaponSlot = undefined;
       return intent;
     },
