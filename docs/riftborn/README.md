@@ -1,14 +1,16 @@
-# RIFTBORN — Phase 0 prototype
+# RIFTBORN — prototype
 
-The grey box from [`game/09-risks-and-roadmap.md`](../../game/09-risks-and-roadmap.md):
+Phases 0 and 1 of [`game/09-risks-and-roadmap.md`](../../game/09-risks-and-roadmap.md),
+built on the design bible's real data and formulas.
 
-> One monster (Cinderfang), one weapon (Marker Pistol), both ammo types. Restraint
-> meter, wound multiplier, weak points, flee behaviour.
-> **Exit criterion:** the kill-or-capture decision is tense with a single monster in
-> a grey box. If it isn't fun here, no amount of map makes it fun.
+- **Phase 0** — the grey-box fight. One monster, one weapon, two chambers.
+- **Phase 1** — the vertical slice. A biome-driven map, 9 wild species across
+  3 families, 3 weapons, a persistent Codex with Research I, and an economy that
+  makes culling pay for capturing.
 
-No map, no AR, no progression, no art. Those are all later phases, and building any
-of them before this question is answered would be building on a guess.
+> **Phase 1 exit criterion:** a 20-minute Patrol session is worth repeating tomorrow.
+
+No AR, no geolocation, no Sanctuary, no evolution. Those are phase 2 and later.
 
 ## Running it
 
@@ -20,62 +22,75 @@ python3 -m http.server -d docs 8000
 # then open http://localhost:8000/riftborn/
 ```
 
-It is also served from GitHub Pages at `/riftborn/` once this branch is merged.
+## Playing it
 
-## Controls
+**Patrol.** Walk with `WASD` (or drag on touch). Monsters spawn from the tile you
+are standing in, the 15-minute time bucket, and your world seed — so the map is the
+same for everyone standing in the same place at the same time, with no persistent
+world simulation behind it. Walk within 25 m of a marker to engage.
+
+**Fight.** Same as phase 0. Hold click to fire, `Space` swaps chamber at its real
+0.6 s cost, `E` tags a subdued monster, `Esc` withdraws.
+
+**Codex.** Every species you see, fight, kill or catalogue is recorded. Culling
+something you have never catalogued marks the entry **Data Lost**. Spend a Research
+Point on a catalogued entry to unlock **Research I** — which makes that species'
+weak points visible in the field. Until then you are shooting at a silhouette.
+
+**Loadout.** Pick a weapon and a round for each chamber, and craft more. You carry
+24 lethal and 12 capture rounds into a fight; the rest stays at the bench. Culling
+pays 3× the alloy of a capture, which is what funds the darts.
 
 | | Desktop | Touch |
 | --- | --- | --- |
-| Move | `WASD` / arrows | drag the left half |
+| Walk / move | `WASD` / arrows | drag (map: anywhere, fight: left half) |
 | Aim | mouse | hold the right half |
 | Fire | hold left click | hold the right half |
-| Swap chamber | `Space` or `Q` | `SWAP` |
+| Swap chamber | `Space` / `Q` | `SWAP` |
 | Reload | `R` | `RELOAD` |
-| Tag a subdued monster | `E` or click it | `TAG` |
+| Tag | `E` or click | `TAG` |
+| Withdraw | `Esc` | `LEAVE` |
 
-The **numbers** button opens a live readout of every term the fight is using —
-wound multiplier, status product, Restraint per hit, decay, flee chance per second.
-It is reading the running fight, not a copy, so it is the fastest way to see why
-something happened.
+Two dev panels are worth opening. **world** (patrol) scrubs the clock and the walk
+pace — shift to dusk and the map fills with Ember and Volt, where daytime is Stone.
+**numbers** (fight) is a live readout of every term the maths is using.
 
-Two toggles in that panel are worth playing with:
+## What's in phase 1
 
-- **Show weak points** — turning it off is what an unresearched Codex entry feels
-  like. The weak points are still there and still worth ×2.5, you just cannot see
-  where they are. This is the argument for Research I in one checkbox.
-- **Must close to 120px to tag** — off by default, matching the design's generous
-  5-second window. On, the window becomes a real scramble. Open question, see below.
-
-## What's in it
-
-- The Restraint meter with decay, the wound multiplier, and the subdue → tag window
-- Weak points with per-zone damage and Restraint multipliers, moving with the body
-- Chamber swapping at its real 0.6s cost, with per-chamber magazines and reserves
-- `Sedated` from tranq stacks, `Enraged` from a missed tag window
-- Flee behaviour, including Restraint suppressing the flee roll
-- A telegraphed lunge with a punish window on the recovery
-- Four outcomes: `CULLED`, `CATALOGUED` (with clean-capture detection), `ESCAPED`,
-  `DRIVEN OFF`
+- 9 wild species across the Cinder, Crag and Volt families, plus their 2 branch
+  forms shown as permanently-blank Codex slots
+- Size classes that matter: a Mote's weak point is a genuinely hard shot, a Brute's
+  is not, because weak points scale with the body
+- Aggression profiles — passive, skittish, territorial and aggressive creatures
+  behave differently enough that you fight them differently
+- 3 weapons: the Marker Pistol, the Longtooth, and the Sylvan Bow (which draws,
+  looses on release, and is silent — so it is the only one that earns Ambush)
+- 7 rounds, including Piercing, which the armoured Crag family exists to teach
+- The type chart in play: Cryo rounds are ×2.0 against both Ember and Stone
+- Biomes, time-of-day spawn shifts, Warden ranks, XP, and an ammo economy
 
 ## Architecture
 
 | File | Role |
 | --- | --- |
 | `js/rules.js` | Pure combat maths. No DOM, no state. |
-| `js/game.js` | The fight: entities, AI, the `step()` function. Also DOM-free. |
-| `js/render.js` | Canvas drawing. |
+| `js/game.js` | The fight: entities, AI, `step()`. Also DOM-free. |
+| `js/world.js` | Tiles, biomes, deterministic spawns. Also DOM-free. |
+| `js/patrol.js` | The map: walking, markers, rendering. |
+| `js/profile.js` | Progression, inventory, the Codex, persistence. |
+| `js/render.js` | Fight canvas drawing. |
 | `js/input.js` | Keyboard, mouse and touch → an `intent` object. |
-| `js/main.js` | Data loading, loop, HUD. |
+| `js/app.js` | View routing and glue. |
 | `data/*.json` | Synced from `game/data/`. Do not edit here. |
 
-`game.js` and `rules.js` are deliberately free of browser APIs so that
-[`game/tools/balance_sim.mjs`](../../game/tools/balance_sim.mjs) can drive the
-**exact same fight code** with scripted players. Input is a plain `intent` object,
-so the fight never knows whether a human or a bot is driving it.
+The fight and world layers avoid browser APIs so that
+[`game/tools/balance_sim.mjs`](../../game/tools/balance_sim.mjs) can drive **the
+exact same code** headlessly with scripted players:
 
 ```sh
 node game/tools/balance_sim.mjs 400      # outcome table by strategy and skill
-PROBE=1 node game/tools/balance_sim.mjs  # plus the weak-point targeting experiment
+PROBE=1 node game/tools/balance_sim.mjs  # weak-point targeting experiment
+DART=1  node game/tools/balance_sim.mjs  # hit-zone distribution by skill
 ```
 
 Data is canonical in `game/data/` and copied here by:
@@ -85,8 +100,13 @@ python3 game/tools/sync_prototype_data.py          # sync
 python3 game/tools/sync_prototype_data.py --check  # fail if stale
 ```
 
+`window.__riftborn` exposes the profile, the patrol and the running fight for
+console poking. It is a prototype; that is worth more than hiding it.
+
 ## Findings
 
-The tuning work this build produced — including three bugs in the design bible's
-own maths — is written up in
-[`game/10-phase0-findings.md`](../../game/10-phase0-findings.md).
+- [`game/10-phase0-findings.md`](../../game/10-phase0-findings.md) — the three
+  maths bugs in the design bible that building the fight exposed.
+- [`game/11-phase1-findings.md`](../../game/11-phase1-findings.md) — the hit-zone
+  bug that turned out to have been distorting phase 0's numbers, and what the map
+  taught us.

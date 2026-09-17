@@ -101,7 +101,14 @@ function botIntent(f, strat, rng, skill, memory) {
   tx += (recent.x - seen.x) * flight * 8;
   ty += (recent.y - seen.y) * flight * 8;
 
-  const desired = Math.atan2(ty - p.y, tx - p.x) + gauss(rng) * skill.aimSigma;
+  /*
+   * Hand tremor has to persist. Re-rolling the error every frame let the bot hold
+   * fire until a favourable sample came up, which turned "shaky aim" into "perfect
+   * aim, eventually" and made both skill levels hit weak points far too often.
+   * A slow random walk cannot be waited out.
+   */
+  memory.bias = (memory.bias ?? 0) * 0.94 + gauss(rng) * skill.aimSigma * 0.34;
+  const desired = Math.atan2(ty - p.y, tx - p.x) + memory.bias;
   let delta = ((desired - p.aim + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
   const maxTurn = TURN_RATE * (1 / 60);
   const aim = p.aim + Math.max(-maxTurn, Math.min(maxTurn, delta));
@@ -229,6 +236,22 @@ console.log('\nCinderfang ships at 0.40. Lower values make a nearly-won fight le
  * only whether the bot hunts weak points. Kept because it is how the "weak points
  * are a liability on a fleeing target" finding was established.
  */
+if (process.env.DART) {
+  console.log('\nZONE DIAGNOSTIC — what share of hits land on a weak point');
+  for (const skill of SKILLS) {
+    for (const [name, strat] of [['pure_dart', STRATEGIES.pure_dart], ['cull', STRATEGIES.cull]]) {
+      let weak = 0, hits = 0;
+      const outs = {};
+      for (let i = 0; i < 80; i++) {
+        const f = runFight(i * 7919 + 13, strat, skill);
+        outs[f.outcome] = (outs[f.outcome] ?? 0) + 1;
+        weak += f.stats.weakHits; hits += f.stats.hits;
+      }
+      console.log(`${skill.label.split(' ')[0].padEnd(8)} ${name.padEnd(10)} weak share ${`${((weak/hits)*100).toFixed(0)}%`.padStart(5)}   ${JSON.stringify(outs)}`);
+    }
+  }
+}
+
 if (process.env.PROBE) {
   console.log('\nPROBE — does weak-point chasing cost you fleeing targets?');
   console.log('aim sigma   weak points   cull:esc   hit rate   shots/sec   chase sh/sec');

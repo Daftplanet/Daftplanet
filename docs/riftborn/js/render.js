@@ -39,6 +39,11 @@ export function fitCanvas(canvas) {
   return { scale, dpr };
 }
 
+const ELEMENT_TINT = {
+  ember: '#c2622f', tide: '#4a90b8', verdant: '#5f9e5a', stone: '#8a8378',
+  gale: '#8fb8c9', volt: '#d9c04a', gloom: '#7a6b96', lumen: '#e0d090', rift: '#b05ad0',
+};
+
 export function draw(ctx, f, view) {
   const { dpr } = view;
   ctx.save();
@@ -98,7 +103,7 @@ function drawMonster(ctx, f, view) {
   if (m.state === 'escaped' || m.state === 'tagged') return;
 
   const statuses = activeStatuses(m);
-  let body = C.monster;
+  let body = ELEMENT_TINT[f.loadout.species.elements[0]] ?? C.monster;
   if (statuses.includes('enraged')) body = C.monsterEnraged;
   else if (statuses.includes('sedated')) body = C.monsterSedated;
   if (m.hitFlash > 0) body = C.monsterLit;

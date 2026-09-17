@@ -19,7 +19,7 @@ const MOVE_KEYS = {
   KeyD: [1, 0], ArrowRight: [1, 0],
 };
 
-export function createInput(canvas) {
+export function createInput(canvas, options = {}) {
   const keys = new Set();
   const pulses = { swap: false, reload: false, tag: false };
   let pointer = null;        // arena-space cursor, or null
@@ -67,7 +67,8 @@ export function createInput(canvas) {
     e.preventDefault();
     const r = canvas.getBoundingClientRect();
     for (const t of e.changedTouches) {
-      const leftHalf = t.clientX < r.left + r.width / 2;
+      // On the map every drag steers; in a fight the screen is split into move and aim.
+      const leftHalf = options.allTouchSteers ? true : t.clientX < r.left + r.width / 2;
       if (e.type === 'touchstart') {
         if (leftHalf && !stick) stick = { id: t.identifier, ox: t.clientX, oy: t.clientY, x: t.clientX, y: t.clientY };
         else if (!leftHalf && !aimTouch) {

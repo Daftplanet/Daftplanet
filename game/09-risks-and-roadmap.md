@@ -88,13 +88,17 @@ Lives at [`docs/riftborn/`](../docs/riftborn/); findings in
 - *Status: the structure holds up and the maths is fixed. Whether it is fun is the
   one thing the sim cannot answer — it needs hands on it.*
 
-### Phase 1 — Vertical slice
+### Phase 1 — Vertical slice — **built**
+
+Findings in [11-phase1-findings.md](11-phase1-findings.md).
 
 - 3 families (Cinder, Crag, Volt) = 9 species, all stages.
 - 3 weapons (Pistol, Longtooth, Sylvan Bow), 6 ammo types.
 - Type chart, size classes, Codex entries with Research I.
 - Real map, real spawns, one biome classification pass.
 - **Exit criterion:** a 20-minute Patrol session is worth repeating tomorrow.
+- *Status: the loop closes — cull funds darts, darts fill the Codex, the Codex
+  reveals weak points, weak points speed up the next fight. Needs hands on it.*
 
 ### Phase 2 — The loop closes
 

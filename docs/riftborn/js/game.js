@@ -15,40 +15,81 @@ export const ARENA = { w: 960, h: 640 };
 export const PX_PER_METRE = 22;
 
 const PLAYER = { radius: 12, speed: 150, maxHp: 100, invulnSeconds: 0.6 };
-const MONSTER = { radius: 26, speedScale: 24 };
+const SIZE_RADIUS = { mote: 13, whelp: 19, strider: 26, brute: 38, colossus: 56, titan: 80 };
+const MONSTER = { speedScale: 24 };
 
 // Cinderfang's attack pattern. A telegraphed lunge with a punish window on the
 // recovery — which is also when its hind-joint weak point is facing you.
 const LUNGE = { windup: 0.45, dash: 0.35, recover: 0.85, speed: 430, cooldown: 1.6, reach: 260, steer: 1.6 };
-const AI = { alertRadius: 210, preferredRange: 170, wanderSpeed: 0.35, fleeSpeedMult: 1.25, fleeEscapeSeconds: 5,
-             noiseRadius: 450 };   // how far a non-silent shot carries
+const AI = { wanderSpeed: 0.35, fleeSpeedMult: 1.25, fleeEscapeSeconds: 5, noiseRadius: 450 };
+
+/*
+ * Behaviour by aggression rating. Passive creatures never attack at all, so the
+ * only way to lose one is to let it run — which is exactly the pressure a Pebblit
+ * or a Sparkmite should apply.
+ */
+const AGGRESSION = {
+  passive:     { alert: 110, preferred: 210, attacks: false, cooldown: 99, reach: 0 },
+  skittish:    { alert: 180, preferred: 240, attacks: true,  cooldown: 2.8, reach: 110 },
+  territorial: { alert: 210, preferred: 170, attacks: true,  cooldown: 1.6, reach: 260 },
+  aggressive:  { alert: 320, preferred: 100, attacks: true,  cooldown: 1.2, reach: 320 },
+};
+const profileFor = (species) => AGGRESSION[species.aggression] ?? AGGRESSION.territorial;
 
 const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
-/** Weak point anchors, in monster-local polar terms. Both move and rotate with the body. */
-const WEAK_POINTS = {
-  throat:     { along: 0.72, across: 0.0,  radius: 7 },
-  hind_joint: { along: -0.58, across: 0.28, radius: 6 },
+/*
+ * Weak point anchors in monster-local terms: `along` runs nose-to-tail, `across`
+ * is lateral, `size` scales with the body. Scaling with the body is deliberate —
+ * a Mote's core is a genuinely hard shot and a Brute's chest is not, which is most
+ * of why the small ones feel different to fight.
+ */
+const WEAK_POINT_LAYOUT = {
+  muzzle:                 { along: 0.85, across: 0.00, size: 0.18 },
+  throat:                 { along: 0.62, across: 0.00, size: 0.156 },
+  eyes:                   { along: 0.78, across: -0.18, size: 0.132 },
+  open_maw:               { along: 0.80, across: 0.00, size: 0.18 },
+  jaw_coil:               { along: 0.70, across: 0.22, size: 0.144 },
+  crown_vents:            { along: 0.35, across: -0.30, size: 0.156 },
+  helm_seam:              { along: 0.45, across: 0.28, size: 0.144 },
+  core:                   { along: 0.00, across: 0.00, size: 0.192 },
+  chest:                  { along: 0.25, across: 0.25, size: 0.168 },
+  cracked_shoulder_plate: { along: 0.10, across: -0.55, size: 0.156 },
+  mane_nodes:             { along: -0.10, across: 0.50, size: 0.144 },
+  keystone:               { along: 0.00, across: -0.45, size: 0.156 },
+  spine_ridge:            { along: -0.45, across: -0.20, size: 0.144 },
+  hind_joint:             { along: -0.58, across: 0.28, size: 0.144 },
+  base_joints:            { along: -0.60, across: 0.35, size: 0.156 },
+  underside:              { along: -0.20, across: 0.00, size: 0.192 },
 };
+
+/** Anything not in the table gets an evenly spaced ring slot rather than vanishing. */
+function layoutFor(name, index, count) {
+  if (WEAK_POINT_LAYOUT[name]) return WEAK_POINT_LAYOUT[name];
+  const a = (index / Math.max(1, count)) * Math.PI * 2;
+  return { along: Math.cos(a) * 0.5, across: Math.sin(a) * 0.5, size: 0.144 };
+}
 
 export function weakPointPositions(m) {
   const out = {};
-  for (const name of m.weakPoints) {
-    const wp = WEAK_POINTS[name];
-    if (!wp) continue;
-    const r = MONSTER.radius;
+  const names = m.weakPoints ?? [];
+  names.forEach((name, i) => {
+    const wp = layoutFor(name, i, names.length);
+    const r = m.radius;
     out[name] = {
       x: m.x + Math.cos(m.facing) * r * wp.along + Math.cos(m.facing + Math.PI / 2) * r * wp.across,
       y: m.y + Math.sin(m.facing) * r * wp.along + Math.sin(m.facing + Math.PI / 2) * r * wp.across,
-      radius: wp.radius,
+      radius: Math.max(3.5, r * wp.size),
     };
-  }
+  });
   return out;
 }
 
 export function createFight(loadout, opts = {}) {
   const rng = opts.rng ?? Math.random;
+  const ai = profileFor(loadout.species);
+  const radius = SIZE_RADIUS[loadout.species.size] ?? 26;
   // Rounds carried in total, magazine included — not magazine plus spares.
   const carried = opts.carried ?? { lethal: 24, capture: 12 };
   const magSize = loadout.weapon.magazine;
@@ -66,10 +107,11 @@ export function createFight(loadout, opts = {}) {
 
     player: { x: ARENA.w / 2, y: ARENA.h - 90, hp: PLAYER.maxHp, maxHp: PLAYER.maxHp, invuln: 0, radius: PLAYER.radius, aim: -Math.PI / 2, hitFlash: 0 },
 
+    ai,
     monster: {
-      x: ARENA.w / 2, y: 170, facing: Math.PI / 2,
+      x: ARENA.w / 2, y: 60 + radius * 2, facing: Math.PI / 2,
       hp: sp.stats.hp, maxHp: sp.stats.hp,
-      radius: MONSTER.radius,
+      radius,
       speed: sp.stats.speed * MONSTER.speedScale,
       weakPoints: sp.weak_points,
       state: 'unaware', stateT: 0,
@@ -77,7 +119,7 @@ export function createFight(loadout, opts = {}) {
       restraint: 0,
       statuses: {},            // id -> seconds remaining (Infinity for permanent)
       tranqStacks: 0,
-      attackCooldown: 0.6,
+      attackCooldown: Math.min(0.6, ai.cooldown),
       wanderT: 0, wanderDir: rng() * Math.PI * 2,
       lungeDir: 0,
       fleeT: 0,
@@ -90,8 +132,10 @@ export function createFight(loadout, opts = {}) {
       reserve: { lethal: carried.lethal - startMag.lethal, capture: carried.capture - startMag.capture },
       carried,
       cooldown: 0, reloadT: 0, swapT: 0,
+      charge: 0, wasFiring: false,
     },
 
+    anchorBlocked: false,
     projectiles: [],
     floaters: [],           // transient damage/restraint numbers for the renderer
     shake: 0,
@@ -220,6 +264,31 @@ function finishReload(f) {
   w.reserve[w.chamber] -= take;
 }
 
+/**
+ * Trigger handling. A weapon with `charge_seconds` (the Sylvan Bow) draws while
+ * the trigger is held and looses on release; releasing early cancels the shot.
+ * Everything else fires on the press.
+ */
+function stepTrigger(f, dt, intent) {
+  const w = f.weapon;
+  const draw = f.loadout.weapon.charge_seconds ?? 0;
+  const firing = Boolean(intent.firing);
+
+  if (draw > 0) {
+    if (firing && canFire(f)) {
+      w.charge = Math.min(draw, w.charge + dt);
+    } else if (w.wasFiring && !firing) {
+      if (w.charge >= draw && canFire(f)) fire(f);
+      w.charge = 0;
+    } else if (!firing) {
+      w.charge = 0;
+    }
+  } else if (firing && canFire(f)) {
+    fire(f);
+  }
+  w.wasFiring = firing;
+}
+
 function startSwap(f) {
   const w = f.weapon;
   if (w.swapT > 0) return;
@@ -285,6 +354,40 @@ function wake(f) {
   }
 }
 
+/** Shortest distance from point c to the segment a->b. */
+function segmentDistance(ax, ay, bx, by, cx, cy) {
+  const dx = bx - ax, dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((cx - ax) * dx + (cy - ay) * dy) / len2));
+  return Math.hypot(ax + dx * t - cx, ay + dy * t - cy);
+}
+
+/*
+ * Decide which zone a hit landed in.
+ *
+ * Resolving this by "whichever collision check fired on this substep" made the
+ * outcome depend on substep quantisation: a weak point sitting a few pixels deeper
+ * inside the silhouette lost its chance to register at all, and moving Cinderfang's
+ * throat by 2.6px swung capture success from 88% to 7%. Instead, once a projectile
+ * contacts the monster, sweep its remaining path through the body and take the
+ * closest weak point it passes on the way IN — surface to centre, not all the way
+ * through. So a rear weak point genuinely requires shooting from behind, which is
+ * what makes a lunge recovery worth punishing.
+ */
+function zoneAt(p, m, wps) {
+  const speed = Math.hypot(p.vx, p.vy) || 1;
+  const reach = m.radius + 3;        // entry surface to centre only
+  const bx = p.x + (p.vx / speed) * reach;
+  const by = p.y + (p.vy / speed) * reach;
+
+  let best = null, bestDist = Infinity;
+  for (const wp of Object.values(wps)) {
+    const d = segmentDistance(p.x, p.y, bx, by, wp.x, wp.y);
+    if (d <= wp.radius + 3 && d < bestDist) { best = wp; bestDist = d; }
+  }
+  return best ? 'weak_point' : 'body';
+}
+
 function stepProjectiles(f, dt) {
   const m = f.monster;
   const wps = weakPointPositions(m);
@@ -299,12 +402,13 @@ function stepProjectiles(f, dt) {
       p.travelled += Math.hypot(p.vx, p.vy) * sdt;
 
       if (f.outcome === null && !['dead', 'escaped', 'tagged'].includes(m.state)) {
-        let zone = null;
-        for (const wp of Object.values(wps)) {
-          if (Math.hypot(p.x - wp.x, p.y - wp.y) <= wp.radius + 3) { zone = 'weak_point'; break; }
+        const touching = Math.hypot(p.x - m.x, p.y - m.y) <= m.radius + 3;
+        const onWeakPoint = Object.values(wps)
+          .some((wp) => Math.hypot(p.x - wp.x, p.y - wp.y) <= wp.radius + 3);
+        if (touching || onWeakPoint) {
+          resolveHit(f, p, zoneAt(p, m, wps));
+          consumed = true;
         }
-        if (!zone && Math.hypot(p.x - m.x, p.y - m.y) <= m.radius + 3) zone = 'body';
-        if (zone) { resolveHit(f, p, zone); consumed = true; }
       }
       if (p.travelled >= p.maxDist || p.x < 0 || p.x > ARENA.w || p.y < 0 || p.y > ARENA.h) consumed = true;
     }
@@ -334,9 +438,16 @@ function stepMonster(f, dt) {
   // --- death and subdue checks happen before behaviour
   if (m.hp <= 0) { setState(m, 'dead'); finish(f, 'culled'); return; }
   if (m.restraint >= L.required && m.state !== 'subdued') {
-    setState(m, 'subdued');
-    m.stateT = 0;
-    return;
+    // Colossus and Titan need an Anchor before they can go down at all, which is
+    // the Tether Harpoon's whole job. Without one the meter simply caps.
+    if (L.sizeDef.anchor_required && !hasStatus(m, 'anchored')) {
+      m.restraint = L.required;
+      f.anchorBlocked = true;
+    } else {
+      setState(m, 'subdued');
+      m.stateT = 0;
+      return;
+    }
   }
 
   switch (m.state) {
@@ -345,20 +456,21 @@ function stepMonster(f, dt) {
       if (m.wanderT <= 0) { m.wanderT = 1.5 + f.rng() * 1.5; m.wanderDir = f.rng() * Math.PI * 2; }
       move(m, Math.cos(m.wanderDir), Math.sin(m.wanderDir), speed * AI.wanderSpeed, dt);
       m.facing = m.wanderDir;
-      if (d < AI.alertRadius) wake(f);                     // territorial: reacts to intrusion
+      if (d < f.ai.alert) wake(f);                         // notices you entering its space
       break;
     }
     case 'stalk': {
       m.facing = Math.atan2(p.y - m.y, p.x - m.x);
       m.attackCooldown -= dt;
       // Hold a preferred range, strafing rather than walking straight in.
-      const toward = d > AI.preferredRange + 40 ? 1 : d < AI.preferredRange - 40 ? -1 : 0;
+      const pref = f.ai.preferred;
+      const toward = d > pref + 40 ? 1 : d < pref - 40 ? -1 : 0;
       const ang = Math.atan2(p.y - m.y, p.x - m.x);
       const strafe = ang + Math.PI / 2;
       const dx = Math.cos(ang) * toward * 1.15 + Math.cos(strafe) * 0.45;
       const dy = Math.sin(ang) * toward * 1.15 + Math.sin(strafe) * 0.45;
       move(m, dx, dy, speed, dt);
-      if (m.attackCooldown <= 0 && d < LUNGE.reach) setState(m, 'windup');
+      if (f.ai.attacks && m.attackCooldown <= 0 && d < f.ai.reach) setState(m, 'windup');
       break;
     }
     case 'windup': {
@@ -385,7 +497,7 @@ function stepMonster(f, dt) {
     case 'recover': {
       // Overshoots past the player, so its back — and the hind joint — is exposed.
       move(m, Math.cos(m.lungeDir), Math.sin(m.lungeDir), speed * 0.25, dt);
-      if (m.stateT >= LUNGE.recover) { m.attackCooldown = LUNGE.cooldown; setState(m, 'stalk'); }
+      if (m.stateT >= LUNGE.recover) { m.attackCooldown = f.ai.cooldown; setState(m, 'stalk'); }
       break;
     }
     case 'flee': {
@@ -502,7 +614,7 @@ export function step(f, dt, intent) {
   if (intent.swap) startSwap(f);
   if (intent.reload) startReload(f);
   if (intent.tag) tryTag(f);
-  if (intent.firing && canFire(f)) fire(f);
+  stepTrigger(f, dt, intent);
 
   // --- monster
   tickStatuses(f.monster, dt);

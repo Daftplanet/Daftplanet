@@ -3,95 +3,169 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>RIFTBORN — Phase 0</title>
-<meta name="description" content="Grey-box prototype for the RIFTBORN kill-or-capture fight.">
+<title>RIFTBORN — Phase 1</title>
+<meta name="description" content="Vertical slice for RIFTBORN: patrol a biome-driven map, then cull or catalogue what you find.">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
 <div id="app">
 
-  <header class="bar bar--top">
-    <div class="target">
-      <div class="target__name"><span id="monster-name">—</span> <span class="tag" id="monster-meta"></span></div>
-      <div class="meters">
-        <div class="meter">
-          <span class="meter__label">HP</span>
-          <div class="meter__track"><div class="meter__fill meter__fill--hp" id="hp-fill"></div></div>
-          <span class="meter__value" id="hp-value">—</span>
-        </div>
-        <div class="meter">
-          <span class="meter__label">RESTRAINT</span>
-          <div class="meter__track">
-            <div class="meter__fill meter__fill--restraint" id="restraint-fill"></div>
-            <div class="meter__decay" id="restraint-decay"></div>
-          </div>
-          <span class="meter__value" id="restraint-value">—</span>
-        </div>
-      </div>
-      <div class="statuses" id="statuses"></div>
+  <!-- ---------------------------------------------------------- warden bar -->
+  <header class="bar bar--warden">
+    <div class="rank">
+      <span class="rank__badge" id="rank">1</span>
+      <div class="rank__bar"><div class="rank__fill" id="rank-fill"></div></div>
+      <span class="rank__xp" id="rank-xp">0 XP</span>
     </div>
-    <button class="ghost" id="dev-toggle" type="button" aria-expanded="false">numbers</button>
+    <div class="purse">
+      <span title="Essence"><b id="essence">0</b> ess</span>
+      <span title="Alloy"><b id="alloy">0</b> alloy</span>
+      <span title="Research Points"><b id="rp">0</b> RP</span>
+    </div>
+    <nav class="tabs">
+      <button class="tab" data-view="patrol" type="button">Patrol</button>
+      <button class="tab" data-view="codex" type="button">Codex</button>
+      <button class="tab" data-view="loadout" type="button">Loadout</button>
+    </nav>
   </header>
 
-  <main class="stage">
-    <canvas id="stage" width="960" height="640" aria-label="Fight arena"></canvas>
+  <!-- ---------------------------------------------------------- patrol -->
+  <section class="view" id="view-patrol">
+    <div class="bar bar--strip">
+      <span id="clock">—</span>
+      <span class="sep">·</span>
+      <span id="biome">—</span>
+      <span class="sep">·</span>
+      <span id="spawn-count">—</span>
+      <button class="ghost" id="patrol-dev-toggle" type="button" aria-expanded="false">world</button>
+    </div>
 
-    <div class="overlay" id="overlay" hidden>
-      <div class="overlay__card">
-        <p class="overlay__verdict" id="verdict">—</p>
-        <p class="overlay__blurb" id="verdict-blurb"></p>
-        <dl class="results" id="results"></dl>
-        <button class="primary" id="again" type="button">New encounter</button>
-        <p class="overlay__hint">Enter / Space</p>
+    <div class="stage">
+      <canvas id="map" width="960" height="640" aria-label="Patrol map"></canvas>
+
+      <div class="engage" id="engage" hidden>
+        <div class="engage__card">
+          <p class="engage__name" id="engage-name">—</p>
+          <p class="engage__meta" id="engage-meta">—</p>
+          <button class="primary" id="engage-go" type="button">Engage</button>
+        </div>
       </div>
+
+      <aside class="dev" id="patrol-dev" hidden>
+        <h2>World</h2>
+        <label>Clock offset <em id="hour-label">+0h</em>
+          <input type="range" id="opt-hour" min="-12" max="12" step="1" value="0"></label>
+        <label>Walk pace <em id="pace-label">×8</em>
+          <input type="range" id="opt-pace" min="1" max="20" step="1" value="8"></label>
+        <p class="dev__note">Spawns come from (tile, 15-minute bucket, world seed). Shift the clock and the map repopulates — Ember and Volt come out at dusk, Stone is the daytime constant.</p>
+        <button class="ghost" id="reset-profile" type="button">Reset Warden</button>
+      </aside>
     </div>
 
-    <aside class="dev" id="dev" hidden>
-      <h2>Live numbers</h2>
-      <dl id="dev-readout"></dl>
-      <h2>Toggles</h2>
-      <label><input type="checkbox" id="opt-weakpoints" checked> Show weak points <em>(Codex Research I)</em></label>
-      <label><input type="checkbox" id="opt-proximity"> Must close to 120px to tag</label>
-      <p class="dev__note">Every value here is read straight out of the running fight, so what you see is what the maths is using.</p>
-    </aside>
-  </main>
+    <p class="keys">
+      <span class="keys__desktop"><b>WASD</b> walk · walk into a marker to engage</span>
+      <span class="keys__touch">Drag to walk · tap a marker within range to engage</span>
+    </p>
+  </section>
 
-  <footer class="bar bar--bottom">
-    <div class="chambers">
-      <button class="chamber" id="chamber-lethal" type="button" data-chamber="lethal">
-        <span class="chamber__kind">A · LETHAL</span>
-        <span class="chamber__ammo" id="lethal-ammo">—</span>
-        <span class="chamber__round" id="lethal-round">—</span>
-      </button>
-      <button class="chamber" id="chamber-capture" type="button" data-chamber="capture">
-        <span class="chamber__kind">B · CAPTURE</span>
-        <span class="chamber__ammo" id="capture-ammo">—</span>
-        <span class="chamber__round" id="capture-round">—</span>
-      </button>
+  <!-- ---------------------------------------------------------- fight -->
+  <section class="view" id="view-fight" hidden>
+    <div class="bar bar--top">
+      <div class="target">
+        <div class="target__name"><span id="monster-name">—</span> <span class="tag" id="monster-meta"></span></div>
+        <div class="meters">
+          <div class="meter">
+            <span class="meter__label">HP</span>
+            <div class="meter__track"><div class="meter__fill meter__fill--hp" id="hp-fill"></div></div>
+            <span class="meter__value" id="hp-value">—</span>
+          </div>
+          <div class="meter">
+            <span class="meter__label">RESTRAINT</span>
+            <div class="meter__track">
+              <div class="meter__fill meter__fill--restraint" id="restraint-fill"></div>
+              <div class="meter__decay" id="restraint-decay"></div>
+            </div>
+            <span class="meter__value" id="restraint-value">—</span>
+          </div>
+        </div>
+        <div class="statuses" id="statuses"></div>
+      </div>
+      <button class="ghost" id="dev-toggle" type="button" aria-expanded="false">numbers</button>
     </div>
 
-    <div class="warden">
-      <span class="meter__label">WARDEN</span>
-      <div class="meter__track meter__track--slim"><div class="meter__fill meter__fill--warden" id="warden-fill"></div></div>
-      <div class="busy" id="busy"></div>
+    <div class="stage">
+      <canvas id="stage" width="960" height="640" aria-label="Fight arena"></canvas>
+
+      <div class="overlay" id="overlay" hidden>
+        <div class="overlay__card">
+          <p class="overlay__verdict" id="verdict">—</p>
+          <p class="overlay__blurb" id="verdict-blurb"></p>
+          <dl class="results" id="results"></dl>
+          <p class="rewards" id="rewards"></p>
+          <button class="primary" id="again" type="button">Back to patrol</button>
+          <p class="overlay__hint">Enter / Space</p>
+        </div>
+      </div>
+
+      <aside class="dev" id="dev" hidden>
+        <h2>Live numbers</h2>
+        <dl id="dev-readout"></dl>
+        <p class="dev__note">Read straight out of the running fight, so what you see is what the maths is using.</p>
+      </aside>
     </div>
 
-    <div class="touch-controls">
-      <button class="pad" id="btn-swap" type="button">SWAP</button>
-      <button class="pad" id="btn-reload" type="button">RELOAD</button>
-      <button class="pad pad--tag" id="btn-tag" type="button">TAG</button>
-    </div>
-  </footer>
+    <footer class="bar bar--bottom">
+      <div class="chambers">
+        <button class="chamber" id="chamber-lethal" type="button" data-chamber="lethal">
+          <span class="chamber__kind">A · LETHAL</span>
+          <span class="chamber__ammo" id="lethal-ammo">—</span>
+          <span class="chamber__round" id="lethal-round">—</span>
+        </button>
+        <button class="chamber" id="chamber-capture" type="button" data-chamber="capture">
+          <span class="chamber__kind">B · CAPTURE</span>
+          <span class="chamber__ammo" id="capture-ammo">—</span>
+          <span class="chamber__round" id="capture-round">—</span>
+        </button>
+      </div>
+      <div class="warden">
+        <span class="meter__label">WARDEN</span>
+        <div class="meter__track meter__track--slim"><div class="meter__fill meter__fill--warden" id="warden-fill"></div></div>
+        <div class="busy" id="busy"></div>
+      </div>
+      <div class="touch-controls">
+        <button class="pad" id="btn-swap" type="button">SWAP</button>
+        <button class="pad" id="btn-reload" type="button">RELOAD</button>
+        <button class="pad pad--tag" id="btn-tag" type="button">TAG</button>
+        <button class="pad pad--leave" id="withdraw" type="button">LEAVE</button>
+      </div>
+    </footer>
 
-  <p class="keys">
-    <span class="keys__desktop"><b>WASD</b> move · <b>mouse</b> aim · <b>hold click</b> fire · <b>Space</b> swap chamber · <b>R</b> reload · <b>E</b> tag</span>
-    <span class="keys__touch">Drag the left half to move · hold the right half to aim and fire · buttons above to swap, reload and tag.</span>
-  </p>
+    <p class="keys">
+      <span class="keys__desktop"><b>WASD</b> move · <b>mouse</b> aim · <b>hold click</b> fire · <b>Space</b> swap · <b>R</b> reload · <b>E</b> tag · <b>Esc</b> withdraw</span>
+      <span class="keys__touch">Drag left to move · hold right to aim and fire · LEAVE to withdraw</span>
+    </p>
+  </section>
+
+  <!-- ---------------------------------------------------------- codex -->
+  <section class="view view--scroll" id="view-codex" hidden>
+    <div class="bar bar--strip">
+      <span id="codex-progress">—</span>
+      <span class="sep">·</span>
+      <span>Research I reveals weak points in the field</span>
+    </div>
+    <div class="codex" id="codex-list"></div>
+  </section>
+
+  <!-- ---------------------------------------------------------- loadout -->
+  <section class="view view--scroll" id="view-loadout" hidden>
+    <div class="bar bar--strip"><span>Pick a weapon, then the round for each chamber. Capture rounds are the expensive ones.</span></div>
+    <div class="loadout" id="loadout-body"></div>
+  </section>
 
   <div class="boot" id="boot">Loading data…</div>
 </div>
 
-<script type="module" src="js/main.js"></script>
+<script type="module" src="js/app.js"></script>
 </body>
 </html>
