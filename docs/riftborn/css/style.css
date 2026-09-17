@@ -649,3 +649,14 @@ select {
 .cast__body b { color: var(--ink); font-size: 13px; }
 .cast__body span { font-size: 10px; color: var(--ink-dim); }
 .cast__why[data-known="false"] { color: var(--ink-faint); font-style: italic; }
+
+/* ---- location */
+.bar--locate { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; font-size: 11px; }
+.bar--locate[data-state="live"] { border-color: var(--restraint); }
+.bar--locate[data-state="denied"], .bar--locate[data-state="unavailable"],
+.bar--locate[data-state="error"] { border-color: var(--warn); }
+#locate-where { color: var(--ink-faint); font-variant-numeric: tabular-nums; margin-left: auto; }
+#btn-locate[data-active="true"] { border-color: var(--restraint); color: var(--restraint); }
+/* In manual mode the map is a drag handle, so say so with the cursor. */
+#map { cursor: grab; }
+#map:active { cursor: grabbing; }

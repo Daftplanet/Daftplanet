@@ -1,6 +1,6 @@
 # Browser suites
 
-Eleven Playwright suites that drive the real prototype in a real browser: they click
+Twelve Playwright suites that drive the real prototype in a real browser: they click
 the real buttons, read the real HUD, and fail on any console error. Between them
 they cover every phase that has been built.
 
@@ -17,17 +17,21 @@ they cover every phase that has been built.
 | `escort.mjs` | the escort's one charge, all nine element abilities doing what they claim, stage scaling, the HUD button, and that a burn never resurrects what a bullet killed |
 | `aim.mjs` | free aim unchanged, the assisted lock holding through an aim sweep, the ring's tempo and gold band, and that a player who never aims can still resolve a fight |
 | `placement.mjs` | that the engine speaks every placement term the bestiary uses, that no biome is dead ground, that each apex appears only where and when its entry allows, and that the forecast finds it |
+| `map.mjs` | the Web Mercator projection against known figures, tile addressing, biome-by-colour, GPS and drag-to-move, and every way a basemap can fail |
 
 ## Running them
 
 ```sh
 npm install playwright        # once, anywhere on your path
-node game/tests/run.mjs       # serves docs/ itself and runs all eleven
+node game/tests/run.mjs       # serves docs/ itself and runs all twelve
 node game/tests/run.mjs mods rifts
 ```
 
 `run.mjs` starts its own static server on a free port, so nothing needs to be
-running first. Set `CHROMIUM=/path/to/chrome` if Playwright cannot find a browser,
+running first. It also serves **fake map tiles** — a quartered image with water,
+woodland, parkland and built ground in known positions — so the whole map path
+(fetch, decode, classify, draw) is testable without the internet. A suite that
+needs OpenStreetMap to be up fails for reasons that are not the code's. Set `CHROMIUM=/path/to/chrome` if Playwright cannot find a browser,
 or `RIFTBORN_URL` to point a single suite at an already-running copy.
 
 ## A warning about these suites

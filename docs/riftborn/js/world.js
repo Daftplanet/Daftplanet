@@ -283,7 +283,12 @@ export function packSizeFor(species, roll) {
 }
 
 /** Every spawn the Warden can currently see. */
-export function visibleSpawns(px, py, bucket, pool, window, seed = 1, weather = 'overcast') {
+/**
+ * `biomeFor` lets the caller decide what each tile is — the real map when it has
+ * loaded, the synthetic generator otherwise. The spawn maths never learns which,
+ * which is why real biomes could be dropped in without touching any of it.
+ */
+export function visibleSpawns(px, py, bucket, pool, window, seed = 1, weather = 'overcast', biomeFor = null) {
   const range = DETECT_M * (WEATHER[weather]?.detectionScale ?? 1);
   const reach = Math.ceil(range / TILE_M) + 1;
   const ctx = Math.floor(px / TILE_M), cty = Math.floor(py / TILE_M);
@@ -291,7 +296,9 @@ export function visibleSpawns(px, py, bucket, pool, window, seed = 1, weather = 
 
   for (let ty = cty - reach; ty <= cty + reach; ty++) {
     for (let tx = ctx - reach; tx <= ctx + reach; tx++) {
-      const biome = biomeAt(tx, ty, seed);
+      const biome = biomeFor
+        ? biomeFor((tx + 0.5) * TILE_M, (ty + 0.5) * TILE_M)
+        : biomeAt(tx, ty, seed);
       for (const s of spawnsInTile(tx, ty, bucket, pool, biome, window, seed, weather)) {
         s.distance = Math.hypot(s.x - px, s.y - py);
         if (s.distance <= range) out.push(s);

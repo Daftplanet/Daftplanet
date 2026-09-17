@@ -91,6 +91,8 @@ const DEFAULT = () => ({
   showcase: [],
   escortUid: null,
   aimMode: 'free',
+  mapProvider: null,
+  lastPosition: null,   // Web Mercator metres. Stays on the device; never sent.
   biomesVisited: {},
   metresWalked: 0,
   xpFromWalkingKm: 0,

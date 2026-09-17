@@ -52,7 +52,14 @@
       <span class="sep">·</span>
       <span class="rift" id="rift-status" hidden></span>
       <span class="flash" id="patrol-flash" hidden></span>
+      <button class="ghost" id="btn-locate" type="button">Use my location</button>
       <button class="ghost" id="patrol-dev-toggle" type="button" aria-expanded="false">world</button>
+    </div>
+
+    <div class="bar bar--strip bar--locate" id="locate-bar">
+      <span id="locate-state">Drag the marker to move · turn on location to walk for real</span>
+      <span class="sep">·</span>
+      <span id="locate-where">—</span>
     </div>
 
     <div class="stage">
@@ -73,6 +80,7 @@
         <label>Walk pace <em id="pace-label">×8</em>
           <input type="range" id="opt-pace" min="1" max="20" step="1" value="8"></label>
         <label>Weather <select id="opt-weather"></select></label>
+        <label>Basemap <select id="opt-map"></select></label>
         <label>Study rate <em id="study-label">×1</em>
           <input type="range" id="opt-study" min="1" max="500" step="1" value="1"></label>
         <p class="dev__note">Spawns come from (tile, 15-minute bucket, weather, world seed). Shift the clock and the map repopulates — Ember and Volt come out at dusk, Stone is the daytime constant. Study accrues in real time at 1/minute, so crank the rate to see an evolution without waiting seven hours.</p>

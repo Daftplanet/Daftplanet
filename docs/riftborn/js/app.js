@@ -18,10 +18,20 @@ import { createProfile, AMMO_COST, RANK_XP, WEAPON_UNLOCK, RESEARCH_COST } from 
 import { drawFieldReport, toPng } from './report.js';
 import {
   buildPool, apexForecast, riftForCell, placementFits, inTimeWindow, weatherIs, biomeAt,
-  PLACEMENT_VOCABULARY, WEATHER, RIFT_RANK, RIFT_RADIUS_M,
+  PLACEMENT_VOCABULARY, WEATHER, RIFT_RANK, RIFT_RADIUS_M, TILE_M, visibleSpawns,
 } from './world.js';
 import { blockers, escortAbility } from './sanctuary.js';
-import { createPatrol, stepPatrol, drawPatrol, patrolClock, biomeUnderfoot, ELEMENT_COLOUR } from './patrol.js';
+import {
+  createPatrol, stepPatrol, drawPatrol, patrolClock, biomeUnderfoot, biomeAtWorld, placePatrol,
+  VIEW as MAP_VIEW, ELEMENT_COLOUR,
+} from './patrol.js';
+import { createTileSource, MAP_ZOOM } from './tiles.js';
+import { createLocator } from './locate.js';
+import {
+  lonLatToWorld, worldToLonLat, groundScale, groundMetres,
+  tileAt, tileOrigin, tileSpan, tileUrl, normaliseTile, biomeFromPixel,
+  TILE_PROVIDERS, DEFAULT_PROVIDER, SUGGESTED_PROVIDER,
+} from './geo.js';
 
 const DATA_FILES = ['elements', 'sizes', 'weapons', 'ammo', 'monsters'];
 const CARRY = { lethal: 24, capture: 12 };
@@ -130,7 +140,28 @@ function boot(data) {
   // of which exist anywhere outside an event.
   const riftPool = allSpecies.filter((m) => m.spawn.biomes.includes('rift_event'));
   const apexById = Object.fromEntries(allSpecies.filter((m) => m.apex).map((m) => [m.id, m]));
-  const patrol = createPatrol(profile, [...pool, ...riftPool], apexById);
+  /*
+   * The map. `fallbackBiome` hands the tile classifier the synthetic generator so
+   * it can tell industrial from works from transit, which colour alone cannot —
+   * the map decides water/green/built, the noise decides which kind of built.
+   */
+  const tiles = createTileSource({
+    provider: profile.state.mapProvider ?? DEFAULT_PROVIDER,
+    fallbackBiome: (wx, wy) => biomeAt(Math.floor(wx / TILE_M), Math.floor(wy / TILE_M), profile.state.seed),
+  });
+  const patrol = createPatrol(profile, [...pool, ...riftPool], apexById, { tiles });
+
+  const locator = createLocator({
+    onUpdate(fix) {
+      if (!fix) { renderLocation(); return; }
+      placePatrol(patrol, fix.x, fix.y, {
+        jumped: fix.jumped, accuracyM: fix.accuracyM, live: true,
+      });
+      patrol.lockedOut = fix.lockedOut;
+      tiles.prefetch(patrol.x, patrol.y, patrol.mapZoom, 1);
+      renderLocation();
+    },
+  });
   let view = 'patrol';
   let fight = null;
   let fightSpawn = null;
@@ -639,6 +670,105 @@ function boot(data) {
 
     $('overlay').hidden = false;
   }
+
+  // ---------------------------------------------------------------- location
+  /*
+   * Two ways to be somewhere, and the game does not care which. Live GPS walks the
+   * avatar for real; dragging it is the fallback for a refusal, no fix, or playing
+   * at a desk. The coordinate is never sent anywhere — see locate.js — but asking
+   * for map tiles does tell the tile host roughly where you are, and the bar says
+   * so rather than leaving it implied.
+   */
+  function renderLocation() {
+    const st = locator.state;
+    const { lon, lat } = worldToLonLat(patrol.x, patrol.y);
+    const live = st.mode === 'live' && st.status === 'tracking';
+
+    $('btn-locate').textContent = live ? 'Stop tracking' : 'Use my location';
+    $('btn-locate').dataset.active = String(live);
+    $('locate-bar').dataset.state = live ? 'live' : st.status;
+
+    $('locate-state').textContent = st.message || (live
+      ? `Walking live · fix ±${Math.round(st.accuracyM ?? 0)} m`
+      : 'Drag the marker to move · turn on location to walk for real');
+    // Four decimal places is about 11 m — enough to find yourself, coarse enough
+    // not to be a pinpoint if someone screenshots the bar.
+    $('locate-where').textContent = `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+  }
+
+  $('btn-locate').addEventListener('click', async () => {
+    if (locator.state.mode === 'live') {
+      locator.setManual();
+      patrol.live = false;
+      patrol.accuracyM = null;
+      patrol.lockedOut = false;
+    } else {
+      renderLocation();
+      const got = await locator.start();
+      if (!got) flash(locator.state.message || 'Could not get a position.');
+      else if (!tiles.live) {
+        // Walking a real street with no street drawn is a strange experience, so
+        // this is the moment to offer the map — and the moment the player is
+        // consenting to a tile host learning roughly where they are.
+        flash('Location on. Turn on a basemap under "world" to see real streets.');
+      }
+    }
+    renderLocation();
+    profile.save();
+  });
+
+  /*
+   * Drag to move. The whole map canvas is the handle rather than the marker
+   * itself: a 9-pixel dot is not a touch target, and anyone in manual mode is
+   * trying to move somewhere, not to grab a sprite.
+   */
+  {
+    let dragging = null;
+    const worldAt = (ev) => {
+      const r = mapCanvas.getBoundingClientRect();
+      const px = ((ev.clientX - r.left) / r.width) * MAP_VIEW.w;
+      const py = ((ev.clientY - r.top) / r.height) * MAP_VIEW.h;
+      return { px, py };
+    };
+    mapCanvas.addEventListener('pointerdown', (ev) => {
+      if (view !== 'patrol' || locator.state.mode === 'live') return;
+      mapCanvas.setPointerCapture(ev.pointerId);
+      dragging = { ...worldAt(ev), x: patrol.x, y: patrol.y, moved: 0 };
+    });
+    mapCanvas.addEventListener('pointermove', (ev) => {
+      if (!dragging) return;
+      const now = worldAt(ev);
+      // 1.7 canvas px per world metre, the same constant drawPatrol renders with.
+      const dx = (now.px - dragging.px) / 1.7;
+      const dy = (now.py - dragging.py) / 1.7;
+      dragging.moved = Math.hypot(dx, dy);
+      placePatrol(patrol, dragging.x - dx, dragging.y - dy, { jumped: false, live: false });
+      renderLocation();
+    });
+    const end = (ev) => {
+      if (!dragging) return;
+      if (dragging.moved > 2) tiles.prefetch(patrol.x, patrol.y, patrol.mapZoom, 1);
+      dragging = null;
+      profile.save();
+      if (ev?.pointerId != null && mapCanvas.hasPointerCapture?.(ev.pointerId)) {
+        mapCanvas.releasePointerCapture(ev.pointerId);
+      }
+    };
+    mapCanvas.addEventListener('pointerup', end);
+    mapCanvas.addEventListener('pointercancel', end);
+  }
+
+  $('opt-map').innerHTML = Object.entries(TILE_PROVIDERS)
+    .map(([id, p]) => `<option value="${id}">${p.name}</option>`).join('');
+  $('opt-map').value = profile.state.mapProvider ?? DEFAULT_PROVIDER;
+  $('opt-map').addEventListener('change', (e) => {
+    profile.state.mapProvider = e.target.value;
+    profile.save();
+    flash('Basemap changed — reload to apply.');
+  });
+
+  tiles.prefetch(patrol.x, patrol.y, patrol.mapZoom, 1);
+  renderLocation();
 
   // ---------------------------------------------------------------- rift forecast
   /*
@@ -1233,7 +1363,10 @@ function boot(data) {
     speciesHeight, rollSpecimen, heightPercentile, createFight, drawFieldReport,
     escortAbility, useEscort, cycleLock, assistPhase, assistMiss, ringSeconds,
     apexForecast, riftForCell, placementFits, inTimeWindow, weatherIs, biomeAt,
-    PLACEMENT_VOCABULARY, WEATHER,
+    PLACEMENT_VOCABULARY, WEATHER, visibleSpawns,
+    locator, tiles, createTileSource, placePatrol, biomeUnderfoot, biomeAtWorld,
+    lonLatToWorld, worldToLonLat, groundScale, groundMetres,
+    tileAt, tileOrigin, tileSpan, tileUrl, normaliseTile, biomeFromPixel, TILE_PROVIDERS,
     step, weakPointPositions,
     /** One modelled body shot, for suites that need a damage number without a trigger pull. */
     applyLethalForTest: (f, m) => applyLethal(f, m, f.loadout.ammo.lethal, 'body'),
