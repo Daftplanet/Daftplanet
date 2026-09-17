@@ -577,3 +577,168 @@ day apart and the hook was already in the bible.
 4. Rift events still ignore the bestiary's placement rules — Karrahk wants waterside
    in a storm, Nyxhollow wants midnight, and neither is honoured.
 5. Habitat affinity is thin, and pack morale and mixed-species packs remain unbuilt.
+
+---
+
+# Phase 3, part 6: The escort — decision 1, answered with numbers
+
+`09-risks-and-roadmap.md` opens with seven questions marked *"these are the ones
+that change architecture, so they want answering before code"*. The first is:
+
+> **Do Sanctuary residents fight alongside you?** Yes (pet sim) / No (pure
+> collection) / Limited: one resident gives an active ability. *Leaning: **Limited.**
+> Full pet combat doubles the combat scope.*
+
+Phase 4 says it will build "whatever question 1 and 4 resolved to", and a leaning
+is not a resolution. This builds the Limited option so the question can be settled
+by measurement instead of instinct — and it is the first time anything you catch
+does something in a fight rather than sitting in a stat bonus.
+
+## The limits are the design
+
+- **One escort**, chosen out of combat.
+- **One charge per encounter.** Not a cooldown — a cooldown makes it a rotation to
+  optimise, and a rotation is a pet sim with extra steps.
+- **It never acts on its own.** Nothing the escort does happens without a press.
+  That is the whole line between "Limited" and "Yes".
+- It arms three seconds in, so Shroud cannot be used to open an ambush you are
+  already getting.
+
+The ability comes from the resident's **first element**, so the nine elements that
+already carry an identity through the type chart and the passive bonuses now carry
+a verb as well:
+
+| Element | Ability | What it does |
+|---|---|---|
+| Ember | Scorch | Burns over time, and never lands the last point |
+| Tide | Undertow | A burst of Restraint, scaled by the wound multiplier like a dart |
+| Verdant | Rootgrasp | Ensnares |
+| Stone | Bulwark | Absorbs the next blows before the Warden feels them |
+| Gale | Downdraught | Shoves it back and spoils a windup |
+| Volt | Jolt | Slams both chambers full |
+| Gloom | Shroud | The whole pack forgets you — Ambush is live again |
+| Lumen | Kindle | Lights a hidden weak point |
+| Rift | Fracture | Strips armour for a window |
+
+Three of them reach straight into work from earlier this phase: Kindle drives the
+illumination system built for Shadelet and the Thermal sight, Fracture stacks with
+mod pierce and apex phase breaks, and Shroud is the only thing besides the Sylvan
+Bow that can hand you the Ambush multiplier.
+
+## Strength comes from stage, which is the first combat payoff for evolving
+
+An ability scales on its **magnitude**. One with no magnitude — Rootgrasp is a
+duration, Kindle is a duration — scales on its **duration instead, at half rate**,
+because a stage 3 Rootgrasp holding a target for four and a quarter seconds stops
+being a window and becomes a stun. Never both, or Scorch would compound to 2.3×.
+
+Shroud and Jolt scale on nothing, and that is a real property rather than an
+oversight: awareness is reset or it is not, the magazine is full or it is not.
+
+## A "never kills" clamp that could not be killed through
+
+The first version of Scorch read:
+
+```js
+m.hp = Math.max(1, m.hp - tick);      // "burn softens, it does not finish"
+```
+
+The intent was sound — an escort that finishes your capture for you is a feel-bad,
+and softening into the wound band is what Scorch is for. The implementation was
+catastrophic. `applyLethal` leaves a killed monster at exactly `hp === 0`, and the
+death check sits **thirty lines below** the burn tick in the same function. So
+every killing shot was undone on the next frame: the clamp raised a dead monster
+back to 1 HP.
+
+A burning Cinderfang could not be killed at all.
+
+```
+cull            win   esc     Δwin
+none            85%   15%       —
+ember/Scorch    27%   74%    -58pt      <- before
+ember/Scorch    88%   13%     +3pt      <- after `if (m.hp > 1)`
+```
+
+Nothing in the game would have reported this. The monster did not look immortal —
+it looked like it kept fleeing at the last second, which is a thing monsters
+legitimately do. It took a diagnostic that asks "what is each ability worth" to
+produce a number so absurd it had to be a bug.
+
+## Does it trivialise the fight? No — and the interesting part is *where* it helps
+
+`ESCORT=1 node game/tools/balance_sim.mjs`. The bot presses the charge the instant
+it arms, which is the worst play available, so these are a floor.
+
+Against a Cinderfang with a Marker Pistol — a fight you already win 85% of:
+
+```
+cull                          soften_30 (capture)
+none            85%    —      none            82%    —
+ember/Scorch    88%  +3pt     ember/Scorch    75%  -7pt
+volt/Jolt       74% -11pt     tide/Undertow   85%  +3pt
+gale/Downdraught 77%  -7pt    verdant/Rootgrasp 85% +3pt
+```
+
+Nothing is a win button. The largest single effect is 11 points, and it is
+**negative** — Jolt tops the magazine up early and relocates the one real reload
+into the window where the target is deciding whether to bolt, which is precisely
+the Extended Cell finding from part 4 arriving by a different road. Scorch splits
+the same way the damage-reducing mods did: +3 on a cull, −7 on a capture, because
+burning a target past its flee threshold early makes it bolt before you can dart it.
+
+Against a Railmane with a Longtooth — a fight you *lose*, driven off 72% of the
+time:
+
+```
+escort              win   esc   down   HP left   Δwin
+none                 21%    6%    72%     27.6      —
+verdant/Rootgrasp    61%   14%    26%     74.3   +40pt
+stone/Bulwark        46%   31%    24%     51.0   +24pt
+ember/Scorch         21%    6%    72%     27.8    +0pt  (noise)
+rift/Fracture        21%    6%    72%     27.6    +0pt  (noise)
+```
+
+**The escort is a survival tool, and only the defensive abilities matter where it
+counts.** One charge turns a fight you lose four times in five into one you win
+three times in five. It does not win it for you; it makes an unwinnable encounter
+an encounter. That reads exactly like "Limited" should, and it is a much better
+answer than the win-rate-neutral result I expected.
+
+Note what Bulwark does to escapes: 6% → 31%. Surviving longer means the monster
+gets more seconds to flee. Nothing in this game is free.
+
+## A column that had to be added to see the design working
+
+Stage 1 and stage 3 Bulwark produced **identical** win rates against Railmane —
+46% / 31% / 24%, to the digit. Not a scaling bug: Railmane hits for 104 against a
+100 HP Warden, so a 34-point shield and a 58-point shield both buy exactly one
+extra hit and every fight plays out the same.
+
+A flat shield only matters when it crosses a whole-hit boundary. The diagnostic now
+prints **Warden HP left**, where the difference is plain (51.0 → 68.8), and that
+column is the one to read for any defensive ability. It is the second time this
+phase that a real effect was invisible in the headline number and obvious one
+column over.
+
+## Also in
+
+- The escort orbits the Warden in the arena, tinted by its element, pulsing while
+  its charge is live and going grey when spent. It has no collision and takes no
+  damage, because it is not a combatant.
+- `F` on a keyboard, a labelled pad on touch, and the button itself reads
+  `Scorch 2.6s` → `F · Scorch` → `Scorch — SPENT`.
+- Releasing your escort clears the slot instead of leaving a dangling uid.
+- `applyLethal` is now exported as a measurement seam, so a suite can ask what one
+  body shot does right now without simulating a trigger pull.
+
+## Still open
+
+1. **Party play** — the last untouched phase 3 item and still netcode-bound.
+2. **Public profiles and local leaderboards** — transport, not data.
+3. Downdraught looks weak in the table (+2pt against Railmane) because the bot
+   presses it on a timer rather than on a telegraph. It is the one ability whose
+   value the harness cannot measure, and the one most worth playing by hand.
+4. An escort brings its ability but takes no risk. Whether it should be able to be
+   hurt — and whether that turns "Limited" back into a pet sim — is untested.
+5. Nine abilities, nine elements, one per resident. Dual-element species use their
+   first element only, which quietly makes the second element decorative here.

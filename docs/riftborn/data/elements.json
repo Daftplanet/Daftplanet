@@ -2,29 +2,289 @@
   "$comment": "RIFTBORN element definitions and effectiveness matrix. First-pass tuning values.",
   "version": 1,
   "elements": [
-    { "id": "ember",   "name": "Ember",   "signature_status": "burning",  "biomes": ["industrial", "urban_core", "works"],      "sanctuary_bonus": "lethal_damage", "bonus_per_resident": 0.01 },
-    { "id": "tide",    "name": "Tide",    "signature_status": "chilled",  "biomes": ["waterside", "urban_core"],                "sanctuary_bonus": "restraint_gain", "bonus_per_resident": 0.01 },
-    { "id": "verdant", "name": "Verdant", "signature_status": "bleeding", "biomes": ["parkland", "woodland"],                   "sanctuary_bonus": "material_quantity", "bonus_per_resident": 0.01 },
-    { "id": "stone",   "name": "Stone",   "signature_status": "armoured", "biomes": ["works", "open_ground", "industrial"],     "sanctuary_bonus": "damage_resistance", "bonus_per_resident": 0.01 },
-    { "id": "gale",    "name": "Gale",    "signature_status": "knockback","biomes": ["open_ground", "waterside", "transit"],    "sanctuary_bonus": "detection_radius", "bonus_per_resident": 0.01 },
-    { "id": "volt",    "name": "Volt",    "signature_status": "stunned",  "biomes": ["transit", "urban_core", "industrial"],    "sanctuary_bonus": "reload_speed", "bonus_per_resident": 0.01 },
-    { "id": "gloom",   "name": "Gloom",   "signature_status": "feared",   "biomes": ["urban_core", "woodland"],                 "sanctuary_bonus": "rare_spawn_night", "bonus_per_resident": 0.02 },
-    { "id": "lumen",   "name": "Lumen",   "signature_status": "revealed", "biomes": ["parkland", "urban_core", "open_ground"],  "sanctuary_bonus": "rare_spawn_day", "bonus_per_resident": 0.02 },
-    { "id": "rift",    "name": "Rift",    "signature_status": "unstable", "biomes": ["rift_event"],                             "sanctuary_bonus": "all", "bonus_per_resident": 0.01 }
+    {
+      "id": "ember",
+      "name": "Ember",
+      "signature_status": "burning",
+      "biomes": [
+        "industrial",
+        "urban_core",
+        "works"
+      ],
+      "sanctuary_bonus": "lethal_damage",
+      "bonus_per_resident": 0.01
+    },
+    {
+      "id": "tide",
+      "name": "Tide",
+      "signature_status": "chilled",
+      "biomes": [
+        "waterside",
+        "urban_core"
+      ],
+      "sanctuary_bonus": "restraint_gain",
+      "bonus_per_resident": 0.01
+    },
+    {
+      "id": "verdant",
+      "name": "Verdant",
+      "signature_status": "bleeding",
+      "biomes": [
+        "parkland",
+        "woodland"
+      ],
+      "sanctuary_bonus": "material_quantity",
+      "bonus_per_resident": 0.01
+    },
+    {
+      "id": "stone",
+      "name": "Stone",
+      "signature_status": "armoured",
+      "biomes": [
+        "works",
+        "open_ground",
+        "industrial"
+      ],
+      "sanctuary_bonus": "damage_resistance",
+      "bonus_per_resident": 0.01
+    },
+    {
+      "id": "gale",
+      "name": "Gale",
+      "signature_status": "knockback",
+      "biomes": [
+        "open_ground",
+        "waterside",
+        "transit"
+      ],
+      "sanctuary_bonus": "detection_radius",
+      "bonus_per_resident": 0.01
+    },
+    {
+      "id": "volt",
+      "name": "Volt",
+      "signature_status": "stunned",
+      "biomes": [
+        "transit",
+        "urban_core",
+        "industrial"
+      ],
+      "sanctuary_bonus": "reload_speed",
+      "bonus_per_resident": 0.01
+    },
+    {
+      "id": "gloom",
+      "name": "Gloom",
+      "signature_status": "feared",
+      "biomes": [
+        "urban_core",
+        "woodland"
+      ],
+      "sanctuary_bonus": "rare_spawn_night",
+      "bonus_per_resident": 0.02
+    },
+    {
+      "id": "lumen",
+      "name": "Lumen",
+      "signature_status": "revealed",
+      "biomes": [
+        "parkland",
+        "urban_core",
+        "open_ground"
+      ],
+      "sanctuary_bonus": "rare_spawn_day",
+      "bonus_per_resident": 0.02
+    },
+    {
+      "id": "rift",
+      "name": "Rift",
+      "signature_status": "unstable",
+      "biomes": [
+        "rift_event"
+      ],
+      "sanctuary_bonus": "all",
+      "bonus_per_resident": 0.01
+    }
   ],
   "sanctuary_bonus_cap_per_element": 0.15,
   "evolved_resident_counts_as": 2,
   "effectiveness": {
     "$comment": "effectiveness[attacker][defender] -> damage and restraint multiplier",
-    "ember":   { "ember": 0.5, "tide": 0.5, "verdant": 2.0, "stone": 0.5, "gale": 1.0, "volt": 1.0, "gloom": 2.0, "lumen": 1.0, "rift": 1.0 },
-    "tide":    { "ember": 2.0, "tide": 0.5, "verdant": 0.5, "stone": 2.0, "gale": 1.0, "volt": 1.0, "gloom": 1.0, "lumen": 1.0, "rift": 1.0 },
-    "verdant": { "ember": 0.5, "tide": 2.0, "verdant": 0.5, "stone": 2.0, "gale": 0.5, "volt": 1.0, "gloom": 1.0, "lumen": 1.0, "rift": 1.0 },
-    "stone":   { "ember": 1.0, "tide": 1.0, "verdant": 0.5, "stone": 1.0, "gale": 2.0, "volt": 2.0, "gloom": 1.0, "lumen": 1.0, "rift": 1.0 },
-    "gale":    { "ember": 1.0, "tide": 1.0, "verdant": 2.0, "stone": 0.5, "gale": 0.5, "volt": 0.5, "gloom": 2.0, "lumen": 1.0, "rift": 1.0 },
-    "volt":    { "ember": 1.0, "tide": 2.0, "verdant": 0.5, "stone": 0.5, "gale": 2.0, "volt": 0.5, "gloom": 1.0, "lumen": 1.0, "rift": 1.0 },
-    "gloom":   { "ember": 0.5, "tide": 1.0, "verdant": 1.0, "stone": 1.0, "gale": 1.0, "volt": 1.0, "gloom": 0.5, "lumen": 2.0, "rift": 1.0 },
-    "lumen":   { "ember": 1.0, "tide": 1.0, "verdant": 1.0, "stone": 1.0, "gale": 1.0, "volt": 1.0, "gloom": 2.0, "lumen": 0.5, "rift": 1.0 },
-    "rift":    { "ember": 1.25, "tide": 1.25, "verdant": 1.25, "stone": 1.25, "gale": 1.25, "volt": 1.25, "gloom": 1.25, "lumen": 1.25, "rift": 1.0 }
+    "ember": {
+      "ember": 0.5,
+      "tide": 0.5,
+      "verdant": 2.0,
+      "stone": 0.5,
+      "gale": 1.0,
+      "volt": 1.0,
+      "gloom": 2.0,
+      "lumen": 1.0,
+      "rift": 1.0
+    },
+    "tide": {
+      "ember": 2.0,
+      "tide": 0.5,
+      "verdant": 0.5,
+      "stone": 2.0,
+      "gale": 1.0,
+      "volt": 1.0,
+      "gloom": 1.0,
+      "lumen": 1.0,
+      "rift": 1.0
+    },
+    "verdant": {
+      "ember": 0.5,
+      "tide": 2.0,
+      "verdant": 0.5,
+      "stone": 2.0,
+      "gale": 0.5,
+      "volt": 1.0,
+      "gloom": 1.0,
+      "lumen": 1.0,
+      "rift": 1.0
+    },
+    "stone": {
+      "ember": 1.0,
+      "tide": 1.0,
+      "verdant": 0.5,
+      "stone": 1.0,
+      "gale": 2.0,
+      "volt": 2.0,
+      "gloom": 1.0,
+      "lumen": 1.0,
+      "rift": 1.0
+    },
+    "gale": {
+      "ember": 1.0,
+      "tide": 1.0,
+      "verdant": 2.0,
+      "stone": 0.5,
+      "gale": 0.5,
+      "volt": 0.5,
+      "gloom": 2.0,
+      "lumen": 1.0,
+      "rift": 1.0
+    },
+    "volt": {
+      "ember": 1.0,
+      "tide": 2.0,
+      "verdant": 0.5,
+      "stone": 0.5,
+      "gale": 2.0,
+      "volt": 0.5,
+      "gloom": 1.0,
+      "lumen": 1.0,
+      "rift": 1.0
+    },
+    "gloom": {
+      "ember": 0.5,
+      "tide": 1.0,
+      "verdant": 1.0,
+      "stone": 1.0,
+      "gale": 1.0,
+      "volt": 1.0,
+      "gloom": 0.5,
+      "lumen": 2.0,
+      "rift": 1.0
+    },
+    "lumen": {
+      "ember": 1.0,
+      "tide": 1.0,
+      "verdant": 1.0,
+      "stone": 1.0,
+      "gale": 1.0,
+      "volt": 1.0,
+      "gloom": 2.0,
+      "lumen": 0.5,
+      "rift": 1.0
+    },
+    "rift": {
+      "ember": 1.25,
+      "tide": 1.25,
+      "verdant": 1.25,
+      "stone": 1.25,
+      "gale": 1.25,
+      "volt": 1.25,
+      "gloom": 1.25,
+      "lumen": 1.25,
+      "rift": 1.0
+    }
   },
-  "dual_element_rule": "Multiply the attacker's multiplier against each of the defender's elements. A Tide/Gale defender hit by Volt takes 2.0 x 2.0 = 4.0."
+  "dual_element_rule": "Multiply the attacker's multiplier against each of the defender's elements. A Tide/Gale defender hit by Volt takes 2.0 x 2.0 = 4.0.",
+  "escort_ability_rules": {
+    "$comment": "Answers decision 1 in 09-risks-and-roadmap.md: 'Limited — one resident gives an active ability.' One escort, one charge per encounter, no autonomous action. The escort never attacks on its own; that is the line between a limited companion and a pet sim.",
+    "charges_per_encounter": 1,
+    "stage_scale": [
+      1.0,
+      1.35,
+      1.7
+    ],
+    "ready_after_seconds": 3.0
+  },
+  "escort_abilities": {
+    "ember": {
+      "id": "scorch",
+      "name": "Scorch",
+      "blurb": "Sets the target alight.",
+      "effect": "burn",
+      "damage_per_second": 9,
+      "seconds": 5
+    },
+    "tide": {
+      "id": "undertow",
+      "name": "Undertow",
+      "blurb": "A surge of cold that drags at it.",
+      "effect": "restraint",
+      "restraint": 22
+    },
+    "verdant": {
+      "id": "rootgrasp",
+      "name": "Rootgrasp",
+      "blurb": "Roots it where it stands.",
+      "effect": "status",
+      "status": "ensnared",
+      "seconds": 2.5
+    },
+    "stone": {
+      "id": "bulwark",
+      "name": "Bulwark",
+      "blurb": "Absorbs the next blow.",
+      "effect": "shield",
+      "hp": 34
+    },
+    "gale": {
+      "id": "downdraught",
+      "name": "Downdraught",
+      "blurb": "Shoves it back and spoils its lunge.",
+      "effect": "interrupt",
+      "knockback": 150
+    },
+    "volt": {
+      "id": "jolt",
+      "name": "Jolt",
+      "blurb": "Slams both chambers full.",
+      "effect": "reload"
+    },
+    "gloom": {
+      "id": "shroud",
+      "name": "Shroud",
+      "blurb": "You go unseen. Ambush is back on the table.",
+      "effect": "unsee"
+    },
+    "lumen": {
+      "id": "kindle",
+      "name": "Kindle",
+      "blurb": "Lights what hides — including a weak point that has none.",
+      "effect": "illuminate",
+      "seconds": 7
+    },
+    "rift": {
+      "id": "fracture",
+      "name": "Fracture",
+      "blurb": "Splits its plating open.",
+      "effect": "sunder",
+      "armour_pierce": 0.4,
+      "seconds": 8
+    }
+  }
 }

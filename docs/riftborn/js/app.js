@@ -8,13 +8,13 @@
  */
 
 import { loadLoadout, applyMods, modUnlocked, speciesHeight, rollSpecimen, heightPercentile } from './rules.js';
-import { createFight, step, readouts, activeStatuses, WEAPON_SWAP_SECONDS } from './game.js';
+import { createFight, step, readouts, activeStatuses, useEscort, applyLethal, WEAPON_SWAP_SECONDS } from './game.js';
 import { fitCanvas, draw } from './render.js';
 import { createInput } from './input.js';
 import { createProfile, AMMO_COST, RANK_XP, WEAPON_UNLOCK, RESEARCH_COST } from './profile.js';
 import { drawFieldReport, toPng } from './report.js';
 import { buildPool, WEATHER, RIFT_RANK, RIFT_RADIUS_M } from './world.js';
-import { blockers } from './sanctuary.js';
+import { blockers, escortAbility } from './sanctuary.js';
 import { createPatrol, stepPatrol, drawPatrol, patrolClock, biomeUnderfoot, ELEMENT_COLOUR } from './patrol.js';
 
 const DATA_FILES = ['elements', 'sizes', 'weapons', 'ammo', 'monsters'];
@@ -107,6 +107,8 @@ function boot(data) {
     speciesById,
     allSpecies: codexSpecies,
     sizeById,
+    escortAbilities: data.elements.escort_abilities,
+    escortRules: data.elements.escort_ability_rules,
     elementDefs: data.elements.elements,
     bonusCap: data.elements.sanctuary_bonus_cap_per_element ?? 0.15,
   });
@@ -322,10 +324,19 @@ function boot(data) {
       return;
     }
 
+    const escortResident = profile.escort;
     fight = createFight(loadouts, {
       carried, bonuses: profile.bonuses,
       packSize: spawn.packSize ?? 1,
       partySize: 1,                       // solo is the only party this build can field
+      escort: escortResident ? {
+        uid: escortResident.uid,
+        speciesId: escortResident.speciesId,
+        name: speciesById[escortResident.speciesId]?.name ?? 'Escort',
+        element: speciesById[escortResident.speciesId]?.elements[0] ?? null,
+        ability: profile.escortAbility,
+      } : null,
+      escortRules: data.elements.escort_ability_rules,
     });
     const loadout = fight.loadout;
     fightSpawn = spawn;
@@ -411,6 +422,7 @@ function boot(data) {
   });
   $('btn-reload').addEventListener('click', () => input.pulse('reload'));
   $('btn-tag').addEventListener('click', () => input.pulse('tag'));
+  $('btn-escort').addEventListener('click', () => input.pulse('escort'));
   for (const el of [$('chamber-lethal'), $('chamber-capture')]) {
     el.addEventListener('click', () => {
       if (fight && fight.weapon.chamber !== el.dataset.chamber) input.pulse('swap');
@@ -507,6 +519,23 @@ function boot(data) {
       $(`${kind}-ammo`).textContent = `${f.weapon.mag[kind]} / ${f.weapon.reserve[kind]}`;
     }
     $('warden-fill').style.width = `${(f.player.hp / f.player.maxHp) * 100}%`;
+
+    const esc = f.escort;
+    const escBtn = $('btn-escort');
+    escBtn.hidden = !esc;
+    if (esc) {
+      const spent = esc.charges <= 0;
+      const arming = esc.readyIn > 0;
+      escBtn.textContent = spent ? `${esc.ability?.name ?? 'ESCORT'} — SPENT`
+        : arming ? `${esc.ability?.name ?? 'ESCORT'} ${esc.readyIn.toFixed(1)}s`
+        : `F · ${esc.ability?.name ?? 'ESCORT'}`;
+      escBtn.dataset.ready = String(!spent && !arming);
+      escBtn.disabled = spent;
+      escBtn.style.setProperty('--c', ELEMENT_COLOUR[esc.element] ?? '#9aa3ad');
+    }
+    // A Stone escort's Bulwark sits on top of the Warden bar rather than beside it.
+    $('warden-shield').style.width = `${Math.min(100, (f.player.shield / f.player.maxHp) * 100)}%`;
+    $('warden-shield').hidden = f.player.shield <= 0;
 
     const w = f.weapon;
     const drawT = f.loadout.weapon.charge_seconds ?? 0;
@@ -744,7 +773,8 @@ function boot(data) {
       + ` · ${s.stats.evolutions} evolutions · ${complete.length} / ${profile.familyCount} families complete`
       + (complete.length ? ` (+${complete.length} habitat)` : '')
       + ` · ${stageOne.length} / ${profile.familyCount} first stages`
-      + (profile.permanentMods.length ? ' · Bio-Scanner earned' : '');
+      + (profile.permanentMods.length ? ' · Bio-Scanner earned' : '')
+      + (profile.escort ? ` · escorting ${speciesById[profile.escort.speciesId]?.name} (${profile.escortAbility?.name ?? '—'})` : ' · no escort');
     $('bonus-list').innerHTML = Object.entries(bonuses).length
       ? Object.entries(bonuses).map(([k, v]) => `<span class="chip chip--good">${title(k)} +${(v * 100).toFixed(0)}%</span>`).join('')
       : '<span class="dev__note">No residents yet — catalogue something and it will live here.</span>';
@@ -764,6 +794,7 @@ function boot(data) {
     }).join('');
 
     const pinned = profile.showcase;
+    const escortUid = profile.state.escortUid;
     $('residents').innerHTML = s.residents.length ? s.residents.map((r) => {
       const sp = speciesById[r.speciesId];
       const colour = ELEMENT_COLOUR[sp.elements[0]] ?? '#888';
@@ -798,6 +829,18 @@ function boot(data) {
             </p>
             ${/* Nothing surfaced lineage before: a specimen that had been through two
                  evolutions looked exactly like one caught this morning. */ ''}
+            ${(() => {
+              const a = escortAbility(sp, data.elements.escort_abilities, data.elements.escort_ability_rules);
+              if (!a) return '';
+              const bits = [];
+              if (a.damage_per_second) bits.push(`${a.damage_per_second.toFixed(0)}/s for ${a.seconds}s`);
+              if (a.restraint) bits.push(`+${a.restraint.toFixed(0)} Restraint`);
+              if (a.hp) bits.push(`${a.hp.toFixed(0)} absorbed`);
+              if (a.status) bits.push(`${a.status} for ${a.seconds.toFixed(1)}s`);
+              if (a.armour_pierce) bits.push(`${Math.round(a.armour_pierce * 100)}% armour off for ${a.seconds}s`);
+              if (a.effect === 'illuminate') bits.push(`${a.seconds.toFixed(1)}s`);
+              return `<p class="entry__first ability"><b style="--c:${ELEMENT_COLOUR[sp.elements[0]]}">${a.name}</b> — ${a.blurb}${bits.length ? ` (${bits.join(' · ')})` : ''}</p>`;
+            })()}
             ${(r.evolvedFrom ?? []).length
               ? `<p class="entry__first">Raised from ${r.evolvedFrom.map((id) => speciesById[id]?.name ?? id).join(' → ')} → ${sp.name}</p>`
               : ''}
@@ -809,6 +852,7 @@ function boot(data) {
                   `<option value="${i}" ${r.habitat === i ? 'selected' : ''}>Habitat ${i + 1}${s.habitats[i]?.element ? ` (${s.habitats[i].element})` : ''}</option>`).join('')}
               </select>
               ${sp.elements.map((el) => `<button class="ghost" data-feed="${r.uid}" data-el="${el}" type="button" ${profile.canFeed(r, el) ? '' : 'disabled'}>Feed ${el}</button>`).join('')}
+              <button class="ghost" data-escort="${r.uid}" data-active="${escortUid === r.uid}" type="button">${escortUid === r.uid ? 'Escorting' : 'Escort'}</button>
               <button class="ghost" data-pin="${r.uid}" data-active="${pinned.includes(r.uid)}" type="button">${pinned.includes(r.uid) ? 'Unpin' : 'Showcase'}</button>
               <button class="ghost" data-release="${r.uid}" type="button">Release</button>
             </div>
@@ -821,6 +865,9 @@ function boot(data) {
     }
     for (const el of document.querySelectorAll('[data-assign]')) {
       el.addEventListener('change', () => { profile.assignHabitat(el.dataset.assign, el.value === '' ? null : Number(el.value)); renderSanctuary(); });
+    }
+    for (const b of document.querySelectorAll('[data-escort]')) {
+      b.addEventListener('click', () => { profile.setEscort(b.dataset.escort); renderSanctuary(); });
     }
     for (const b of document.querySelectorAll('[data-pin]')) {
       b.addEventListener('click', () => {
@@ -1108,6 +1155,9 @@ function boot(data) {
     show, startFight, renderSanctuary, renderContracts,
     loadLoadout, applyMods, modUnlocked, fittedMods,
     speciesHeight, rollSpecimen, heightPercentile, createFight, drawFieldReport,
+    escortAbility, useEscort,
+    /** One modelled body shot, for suites that need a damage number without a trigger pull. */
+    applyLethalForTest: (f, m) => applyLethal(f, m, f.loadout.ammo.lethal, 'body'),
     teleportTo(spawn) { patrol.x = spawn.x; patrol.y = spawn.y; },
   };
 

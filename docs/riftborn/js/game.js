@@ -265,7 +265,19 @@ export function createFight(loadouts, opts = {}) {
     player: {
       x: ARENA.w / 2, y: ARENA.h - 90, hp: PLAYER.maxHp, maxHp: PLAYER.maxHp,
       invuln: 0, radius: PLAYER.radius, aim: -Math.PI / 2, hitFlash: 0,
+      shield: 0,
     },
+    /*
+     * The escort: one resident, one charge, no autonomy. `readyIn` stops it being
+     * pressed on the first frame of an ambush, which would make Shroud a way to
+     * open every fight unseen twice over.
+     */
+    escort: opts.escort ? {
+      ...opts.escort,
+      charges: opts.escortRules?.charges_per_encounter ?? 1,
+      readyIn: opts.escortRules?.ready_after_seconds ?? 3,
+      usedAt: null,
+    } : null,
 
     monsters: Array.from({ length: packSize }, (_, i) => makeMonster(loadout, i, packSize, rng, partySize, specimenRng)),
     focusIndex: 0,
@@ -540,14 +552,21 @@ function zoneAt(p, m, wps) {
   return best ? 'weak_point' : 'body';
 }
 
-function applyLethal(f, m, ammo, hitZone, scale = 1, ambush = false) {
+/*
+ * Exported as a measurement seam: the balance sim and the browser suites need to
+ * ask "what does one body shot do to this monster right now" without simulating a
+ * trigger pull, and every armour source has to be in the answer.
+ */
+export function applyLethal(f, m, ammo, hitZone, scale = 1, ambush = false) {
   const L = f.loadout;
   if (m.phaseShield > 0) return 0;              // invulnerable mid-transition
   const dmg = computeDamage({
     weapon: L.weapon, ammo, species: L.species, sizeDef: L.sizeDef,
     hitZone, hitZones: L.hitZones, effectiveness: L.effectiveness,
     ambush, ambushCfg: L.ambushCfg,
-    armourScale: (m.armourScale ?? 1) * (1 - (L.armourPierce ?? 0)),
+    // Three sources stack multiplicatively: the apex's phase break, the weapon's
+    // mods, and a Rift escort's Fracture.
+    armourScale: (m.armourScale ?? 1) * (1 - (L.armourPierce ?? 0)) * (1 - (m.sunder?.pierce ?? 0)),
   }) * (1 + (f.bonuses.lethal_damage ?? 0)) * scale;
 
   m.hp = Math.max(0, m.hp - dmg);
@@ -732,6 +751,30 @@ function stepMonster(f, m, dt) {
   m.stateT += dt;
   m.hitFlash = Math.max(0, m.hitFlash - dt);
 
+  if (m.burn) {
+    /*
+     * Scorch softens, it does not finish. It exists to walk a target into the
+     * wound band where darts bite, not to steal the capture the Warden is
+     * setting up.
+     *
+     * The `m.hp > 1` guard is load-bearing and was not there at first. A killing
+     * shot leaves hp at exactly 0 and the death check is thirty lines below this
+     * one, so clamping the floor unconditionally *resurrected* the target to 1 HP
+     * every time a bullet killed it. A burning Cinderfang could not be killed at
+     * all: culls fell from 85% to 27% and escapes went to 74%.
+     */
+    if (m.hp > 1) {
+      const tick = m.burn.dps * Math.min(dt, m.burn.left);
+      m.hp = Math.max(1, m.hp - tick);
+    }
+    m.burn.left -= dt;
+    if (m.burn.left <= 0) m.burn = null;
+  }
+  if (m.sunder) {
+    m.sunder.left -= dt;
+    if (m.sunder.left <= 0) m.sunder = null;
+  }
+
   if (m.hiddenWeakPoints) {
     // A Thermal sight holds it lit; a Lumen hit lights it for a few seconds.
     if (f.loadout.modFlags?.revealHidden) m.illuminated = Math.max(m.illuminated, 0.2);
@@ -873,13 +916,106 @@ function hitPlayer(f, m) {
   const dmg = (m.attack ?? f.loadout.species.stats.attack)
     * (enraged ? (f.loadout.statusDefs.enraged.damage_dealt_multiplier ?? 1.4) : 1)
     * (1 - Math.min(0.5, f.bonuses.damage_resistance ?? 0));
-  f.player.hp = Math.max(0, f.player.hp - dmg);
+  // Bulwark: a Stone escort's shield eats the blow before the Warden feels it.
+  let incoming = dmg;
+  if (f.player.shield > 0) {
+    const absorbed = Math.min(f.player.shield, incoming);
+    f.player.shield -= absorbed;
+    incoming -= absorbed;
+    f.floaters.push({ x: f.player.x, y: f.player.y - 34, text: `shield -${absorbed.toFixed(0)}`, kind: 'player', t: 0 });
+  }
+  f.player.hp = Math.max(0, f.player.hp - incoming);
   f.player.invuln = PLAYER.invulnSeconds;
   f.player.hitFlash = 0.3;
   f.stats.playerHits += 1;
   f.shake = 10;
-  f.floaters.push({ x: f.player.x, y: f.player.y - 20, text: `-${dmg.toFixed(0)}`, kind: 'player', t: 0 });
+  if (incoming > 0) f.floaters.push({ x: f.player.x, y: f.player.y - 20, text: `-${incoming.toFixed(0)}`, kind: 'player', t: 0 });
   if (f.player.hp <= 0) finish(f, 'driven_off');
+}
+
+/**
+ * The escort's single charge. Everything here is instantaneous or leaves a timer
+ * on the target; nothing schedules the escort to act again, because the escort
+ * does not act — the Warden does, once.
+ *
+ * Targeting is the focused pack member for anything that lands on a monster, so
+ * an ability is aimed the same way a shot is.
+ */
+export function useEscort(f) {
+  const e = f.escort;
+  if (!e || e.charges <= 0 || e.readyIn > 0) return false;
+  const a = e.ability;
+  if (!a) return false;
+  const m = f.monster;
+  const p = f.player;
+
+  switch (a.effect) {
+    case 'burn':
+      if (!m || isDone(m)) return false;
+      m.burn = { dps: a.damage_per_second, left: a.seconds };
+      break;
+    case 'restraint': {
+      if (!m || isDone(m)) return false;
+      // Straight Restraint, and it still respects the wound multiplier: an
+      // Undertow on a healthy target is worth a fraction of one on a hurt one,
+      // exactly like a dart.
+      const gain = a.restraint * woundMultiplier(m.hp, m.maxHp, f.loadout.woundExponent);
+      m.restraint = Math.min((m.required ?? f.loadout.required) * 1.2, m.restraint + gain);
+      f.floaters.push({ x: m.x, y: m.y - m.radius - 12, text: `+${gain.toFixed(0)}`, kind: 'restraint', t: 0 });
+      break;
+    }
+    case 'status':
+      if (!m || isDone(m)) return false;
+      applyStatus(m, a.status, a.seconds);
+      break;
+    case 'shield':
+      p.shield = Math.max(p.shield, a.hp);
+      break;
+    case 'interrupt': {
+      if (!m || isDone(m)) return false;
+      const ang = Math.atan2(m.y - p.y, m.x - p.x);
+      m.x = clamp(m.x + Math.cos(ang) * a.knockback, m.radius, ARENA.w - m.radius);
+      m.y = clamp(m.y + Math.sin(ang) * a.knockback, m.radius, ARENA.h - m.radius);
+      // Spoiling a windup is the point: it is the only answer to a telegraph you
+      // read too late to dodge.
+      if (['windup', 'lunge'].includes(m.state)) { releaseToken(f, m); setState(m, 'recover'); }
+      break;
+    }
+    case 'reload': {
+      const w = f.weapon;
+      for (const kind of ['lethal', 'capture']) {
+        const want = f.loadout.weapon.magazine - w.mag[kind];
+        const take = Math.min(want, w.reserve[kind]);
+        w.mag[kind] += take;
+        w.reserve[kind] -= take;
+      }
+      w.reloadT = 0;
+      break;
+    }
+    case 'unsee':
+      // Shroud puts awareness back to zero across the whole pack, which is what
+      // makes Ambush available a second time in one encounter.
+      for (const o of f.monsters) {
+        if (isDone(o)) continue;
+        o.aware = false;
+        if (!['subdued', 'flee'].includes(o.state)) { releaseToken(f, o); setState(o, 'unaware'); }
+      }
+      break;
+    case 'illuminate':
+      for (const o of f.monsters) if (!isDone(o) && o.hiddenWeakPoints) o.illuminated = Math.max(o.illuminated, a.seconds);
+      break;
+    case 'sunder':
+      if (!m || isDone(m)) return false;
+      m.sunder = { pierce: a.armour_pierce, left: a.seconds };
+      break;
+    default:
+      return false;
+  }
+
+  e.charges -= 1;
+  e.usedAt = f.t;
+  f.stats.escortUsed = (f.stats.escortUsed ?? 0) + 1;
+  return true;
 }
 
 function stepFlee(f, m, dt) {
@@ -996,6 +1132,8 @@ export function step(f, dt, intent) {
     }
   }
   if (intent.swapWeapon) startWeaponSwap(f, intent.weaponSlot);
+  if (f.escort) f.escort.readyIn = Math.max(0, f.escort.readyIn - dt);
+  if (intent.escort) useEscort(f);
 
   const w = f.weapon;
   w.cooldown = Math.max(0, w.cooldown - dt);

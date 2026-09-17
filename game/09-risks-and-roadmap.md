@@ -6,7 +6,7 @@ These are the ones that change architecture, so they want answering before code.
 
 | # | Question | Options | Leaning |
 | --- | --- | --- | --- |
-| 1 | Do Sanctuary residents fight alongside you? | Yes (pet sim) / No (pure collection) / Limited: one resident gives an active ability | **Limited.** Full pet combat doubles the combat scope |
+| 1 | Do Sanctuary residents fight alongside you? | Yes (pet sim) / No (pure collection) / Limited: one resident gives an active ability | **Limited — built and measured.** One escort, one ability, one charge per encounter, no autonomous action. Nine abilities, one per element. Measured in [13](13-phase3-findings.md): the biggest swing against a fight you are already winning is ±11 points, and against one you are losing it is +40. It does not trivialise anything |
 | 2 | Is combat real-time aim, or tap-to-shoot? | Free aim / lock-on with a timing bar / hybrid | **Hybrid.** Free aim on a tripod-steady phone is miserable while walking |
 | 3 | AR camera mandatory? | Always / optional toggle / off by default | **Optional.** AR is the marketing, "field view" is how people actually play |
 | 4 | PvP at all? | None / async Codex competition / live duels | **Async only** at launch. Live PvP needs netcode we don't need yet |
@@ -121,7 +121,10 @@ Findings in [13-phase3-findings.md](13-phase3-findings.md).
 - Rift events, the 3 apexes, party play. *Rift events and all three apexes are
   built and solo-playable; party play needs netcode and is untouched.*
 - Multi-capture (snare + partner tag).
-- Codex sharing, field reports, local leaderboards.
+- Codex sharing, field reports, local leaderboards. *Field reports and the whole
+  Your Records layer are built; profiles and leaderboards need a server.*
+- *Also built, ahead of the plan: the two-weapon loadout, the full weapon-mod
+  table, and the escort that answers decision 1.*
 - **Exit criterion:** an Expedition session pulls people out of the house.
 
 ### Phase 4 — Live

@@ -1,6 +1,6 @@
 # Browser suites
 
-Eight Playwright suites that drive the real prototype in a real browser: they click
+Nine Playwright suites that drive the real prototype in a real browser: they click
 the real buttons, read the real HUD, and fail on any console error. Between them
 they cover every phase that has been built.
 
@@ -14,12 +14,13 @@ they cover every phase that has been built.
 | `twoweapons.mjs` | two weapon slots, their separate magazines, the switch cost, and the apex that needs both |
 | `mods.mjs` | the barrel/core/sight rails, the Codex gate on the two research sights, and what each mod changes |
 | `codex.mjs` | measured specimens and their percentiles, Your Records, the field-report card and what it refuses to put on it, completion rewards, lineage and the showcase |
+| `escort.mjs` | the escort's one charge, all nine element abilities doing what they claim, stage scaling, the HUD button, and that a burn never resurrects what a bullet killed |
 
 ## Running them
 
 ```sh
 npm install playwright        # once, anywhere on your path
-node game/tests/run.mjs       # serves docs/ itself and runs all eight
+node game/tests/run.mjs       # serves docs/ itself and runs all nine
 node game/tests/run.mjs mods rifts
 ```
 

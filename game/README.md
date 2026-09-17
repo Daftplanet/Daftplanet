@@ -31,7 +31,7 @@ grows your collection.
 | [10-phase0-findings.md](10-phase0-findings.md) | What building the fight taught us, and the three maths bugs it caught |
 | [11-phase1-findings.md](11-phase1-findings.md) | The vertical slice: a collision bug that had been distorting phase 0, and what the map taught us |
 | [12-phase2-findings.md](12-phase2-findings.md) | The loop closes: a world that could not host its own bestiary, and evolution against real-world time and weather |
-| [13-phase3-findings.md](13-phase3-findings.md) | Packs, rift events, apexes, the two-weapon loadout, weapon mods and the Codex as a record — including a phase 1 decision that took three phases to prove wrong, a magazine that kills fewer monsters by being bigger, and a purely cosmetic number that cost five points of culls |
+| [13-phase3-findings.md](13-phase3-findings.md) | Packs, rift events, apexes, the two-weapon loadout, weapon mods, the Codex as a record, and the escort that answers roadmap decision 1 — including a phase 1 decision that took three phases to prove wrong, a magazine that kills fewer monsters by being bigger, a cosmetic number that cost five points of culls, and a burn that made its target immortal |
 
 ## Machine-readable data
 
@@ -57,8 +57,9 @@ phase 3: the grey-box fight, the vertical slice, the closed loop — all 12 fami
 all 8 weapons, the Sanctuary, evolution with its four branch conditions, Research
 I–III, contracts and weather — and now pack spawns, scheduled rift events, the
 three phased apexes, a two-weapon loadout, the full weapon-mod table, measured
-specimens with shareable field reports, and the first of the Codex completion
-rewards. Party play and the server-side half of Codex sharing are what remain. It runs the design's real formulas out of `data/`, and the same
+specimens with shareable field reports, the first of the Codex completion rewards,
+and an escort that brings one resident's ability into the fight. Party play and the
+server-side half of Codex sharing are what remain. It runs the design's real formulas out of `data/`, and the same
 fight and world code runs headlessly in a balance sim so tuning claims can be
 checked rather than asserted.
 
@@ -67,8 +68,10 @@ python3 -m http.server -d docs 8000     # then open localhost:8000/riftborn/
 node game/tools/balance_sim.mjs 400     # outcome table by strategy and skill
 MODS=1 node game/tools/balance_sim.mjs  # what each weapon mod is worth, one at a time
 MODNOISE=1 node game/tools/balance_sim.mjs   # the seed-noise floor those deltas sit on
+ESCORT=1 node game/tools/balance_sim.mjs     # what one resident's ability is worth
+ESCORT=1 SPECIES=railmane WEAPON=longtooth LETHAL=slug node game/tools/balance_sim.mjs
 python3 game/tools/stamp_sw.py --check  # service worker cache stamp is current
-node game/tests/run.mjs                 # eight browser suites against the real UI
+node game/tests/run.mjs                 # nine browser suites against the real UI
 ```
 
 It is an installable PWA that plays fully offline, published from `main` → `docs/`

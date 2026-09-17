@@ -8,6 +8,7 @@
 
 import { passiveBonuses, studyRate, STUDY_PER_KM_WALKED, FEED_COST, FEED_STUDY } from './sanctuary.js';
 import { speciesHeight } from './rules.js';
+import { escortAbility } from './sanctuary.js';
 
 const KEY = 'riftborn.profile.v2';
 
@@ -88,6 +89,7 @@ const DEFAULT = () => ({
   habitats: [{ element: null }, { element: null }, { element: null }],
   contracts: { day: null, list: [] },
   showcase: [],
+  escortUid: null,
   biomesVisited: {},
   metresWalked: 0,
   xpFromWalkingKm: 0,
@@ -386,6 +388,26 @@ export function createProfile(content) {
       return this.stageOneFamilies.length >= this.familyCount ? ['bio_scanner'] : [];
     },
 
+    // ---------------------------------------------------------- escort
+    /*
+     * One resident comes on patrol. This is decision 1 in the roadmap answered
+     * "Limited": it brings a single ability with a single charge, and it never
+     * acts on its own.
+     */
+    get escort() {
+      return state.residents.find((r) => r.uid === state.escortUid) ?? null;
+    },
+    get escortAbility() {
+      const r = this.escort;
+      if (!r) return null;
+      return escortAbility(speciesById[r.speciesId], content.escortAbilities, content.escortRules);
+    },
+    setEscort(uid) {
+      state.escortUid = state.escortUid === uid ? null : (uid ?? null);
+      notify();
+      return state.escortUid;
+    },
+
     // ---------------------------------------------------------- showcase
     /** Up to three pinned residents, per 07's "specimen showcase". */
     get showcase() { return (state.showcase ?? []).filter((uid) => state.residents.some((r) => r.uid === uid)); },
@@ -446,6 +468,8 @@ export function createProfile(content) {
       if (i < 0) return;
       const r = state.residents[i];
       state.essence += Math.round(r.study * 0.4);      // ~40% of Study back as Essence
+      if (state.escortUid === uid) state.escortUid = null;
+      state.showcase = (state.showcase ?? []).filter((u) => u !== uid);
       state.residents.splice(i, 1);
       notify();
     },

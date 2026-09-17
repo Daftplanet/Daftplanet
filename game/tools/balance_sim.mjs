@@ -12,6 +12,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
 import { loadLoadout } from '../../docs/riftborn/js/rules.js';
+import { escortAbility } from '../../docs/riftborn/js/sanctuary.js';
 import { createFight, step, weakPointPositions, ARENA } from '../../docs/riftborn/js/game.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -24,8 +25,12 @@ const data = {
 };
 
 const LOADOUT = {
-  speciesId: 'cinderfang', weaponId: 'marker_pistol',
-  lethalId: 'ball_round', captureId: 'tranq_dart',
+  // SPECIES/WEAPON let a diagnostic point the same harness at a different fight
+  // without touching the headline table, which stays Cinderfang vs Marker Pistol.
+  speciesId: process.env.SPECIES ?? 'cinderfang',
+  weaponId: process.env.WEAPON ?? 'marker_pistol',
+  lethalId: process.env.LETHAL ?? 'ball_round',
+  captureId: process.env.CAPTURE ?? 'tranq_dart',
 };
 
 /** Deterministic RNG so a surprising run can be reproduced from its seed. */
@@ -134,17 +139,25 @@ function botIntent(f, strat, rng, skill, memory) {
     moveX: mx, moveY: my, aim,
     firing: !busy && !swap && onTarget && w.mag[w.chamber] > 0,
     swap, reload,
+    // Press the charge the instant it arms. Deliberately the worst play a Warden
+    // could make with it, so the numbers are a floor on the ability's value and a
+    // ceiling on how well a naive player does with one.
+    escort: Boolean(f.escort && f.escort.charges > 0 && f.escort.readyIn <= 0),
     tag: m.state === 'subdued',
   };
 }
 
-function runFight(seed, strat, skill, override, mods) {
+function runFight(seed, strat, skill, override, mods, escort) {
   const rng = mulberry32(seed);
   const loadout = loadLoadout(data, { ...LOADOUT, mods });
   if (override) {
     loadout.species = { ...loadout.species, stats: { ...loadout.species.stats, ...override } };
   }
-  const f = createFight(loadout, { rng });
+  const f = createFight(loadout, {
+    rng,
+    escort: escort ? { ability: escort } : null,
+    escortRules: data.elements.escort_ability_rules,
+  });
   const dt = 1 / 60;
   const memory = [];
   let guard = 0;
@@ -324,6 +337,58 @@ if (process.env.MODS) {
         + `${(shots/N).toFixed(1).padStart(6)} ${(darts/N).toFixed(1).padStart(6)}  `
         + `${name === 'stock' ? '    —' : `${d >= 0 ? '+' : ''}${(d*100).toFixed(0)}pt`.padStart(5)}`
         + `${name !== 'stock' && Math.abs(d) < 0.025 ? '  (noise)' : ''}`);
+    }
+  }
+}
+
+
+/*
+ * ESCORT=1 answers decision 1 in 09-risks-and-roadmap.md with numbers instead of
+ * a leaning: does one resident with one ability per encounter change the fight,
+ * and does it trivialise it?
+ *
+ * The bot presses it as soon as it is armed, which is the WORST case for the
+ * design — a player choosing the moment will do better than this, so anything
+ * that already looks strong here is too strong.
+ */
+if (process.env.ESCORT) {
+  const N = 800;
+  const skill = SKILLS[1];
+  const stage = Number(process.env.STAGE ?? 1);
+  const rules = data.elements.escort_ability_rules;
+  const cases = [['none', null]];
+  for (const [el, ability] of Object.entries(data.elements.escort_abilities)) {
+    cases.push([`${el}/${ability.name}`, escortAbility({ elements: [el], stage }, data.elements.escort_abilities, rules)]);
+  }
+
+  console.log(`\nESCORT DIAGNOSTIC — one charge per encounter, stage ${stage}, average aim, ${N} runs each`);
+  console.log('The bot fires the charge the instant it arms; a player picking their moment does better.');
+  for (const [stratName, strat] of [['cull', STRATEGIES.cull], ['soften_30', STRATEGIES.soften_30]]) {
+    console.log(`\n${stratName}`);
+    // Warden HP left is the sensitive column: a defensive ability can be plainly
+    // working and still move the win rate by nothing, because survival only shows
+    // up in the outcome when it crosses a whole-hit boundary.
+    console.log('escort              win   esc   down   time   shots  hitsTaken  HP left   Δwin');
+    let baseWin = null;
+    for (const [name, ability] of cases) {
+      const want = stratName === 'cull' ? 'culled' : 'catalogued';
+      let win = 0, esc = 0, down = 0, time = 0, shots = 0, hits = 0, hp = 0;
+      for (let i = 0; i < N; i++) {
+        const f = runFight(i * 7919 + 13, strat, skill, null, undefined, ability);
+        if (f.outcome === want) win++;
+        if (f.outcome === 'escaped') esc++;
+        if (f.outcome === 'driven_off') down++;
+        time += f.outcomeAt; shots += f.stats.shots; hits += f.stats.playerHits;
+        hp += f.player.hp + f.player.shield;
+      }
+      if (baseWin === null) baseWin = win / N;
+      const d = win / N - baseWin;
+      console.log(`${name.padEnd(19)} ${`${((win/N)*100).toFixed(0)}%`.padStart(4)} `
+        + `${`${((esc/N)*100).toFixed(0)}%`.padStart(5)} ${`${((down/N)*100).toFixed(0)}%`.padStart(6)} `
+        + `${(time/N).toFixed(1).padStart(6)}s ${(shots/N).toFixed(1).padStart(6)} `
+        + `${(hits/N).toFixed(2).padStart(10)} ${(hp/N).toFixed(1).padStart(7)}  `
+        + `${name === 'none' ? '    —' : `${d >= 0 ? '+' : ''}${(d*100).toFixed(0)}pt`.padStart(5)}`
+        + `${name !== 'none' && Math.abs(d) < 0.025 ? '  (noise)' : ''}`);
     }
   }
 }

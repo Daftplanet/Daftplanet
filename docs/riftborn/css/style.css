@@ -602,3 +602,20 @@ select {
 }
 
 .ghost[data-active="true"] { border-color: var(--restraint); color: var(--restraint); }
+
+/* ---- the escort */
+.pad--escort {
+  border-color: var(--line); color: var(--ink-faint);
+  font-size: 10px; letter-spacing: 0.04em; white-space: nowrap;
+}
+.pad--escort[data-ready="true"] { border-color: var(--c, var(--restraint)); color: var(--c, var(--restraint)); }
+.pad--escort:disabled { opacity: 0.45; }
+
+.meter__shield {
+  position: absolute; inset: 0 auto 0 0; height: 100%;
+  background: repeating-linear-gradient(135deg, #8a837866 0 4px, #8a837800 4px 8px);
+  border-right: 1px solid #8a8378;
+}
+
+.ability b { color: var(--c, var(--ink)); }
+.ability { color: var(--ink-dim); }

@@ -70,6 +70,7 @@ export function draw(ctx, f, view) {
   for (const m of f.monsters) drawTelegraph(ctx, m);
   drawBursts(ctx, f);
   for (const m of f.monsters) drawMonster(ctx, f, m, view, m === f.monster);
+  drawEscort(ctx, f);
   drawPlayer(ctx, f);
   drawProjectiles(ctx, f);
   drawFloaters(ctx, f);
@@ -253,9 +254,49 @@ function drawSubduePrompt(ctx, f, m) {
   ctx.restore();
 }
 
+/*
+ * The escort: a small companion that orbits the Warden. It has no collision, takes
+ * no damage and never moves toward the target, because it does not fight — the
+ * whole point of answering decision 1 with "Limited" is that it is a button the
+ * Warden presses, not a second combatant to watch.
+ */
+function drawEscort(ctx, f) {
+  const e = f.escort;
+  if (!e) return;
+  const p = f.player;
+  const a = f.t * 1.1;
+  const x = p.x + Math.cos(a) * 26;
+  const y = p.y + Math.sin(a) * 26 * 0.6;
+  const tint = ELEMENT_TINT[e.element] ?? C.text;
+  const live = e.charges > 0 && e.readyIn <= 0;
+
+  ctx.save();
+  if (live) {
+    ctx.globalAlpha = 0.25 + 0.15 * Math.sin(f.t * 5);
+    ctx.fillStyle = tint;
+    ctx.beginPath(); ctx.arc(x, y, 12, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  ctx.fillStyle = e.charges > 0 ? tint : '#4a5058';
+  ctx.beginPath(); ctx.arc(x, y, 6, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  ctx.restore();
+}
+
 function drawPlayer(ctx, f) {
   const p = f.player;
   ctx.save();
+
+  // Bulwark reads as a ring around the Warden, not a number somewhere else.
+  if (p.shield > 0) {
+    ctx.strokeStyle = ELEMENT_TINT.stone;
+    ctx.globalAlpha = 0.75;
+    ctx.lineWidth = 3;
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.radius + 6, 0, Math.PI * 2); ctx.stroke();
+    ctx.globalAlpha = 1;
+  }
 
   // Aim line, faded out to the weapon's maximum range.
   const range = f.loadout.weapon.range_m * 22;

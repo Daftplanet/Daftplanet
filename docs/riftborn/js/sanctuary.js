@@ -104,3 +104,56 @@ export function passiveBonuses(residents, speciesById, elementDefs, cap) {
   }
   return out;
 }
+
+// ---------------------------------------------------------------- the escort
+
+/*
+ * Decision 1 in 09-risks-and-roadmap.md — "Do Sanctuary residents fight alongside
+ * you?" — leaned **Limited: one resident gives an active ability**, on the grounds
+ * that full pet combat doubles the combat scope. This is that answer, built so it
+ * can be measured rather than argued about.
+ *
+ * The limits are the design:
+ *   - one escort at a time, chosen out of combat;
+ *   - one charge per encounter, so it is a decision and never a rotation;
+ *   - it never acts on its own. Nothing the escort does happens without a press.
+ *
+ * The ability comes from the resident's first element, so what you raise decides
+ * what you can do — and its strength comes from its stage, which is the first time
+ * evolving something has paid off inside a fight.
+ */
+
+/** The ability an escort brings, already scaled for its stage. Null if it has none. */
+export function escortAbility(species, abilities, rules) {
+  if (!species) return null;
+  const base = abilities?.[species.elements[0]];
+  if (!base) return null;
+  const scale = rules?.stage_scale?.[Math.max(0, (species.stage ?? 1) - 1)]
+    ?? rules?.stage_scale?.at(-1) ?? 1;
+  /*
+   * An ability scales on its magnitude. One that has no magnitude — Rootgrasp is a
+   * duration, Kindle is a duration — scales on its duration instead, and at half
+   * rate: a stage 3 Rootgrasp holding a target for four and a quarter seconds
+   * would stop being a window and start being a stun, which is a different
+   * ability. Both never applies, or Scorch would compound to 2.3x.
+   *
+   * Shroud and Jolt scale on nothing, because they are binary: awareness is reset
+   * or it is not, the magazine is full or it is not. That is a real property of
+   * those two and not an oversight — a Gloom escort is worth evolving for its
+   * passive and its Study, not for a bigger Shroud.
+   */
+  const MAGNITUDES = ['damage_per_second', 'restraint', 'hp', 'knockback', 'armour_pierce'];
+  const hasMagnitude = MAGNITUDES.some((k) => base[k] != null);
+  const durationScale = hasMagnitude ? 1 : 1 + (scale - 1) / 2;
+
+  return {
+    ...base,
+    scale,
+    seconds: base.seconds == null ? null : base.seconds * durationScale,
+    damage_per_second: base.damage_per_second == null ? null : base.damage_per_second * scale,
+    restraint: base.restraint == null ? null : base.restraint * scale,
+    hp: base.hp == null ? null : base.hp * scale,
+    knockback: base.knockback == null ? null : base.knockback * scale,
+    armour_pierce: base.armour_pierce == null ? null : Math.min(0.75, base.armour_pierce * scale),
+  };
+}
