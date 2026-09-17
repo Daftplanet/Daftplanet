@@ -220,7 +220,66 @@ export function applyMods(weapon, modIds, modTable) {
  */
 export function modUnlocked(mod, codexProgress) {
   if (!mod?.requires) return true;
+  // A completion reward can hand you a mod outright: 07's "all 12 families stage 1
+  // — Bio-Scanner sight, permanently" outranks the research gate.
+  if (codexProgress.permanent?.includes(mod.id)) return true;
   if (mod.requires === 'research_1') return (codexProgress.researchI ?? 0) >= 5;
   if (mod.requires === 'research_2') return (codexProgress.researchII ?? 0) >= 3;
   return true;
+}
+
+// ------------------------------------------------------------ specimen identity
+
+/*
+ * Every monster you meet is an individual with a measured height, and the Codex
+ * keeps your largest. `07-codex-wiki.md` shows it as a record — "Largest 2.31 m
+ * (98th percentile)" — and that is all it is. It changes no stat and not even the
+ * drawn radius: tying it to HP or to hitbox size would silently re-open every
+ * balance figure measured so far, for a number the design deliberately frames as
+ * a brag rather than a mechanic.
+ */
+
+const HEIGHT_SIGMA = 0.085;          // ~±8.5% of the species mean, one standard deviation
+
+/**
+ * Where a species sits inside its size class, derived rather than authored: a
+ * species' HP within its class's `hp_band` places it within the class's
+ * `height_m` band. A heavier animal is a bigger animal, and no new data file is
+ * needed to say so.
+ */
+export function speciesHeight(species, sizeDef) {
+  const [hpLo, hpHi] = sizeDef.hp_band;
+  const [hLo, hHi] = sizeDef.height_m;
+  const t = hpHi > hpLo ? (species.stats.hp - hpLo) / (hpHi - hpLo) : 0.5;
+  return hLo + Math.max(0, Math.min(1, t)) * (hHi - hLo);
+}
+
+/** Standard normal CDF, good to ~7 decimal places. Used to turn a height into a percentile. */
+function normalCdf(z) {
+  const t = 1 / (1 + 0.2316419 * Math.abs(z));
+  const d = 0.3989422804014327 * Math.exp(-z * z / 2);
+  const p = d * t * (0.319381530 + t * (-0.356563782 + t * (1.781477937
+          + t * (-1.821255978 + t * 1.330274429))));
+  return z > 0 ? 1 - p : p;
+}
+
+/**
+ * The percentile is against the *species*, not against your own catalogue. Five
+ * captures should not make your third-biggest the 40th percentile.
+ */
+export function heightPercentile(species, sizeDef, heightM) {
+  const mean = speciesHeight(species, sizeDef);
+  return normalCdf((heightM / mean - 1) / HEIGHT_SIGMA);
+}
+
+/** Roll one specimen. Deterministic given `rng`, so a seeded fight reproduces exactly. */
+export function rollSpecimen(species, sizeDef, rng) {
+  // Box-Muller from two uniforms, clamped to the size class's own band: a Strider
+  // is never taller than a Strider.
+  const u = Math.max(1e-9, rng());
+  const z = Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng());
+  const mean = speciesHeight(species, sizeDef);
+  const [lo, hi] = sizeDef.height_m;
+  const heightM = Math.max(lo, Math.min(hi, mean * (1 + z * HEIGHT_SIGMA)));
+  return { heightM, percentile: heightPercentile(species, sizeDef, heightM) };
 }

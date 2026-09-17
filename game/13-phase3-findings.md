@@ -447,3 +447,133 @@ thing a player works out.
    intermittently against fast fliers in packs. It passed ten runs in a row after
    this change; the diagnostic now reports how many loops it ran and what stopped
    it, so the next failure will say why rather than just that.
+
+---
+
+# Phase 3, part 5: The Codex as a record
+
+The last named phase 3 item was "Codex sharing and field reports". Three of the
+four things `07-codex-wiki.md` lists under Sharing need a server and are not
+prototypable here; the fourth — field reports — needs nothing but a canvas, and it
+turned out to be the one that forced the rest of the work.
+
+## What a field report needs, and what the Codex did not have
+
+`07` describes the card as "species, method, approximate area, HP remaining". Three
+of those four existed. The interesting absence was the fourth thing the same
+document asks for two panels earlier:
+
+> Largest **2.31 m** (98th percentile)
+
+Nothing in the build had a height, a percentile, or any notion that two Cinderfangs
+might differ. And `07` is explicit about why that matters:
+
+> Note the bottom panel. The species data is the same for everyone; **Your Records**
+> is not, and that is what makes the Codex worth opening more than once.
+
+So the card came second. First, every monster had to become an individual.
+
+## Every specimen is measured, and nothing else changes
+
+Each monster now rolls a height when the fight starts. The species' own typical
+height is **derived, not authored**: its HP position within its size class's
+`hp_band` places it within that class's `height_m` band, so Cinderfang (310 HP in a
+Strider's 220–520) comes out at 1.59 m of a 1.2–2.5 m band. A heavier animal is a
+bigger animal, and no new data file was needed to say so. The roll is normal about
+that mean at σ ≈ 8.5%, clamped to the class band: a Strider is never taller than a
+Strider.
+
+**It affects nothing.** Not HP, not Restraint, not the drawn radius. That was a
+decision, not an oversight:
+
+- `07` frames it as a record — a brag — and the showcase it feeds is "largest,
+  cleanest, weirdest", not "strongest".
+- Scaling the *hitbox* by height would be a real difficulty change dressed up as
+  cosmetics, and would silently re-open every balance figure measured across four
+  phases.
+
+The percentile is computed against the **species**, at roll time, from the normal
+CDF. Ranking a specimen against your own catalogue would mean your third-biggest
+becomes the 40th percentile the moment you catch a fourth.
+
+## A cosmetic number cost five points of culls before it was moved
+
+Rolling the height from the fight's own RNG shifted every draw after it. The phase 0
+headline table moved — skilled cull 63% → 58% — not because anything got harder, but
+because every seed now produced a different fight. That is the same decorrelation
+the weapon-mod diagnostic ran into one section above, and it is much worse here:
+the mod table is a diagnostic, but `10-phase0-findings.md` publishes numbers that
+are supposed to reproduce.
+
+The specimen roll now draws from its **own stream** (`opts.specimenRng`, defaulting
+to `Math.random`). The balance table is byte-identical to the commit before this
+one.
+
+**The rule this establishes: anything that does not affect the simulation must not
+draw from the simulation's randomness.** A cosmetic feature is allowed to be
+cosmetic in the numbers too.
+
+## An evolution carries the percentile, not the height
+
+The first version kept a resident's measured height across an evolution, which made
+a 0.80 m Sootpup into a 0.80 m Cinderfang — the smallest Cinderfang ever recorded,
+from the biggest Sootpup you ever caught. Evolution now carries the **percentile**
+and re-derives the height against the animal it became (0.80 m at the 95th → 1.81 m
+at the 95th). A runt stays a runt; the giant you raised stays a giant.
+
+This needed an inverse normal, which is the one piece of real maths in the change.
+
+## The card
+
+`js/report.js` renders a 1080×1350 PNG offscreen: element-tinted wash, portrait
+scaled by percentile, name and dex number, chips for height / percentile / HP
+remaining, then method, area and date. It saves through a blob download and shares
+through `navigator.share({files})`, falling back to the download when a browser
+advertises share without file support — which iOS does.
+
+The location rule from `09-risks-and-roadmap.md` is enforced **in the renderer**,
+not trusted to the caller: the card draws a biome name and has no code path that
+reads a coordinate, a tile or a distance. You can hand `drawFieldReport` a latitude
+and it will ignore it, which is what the test does.
+
+Two things went wrong drawing it, both the same shape — text with no bound. A long
+family blurb walked out of the bottom of its panel (a card has no scrollbar), and
+the panel itself was 40px too short. Both fixed; the wrap now clamps to three lines
+with an ellipsis.
+
+## Completion rewards, and a reward that reaches the bench
+
+`07`'s completion table was unbuilt. Two rungs of it are now in:
+
+- **Family complete (every stage, every branch) → +1 Sanctuary habitat slot.** The
+  Codex now pays into progression, not just the rank track.
+- **All 12 families at stage 1 → the Bio-Scanner, permanently.**
+
+The second is the interesting one, because of what landed one section earlier: the
+Bio-Scanner is the sight that turns the coarse quarter-notched Restraint meter into
+exact figures. The completion reward now outranks its research gate — the only
+unlock in the game you earn by *breadth* of collection rather than depth of study,
+and it is worth having precisely because the stock HUD was made worse to make room
+for it. Neither half of that was designed with the other in mind; they were built a
+day apart and the hook was already in the bible.
+
+## Also in
+
+- **Lineage is surfaced.** A resident that has been through two evolutions says so.
+  It has been recorded as `evolvedFrom` since phase 2 and nothing had ever displayed it.
+- **Specimen showcase** — pin up to three residents, fourth pin refused.
+- Culled specimens are measured too. You had it in front of you.
+
+## Still open
+
+1. **Party play**, still the honest answer to multi-capture and the two Titans, and
+   still not prototypable without netcode.
+2. **Public profiles and local leaderboards** need a server by definition. The
+   pieces they would read — completion %, family banners, apex captures, the
+   showcase — all now exist locally, so what is missing is transport, not data.
+3. The card's portrait is the arena silhouette: a tinted disc with its weak points
+   marked. `07` wants "a 3D model rendered from your specimen". The layout has the
+   hole for it.
+4. Rift events still ignore the bestiary's placement rules — Karrahk wants waterside
+   in a storm, Nyxhollow wants midnight, and neither is honoured.
+5. Habitat affinity is thin, and pack morale and mixed-species packs remain unbuilt.

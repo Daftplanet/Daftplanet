@@ -7,11 +7,12 @@
  * you have never seen — which need catalogueing too.
  */
 
-import { loadLoadout, applyMods, modUnlocked } from './rules.js';
+import { loadLoadout, applyMods, modUnlocked, speciesHeight, rollSpecimen, heightPercentile } from './rules.js';
 import { createFight, step, readouts, activeStatuses, WEAPON_SWAP_SECONDS } from './game.js';
 import { fitCanvas, draw } from './render.js';
 import { createInput } from './input.js';
 import { createProfile, AMMO_COST, RANK_XP, WEAPON_UNLOCK, RESEARCH_COST } from './profile.js';
+import { drawFieldReport, toPng } from './report.js';
 import { buildPool, WEATHER, RIFT_RANK, RIFT_RADIUS_M } from './world.js';
 import { blockers } from './sanctuary.js';
 import { createPatrol, stepPatrol, drawPatrol, patrolClock, biomeUnderfoot, ELEMENT_COLOUR } from './patrol.js';
@@ -23,6 +24,12 @@ const FIXED_DT = 1 / 60;
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => Math.round(n).toLocaleString();
 const title = (s) => String(s).replace(/_/g, ' ');
+const dateOf = (ms) => new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+function ordinal(pct) {
+  const v = Math.max(1, Math.min(99, Math.round(pct)));
+  if (v % 100 >= 11 && v % 100 <= 13) return `${v}th`;
+  return `${v}${['th', 'st', 'nd', 'rd'][v % 10] ?? 'th'}`;
+}
 
 const VERDICTS = {
   resolved: ['ENCOUNTER OVER', 'The pack is dealt with.'],
@@ -75,6 +82,7 @@ function boot(data) {
   const speciesById = Object.fromEntries(allSpecies.map((m) => [m.id, m]));
   const ammoById = Object.fromEntries([...data.ammo.lethal, ...data.ammo.capture].map((a) => [a.id, a]));
   const weaponById = Object.fromEntries(data.weapons.weapons.map((w) => [w.id, w]));
+  const sizeById = Object.fromEntries(data.sizes.sizes.map((z) => [z.id, z]));
   const MOD_SLOTS = ['barrel', 'core', 'sight'];
   const modById = Object.fromEntries(Object.values(data.weapons.mods ?? {}).flat().map((m) => [m.id, m]));
 
@@ -97,6 +105,8 @@ function boot(data) {
 
   const profile = createProfile({
     speciesById,
+    allSpecies: codexSpecies,
+    sizeById,
     elementDefs: data.elements.elements,
     bonusCap: data.elements.sanctuary_bonus_cap_per_element ?? 0.15,
   });
@@ -116,6 +126,7 @@ function boot(data) {
   let view = 'patrol';
   let fight = null;
   let fightSpawn = null;
+  let fightBiome = null;
   let mapView = fitCanvas(mapCanvas);
   let fightView = fitCanvas(fightCanvas);
   let restraintPeak = 0;
@@ -318,6 +329,8 @@ function boot(data) {
     });
     const loadout = fight.loadout;
     fightSpawn = spawn;
+    // Captured once, at engage: the card names a biome and never a position.
+    fightBiome = biomeUnderfoot(patrol);
     restraintPeak = 0;
     shownOutcome = null;
     $('overlay').hidden = true;
@@ -367,9 +380,13 @@ function boot(data) {
       profile.recordOutcome(sp, r.outcome, {
         clean: r.clean,
         hpFraction: r.hpFraction,
-          method: `${fight.loadout.weapon.name} · ${fight.loadout.ammo.capture?.name ?? 'no capture round'}`,
+        method: `${fight.loadout.weapon.name} · ${fight.loadout.ammo.capture?.name ?? 'no capture round'}`,
         methodAmmo: active?.captureId ?? null,
         weaponId: active?.weaponId ?? null,
+        heightM: r.heightM,
+        percentile: r.percentile,
+        // Biome only — never the tile, never the coordinates. See report.js.
+        biome: fightBiome,
       });
     }
     profile.resolve(fightSpawn.id);
@@ -549,7 +566,93 @@ function boot(data) {
     if (f.stats.failedSubdues) rows.push(['Missed tag windows', f.stats.failedSubdues]);
     if (f.outcome === 'catalogued') rows.push(['HP at subdue', `${(f.stats.hpFractionAtResolve * 100).toFixed(0)}%`]);
     $('results').innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
+
+    /*
+     * A pack can end as two culls and a capture; the card shows the one worth
+     * showing — a capture over a cull, and the biggest of whichever it is.
+     */
+    const best = [...f.results]
+      .filter((r) => r.outcome === 'catalogued' || r.outcome === 'culled')
+      .sort((a, b) => (a.outcome === b.outcome ? b.heightM - a.heightM
+                                               : a.outcome === 'catalogued' ? -1 : 1))[0];
+    const btn = $('field-report');
+    btn.hidden = !best;
+    if (best) {
+      btn.onclick = () => openReport({
+        species: sp,
+        outcome: best.outcome,
+        method: `${f.loadout.weapon.name} · ${best.outcome === 'catalogued'
+          ? (f.loadout.ammo.capture?.name ?? 'no capture round') : f.loadout.ammo.lethal.name}`,
+        heightM: best.heightM,
+        percentile: best.percentile,
+        hpFraction: best.hpFraction,
+        biome: fightBiome,
+        at: Date.now(),
+      });
+    }
+
     $('overlay').hidden = false;
+  }
+
+  // ---------------------------------------------------------------- field report
+  let reportState = null;
+
+  function openReport(report) {
+    reportState = report;
+    drawFieldReport($('report-canvas'), report);
+    $('report').hidden = false;
+  }
+  $('report-close').addEventListener('click', () => { $('report').hidden = true; });
+  $('report').addEventListener('click', (e) => { if (e.target === $('report')) $('report').hidden = true; });
+
+  const reportName = () =>
+    `riftborn-${reportState.species.id}-${new Date(reportState.at ?? Date.now()).toISOString().slice(0, 10)}.png`;
+
+  $('report-save').addEventListener('click', async () => {
+    const blob = await toPng($('report-canvas'));
+    if (!blob) { flash('Could not render the card on this device.'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = reportName();
+    a.click();
+    // Revoke on the next turn of the loop: revoking synchronously races the download.
+    setTimeout(() => URL.revokeObjectURL(url), 10000);
+  });
+
+  $('report-share').addEventListener('click', async () => {
+    const blob = await toPng($('report-canvas'));
+    if (!blob) { flash('Could not render the card on this device.'); return; }
+    const file = new File([blob], reportName(), { type: 'image/png' });
+    // navigator.share is the only route off this device, and it is the player
+    // pressing it. canShare gates on files because iOS advertises share without them.
+    if (navigator.canShare?.({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: `RIFTBORN — ${reportState.species.name}` });
+        return;
+      } catch (err) {
+        if (err?.name === 'AbortError') return;     // they changed their mind; not an error
+      }
+    }
+    $('report-save').click();
+    flash('This browser cannot share files — the card was saved instead.');
+  });
+
+  /** Turn a Codex entry's largest specimen into a card. */
+  function reportFromEntry(sp) {
+    const e = profile.entry(sp.id);
+    if (!e.largest) return null;
+    return {
+      species: sp,
+      outcome: e.largest.outcome,
+      method: e.firstMethod ?? '—',
+      heightM: e.largest.heightM,
+      percentile: e.largest.percentile,
+      hpFraction: e.bestHp ?? 0,
+      biome: e.lastArea ?? null,
+      at: e.largest.at,
+      note: `Your largest of ${e.specimens?.count ?? 1}. Catalogued ${e.catalogued}, culled ${e.culled}.`,
+    };
   }
 
   // ---------------------------------------------------------------- codex
@@ -575,9 +678,33 @@ function boot(data) {
         lines.push(`<p class="entry__wp"><b>Evolves to:</b> ${sp.evolves_to.map((o) =>
           `${speciesById[o.id].name} (${o.study_required} Study, rank ${o.rank_required}${o.condition !== 'none' ? `, ${o.description ?? title(o.condition)}` : ''})`).join('; ')}</p>`);
       }
-      if (e.firstMethod) lines.push(`<p class="entry__first">First taken with ${e.firstMethod}</p>`);
-      if (e.bestHp) lines.push(`<p class="entry__first">Best capture at ${(e.bestHp * 100).toFixed(0)}% HP</p>`);
       if (sp.is_branch_form) lines.push('<p class="entry__first">Branch form — evolution only, never spawns wild</p>');
+
+      /*
+       * "Note the bottom panel. The species data is the same for everyone; Your
+       * Records is not, and that is what makes the Codex worth opening more than
+       * once." — 07-codex-wiki.md.
+       */
+      const records = [];
+      if (e.firstMethod) records.push(['First taken', `${e.firstMethod}${e.firstAt ? ` · ${dateOf(e.firstAt)}` : ''}`]);
+      if (e.bestHp) records.push(['Best capture', `${(e.bestHp * 100).toFixed(0)}% HP`]);
+      if (e.largest) {
+        records.push(['Largest', `${e.largest.heightM.toFixed(2)} m · ${ordinal(e.largest.percentile * 100)} percentile`]);
+      }
+      if (e.specimens?.count > 1) {
+        records.push(['Your average', `${(e.specimens.sumM / e.specimens.count).toFixed(2)} m over ${e.specimens.count}`]);
+      }
+      if (known) {
+        const typical = speciesHeight(sp, sizeById[sp.size]);
+        records.push(['Species typical', `${typical.toFixed(2)} m`]);
+      }
+      if (records.length) {
+        lines.push(`<div class="records">
+          <h4>Your records</h4>
+          <dl>${records.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+          ${e.largest ? `<button class="ghost records__card" data-card="${sp.id}" type="button">Field report</button>` : ''}
+        </div>`);
+      }
 
       return `
         <article class="entry" data-state="${e.state}">
@@ -596,6 +723,12 @@ function boot(data) {
     for (const b of document.querySelectorAll('.entry__research')) {
       b.addEventListener('click', () => { profile.research(b.dataset.species); renderCodex(); });
     }
+    for (const b of document.querySelectorAll('.records__card')) {
+      b.addEventListener('click', () => {
+        const card = reportFromEntry(speciesById[b.dataset.card]);
+        if (card) openReport(card);
+      });
+    }
   }
 
   // ---------------------------------------------------------------- sanctuary
@@ -604,8 +737,14 @@ function boot(data) {
     const ctx = ctxFor();
     const bonuses = profile.bonuses;
 
+    const complete = profile.completedFamilies;
+    const stageOne = profile.stageOneFamilies;
     $('sanctuary-summary').textContent =
-      `${s.residents.length} / ${profile.residentCap} residents · ${profile.habitatSlots} habitats · ${s.stats.evolutions} evolutions`;
+      `${s.residents.length} / ${profile.residentCap} residents · ${profile.habitatSlots} habitats`
+      + ` · ${s.stats.evolutions} evolutions · ${complete.length} / ${profile.familyCount} families complete`
+      + (complete.length ? ` (+${complete.length} habitat)` : '')
+      + ` · ${stageOne.length} / ${profile.familyCount} first stages`
+      + (profile.permanentMods.length ? ' · Bio-Scanner earned' : '');
     $('bonus-list').innerHTML = Object.entries(bonuses).length
       ? Object.entries(bonuses).map(([k, v]) => `<span class="chip chip--good">${title(k)} +${(v * 100).toFixed(0)}%</span>`).join('')
       : '<span class="dev__note">No residents yet — catalogue something and it will live here.</span>';
@@ -624,6 +763,7 @@ function boot(data) {
         </div>`;
     }).join('');
 
+    const pinned = profile.showcase;
     $('residents').innerHTML = s.residents.length ? s.residents.map((r) => {
       const sp = speciesById[r.speciesId];
       const colour = ELEMENT_COLOUR[sp.elements[0]] ?? '#888';
@@ -651,7 +791,16 @@ function boot(data) {
               <div class="meter__track meter__track--slim"><div class="meter__fill meter__fill--restraint" style="width:${pct}%"></div></div>
               <span>${Math.floor(r.study)}${nextGate ? ` / ${nextGate}` : ''} Study</span>
             </div>
-            ${r.method ? `<p class="entry__first">Taken with ${ammoById[r.method]?.name ?? r.method}</p>` : ''}
+            <p class="entry__first">
+              ${r.heightM ? `${r.heightM.toFixed(2)} m · ${ordinal((r.percentile ?? 0) * 100)} percentile` : 'unmeasured'}
+              ${r.method ? ` · taken with ${ammoById[r.method]?.name ?? r.method}` : ''}
+              ${r.biome ? ` · ${title(r.biome)}` : ''}
+            </p>
+            ${/* Nothing surfaced lineage before: a specimen that had been through two
+                 evolutions looked exactly like one caught this morning. */ ''}
+            ${(r.evolvedFrom ?? []).length
+              ? `<p class="entry__first">Raised from ${r.evolvedFrom.map((id) => speciesById[id]?.name ?? id).join(' → ')} → ${sp.name}</p>`
+              : ''}
             ${options || '<p class="entry__first">Fully evolved</p>'}
             <div class="resident__actions">
               <select data-assign="${r.uid}">
@@ -660,6 +809,7 @@ function boot(data) {
                   `<option value="${i}" ${r.habitat === i ? 'selected' : ''}>Habitat ${i + 1}${s.habitats[i]?.element ? ` (${s.habitats[i].element})` : ''}</option>`).join('')}
               </select>
               ${sp.elements.map((el) => `<button class="ghost" data-feed="${r.uid}" data-el="${el}" type="button" ${profile.canFeed(r, el) ? '' : 'disabled'}>Feed ${el}</button>`).join('')}
+              <button class="ghost" data-pin="${r.uid}" data-active="${pinned.includes(r.uid)}" type="button">${pinned.includes(r.uid) ? 'Unpin' : 'Showcase'}</button>
               <button class="ghost" data-release="${r.uid}" type="button">Release</button>
             </div>
           </div>
@@ -671,6 +821,12 @@ function boot(data) {
     }
     for (const el of document.querySelectorAll('[data-assign]')) {
       el.addEventListener('change', () => { profile.assignHabitat(el.dataset.assign, el.value === '' ? null : Number(el.value)); renderSanctuary(); });
+    }
+    for (const b of document.querySelectorAll('[data-pin]')) {
+      b.addEventListener('click', () => {
+        if (!profile.togglePin(b.dataset.pin)) flash('Three specimens is the whole showcase — unpin one first.');
+        renderSanctuary();
+      });
     }
     for (const b of document.querySelectorAll('[data-feed]')) {
       b.addEventListener('click', () => { profile.feed(b.dataset.feed, b.dataset.el); renderSanctuary(); });
@@ -951,6 +1107,7 @@ function boot(data) {
     get fight() { return fight; },
     show, startFight, renderSanctuary, renderContracts,
     loadLoadout, applyMods, modUnlocked, fittedMods,
+    speciesHeight, rollSpecimen, heightPercentile, createFight, drawFieldReport,
     teleportTo(spawn) { patrol.x = spawn.x; patrol.y = spawn.y; },
   };
 

@@ -1,6 +1,6 @@
 # Browser suites
 
-Seven Playwright suites that drive the real prototype in a real browser: they click
+Eight Playwright suites that drive the real prototype in a real browser: they click
 the real buttons, read the real HUD, and fail on any console error. Between them
 they cover every phase that has been built.
 
@@ -13,12 +13,13 @@ they cover every phase that has been built.
 | `pwa.mjs` | manifest, icons, service worker, and that it boots and fights with the network cut |
 | `twoweapons.mjs` | two weapon slots, their separate magazines, the switch cost, and the apex that needs both |
 | `mods.mjs` | the barrel/core/sight rails, the Codex gate on the two research sights, and what each mod changes |
+| `codex.mjs` | measured specimens and their percentiles, Your Records, the field-report card and what it refuses to put on it, completion rewards, lineage and the showcase |
 
 ## Running them
 
 ```sh
 npm install playwright        # once, anywhere on your path
-node game/tests/run.mjs       # serves docs/ itself and runs all seven
+node game/tests/run.mjs       # serves docs/ itself and runs all eight
 node game/tests/run.mjs mods rifts
 ```
 
@@ -34,5 +35,9 @@ every frame and so waited for a perfect sample; a scripted player that aimed whe
 the monster had been; a spawn assertion measuring the one family that does not shift
 with the clock. Every one of them reported a green pass or a confident number that
 was not true.
+
+A suite that bulk-catalogued the whole bestiary by *replacing* Codex entries, then
+failed its own persistence check on the records it had just destroyed, is the most
+recent. It reported a real-looking data-loss bug that did not exist.
 
 When a suite tells you something surprising, suspect the suite first.

@@ -7,6 +7,7 @@
  */
 
 import { passiveBonuses, studyRate, STUDY_PER_KM_WALKED, FEED_COST, FEED_STUDY } from './sanctuary.js';
+import { speciesHeight } from './rules.js';
 
 const KEY = 'riftborn.profile.v2';
 
@@ -86,6 +87,7 @@ const DEFAULT = () => ({
   residents: [],
   habitats: [{ element: null }, { element: null }, { element: null }],
   contracts: { day: null, list: [] },
+  showcase: [],
   biomesVisited: {},
   metresWalked: 0,
   xpFromWalkingKm: 0,
@@ -130,11 +132,43 @@ function write(p) {
 
 let uidCounter = 0;
 
+/**
+ * Inverse standard normal (Acklam's rational approximation, ~1e-9 absolute).
+ * Used to put an evolved specimen back on the ladder at the percentile it earned.
+ */
+function inverseNormal(p) {
+  const q = Math.min(0.999999, Math.max(0.000001, p));
+  const a = [-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02,
+             1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00];
+  const b = [-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02,
+             6.680131188771972e+01, -1.328068155288572e+01];
+  const c = [-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00,
+             -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00];
+  const d = [7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00];
+  const lo = 0.02425;
+  if (q < lo) {
+    const s = Math.sqrt(-2 * Math.log(q));
+    return (((((c[0] * s + c[1]) * s + c[2]) * s + c[3]) * s + c[4]) * s + c[5])
+         / ((((d[0] * s + d[1]) * s + d[2]) * s + d[3]) * s + 1);
+  }
+  if (q > 1 - lo) {
+    const s = Math.sqrt(-2 * Math.log(1 - q));
+    return -(((((c[0] * s + c[1]) * s + c[2]) * s + c[3]) * s + c[4]) * s + c[5])
+          / ((((d[0] * s + d[1]) * s + d[2]) * s + d[3]) * s + 1);
+  }
+  const s = q - 0.5;
+  const r = s * s;
+  return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * s
+       / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+}
+
 export function createProfile(content) {
   const state = read();
   const listeners = new Set();
   const notify = () => { write(state); listeners.forEach((fn) => fn(state)); };
   const speciesById = content.speciesById;
+  const allSpecies = content.allSpecies ?? Object.values(speciesById);
+  const sizeById = content.sizeById ?? {};
 
   const api = {
     get state() { return state; },
@@ -156,7 +190,9 @@ export function createProfile(content) {
     get habitatSlots() {
       let n = 3;
       for (const [rank, slots] of HABITAT_SLOTS_BY_RANK) if (this.rank >= rank) n = slots;
-      return n;
+      // 07-codex-wiki.md: "Family complete (3 stages) — family banner, +1 Sanctuary
+      // habitat slot." The Codex pays out, not just the rank track.
+      return n + this.completedFamilies.length;
     },
     get residentCap() { return RESIDENT_CAP + Math.max(0, this.habitatSlots - 3); },
 
@@ -205,7 +241,7 @@ export function createProfile(content) {
         if ((e.research ?? 0) >= 1) researchI += 1;
         if ((e.research ?? 0) >= 2) researchII += 1;
       }
-      return { researchI, researchII };
+      return { researchI, researchII, permanent: this.permanentMods };
     },
 
     // ---------------------------------------------------------- inventory
@@ -252,6 +288,8 @@ export function createProfile(content) {
 
       if (outcome === 'culled') {
         e.culled += 1;
+        // A culled specimen still counts as measured — you had it in front of you.
+        this.recordSpecimen(e, detail, 'culled');
         state.stats.culls += 1;
         if (this._rank(e.state) < this._rank('catalogued')) e.state = 'data_lost';
         state.xp += XP.cull(tier);
@@ -278,6 +316,9 @@ export function createProfile(content) {
           state.stats.cleanCaptures += 1;
         }
         e.bestHp = Math.max(e.bestHp ?? 0, detail.hpFraction ?? 0);
+        if (detail.weaponId) e.firstWeapon = e.firstWeapon ?? detail.weaponId;
+        if (detail.biome) e.lastArea = detail.biome;
+        this.recordSpecimen(e, detail, 'catalogued');
         state.xp += Math.round(xp);
         state.essence += 12 * tier;
         this.grantMaterials(species, 1 * tier);
@@ -292,9 +333,71 @@ export function createProfile(content) {
       notify();
     },
 
+    /*
+     * "Largest 2.31 m (98th percentile)" from 07-codex-wiki.md. The percentile is
+     * against the species, computed at roll time, so it does not drift as your own
+     * catalogue grows.
+     */
+    recordSpecimen(entry, detail, outcome) {
+      if (!(detail.heightM > 0)) return;
+      const seen = entry.specimens ?? { count: 0, sumM: 0 };
+      seen.count += 1;
+      seen.sumM += detail.heightM;
+      entry.specimens = seen;
+      if (!entry.largest || detail.heightM > entry.largest.heightM) {
+        entry.largest = {
+          heightM: detail.heightM,
+          percentile: detail.percentile ?? 0,
+          at: Date.now(),
+          outcome,
+        };
+      }
+    },
+
     grantMaterials(species, amount) {
       const per = Math.max(1, Math.round(amount / species.elements.length));
       for (const el of species.elements) state.materials[el] = (state.materials[el] ?? 0) + per;
+    },
+
+    // ---------------------------------------------------------- completion
+    /** Every family whose whole line — every stage, every branch — is catalogued. */
+    get completedFamilies() {
+      const byFamily = {};
+      for (const sp of allSpecies) (byFamily[sp.family] ??= []).push(sp);
+      return Object.entries(byFamily)
+        .filter(([, list]) => list.every((sp) => this._rank(this.entry(sp.id).state) >= this._rank('catalogued')))
+        .map(([family]) => family);
+    },
+    /** Families with at least their stage 1 catalogued — what the Bio-Scanner reward counts. */
+    get stageOneFamilies() {
+      const done = new Set();
+      for (const sp of allSpecies) {
+        if (sp.stage === 1 && this._rank(this.entry(sp.id).state) >= this._rank('catalogued')) done.add(sp.family);
+      }
+      return [...done];
+    },
+    get familyCount() { return new Set(allSpecies.map((sp) => sp.family)).size; },
+    /*
+     * "All 12 families stage 1 — Bio-Scanner sight, permanently." This is the one
+     * reward that reaches back into the bench: it opens a mod the research gate
+     * would otherwise still be holding.
+     */
+    get permanentMods() {
+      return this.stageOneFamilies.length >= this.familyCount ? ['bio_scanner'] : [];
+    },
+
+    // ---------------------------------------------------------- showcase
+    /** Up to three pinned residents, per 07's "specimen showcase". */
+    get showcase() { return (state.showcase ?? []).filter((uid) => state.residents.some((r) => r.uid === uid)); },
+    togglePin(uid) {
+      const list = [...this.showcase];
+      const i = list.indexOf(uid);
+      if (i >= 0) list.splice(i, 1);
+      else if (list.length < 3) list.push(uid);
+      else return false;
+      state.showcase = list;
+      notify();
+      return true;
     },
 
     researchTier(id) { return this.entry(id).research; },
@@ -329,6 +432,9 @@ export function createProfile(content) {
         method: detail.methodAmmo ?? null,
         weaponId: detail.weaponId ?? null,
         hpFraction: detail.hpFraction ?? null,
+        heightM: detail.heightM ?? null,
+        percentile: detail.percentile ?? null,
+        biome: detail.biome ?? null,
         habitat: null,
       });
       notify();      // every public mutator persists; admit was the one that did not
@@ -396,6 +502,20 @@ export function createProfile(content) {
 
       r.evolvedFrom = r.evolvedFrom ?? [];
       r.evolvedFrom.push(r.speciesId);
+      /*
+       * Carry the specimen's percentile across the evolution, don't carry its
+       * height. A 0.66 m Sootpup that becomes a Cinderfang is not still 0.66 m —
+       * it would read as the smallest Cinderfang ever recorded. A runt stays a
+       * runt and the giant you raised stays a giant, measured against the animal
+       * it has become.
+       */
+      const size = sizeById[target.size];
+      if (size && r.percentile != null) {
+        const mean = speciesHeight(target, size);
+        const z = inverseNormal(r.percentile);
+        const [lo, hi] = size.height_m;
+        r.heightM = Math.max(lo, Math.min(hi, mean * (1 + z * 0.085)));
+      }
       r.speciesId = targetId;
       r.study = 0;
 

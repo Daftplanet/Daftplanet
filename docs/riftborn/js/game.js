@@ -13,7 +13,7 @@
 
 import {
   computeDamage, computeRestraint, fleeChancePerSecond,
-  restraintDecayPerSecond, woundMultiplier, statusProduct,
+  restraintDecayPerSecond, woundMultiplier, statusProduct, rollSpecimen,
 } from './rules.js';
 
 export const ARENA = { w: 960, h: 640 };
@@ -134,9 +134,12 @@ export function weakPointPositions(m) {
 
 // ---------------------------------------------------------------- setup
 
-function makeMonster(loadout, index, count, rng, partySize = 1) {
+function makeMonster(loadout, index, count, rng, partySize = 1, specimenRng = Math.random) {
   const sp = loadout.species;
+  // The drawn radius stays the size class's, deliberately: the specimen's measured
+  // height is a Codex record, never a bigger hitbox. See rollSpecimen in rules.js.
   const radius = SIZE_RADIUS[sp.size] ?? 26;
+  const specimen = rollSpecimen(sp, loadout.sizeDef, specimenRng);
   const phases = sp.apex ? (sp.phases ?? 1) : 1;
   /*
    * Apexes scale to the party on both sides. Scaling only health left Karrahk
@@ -190,6 +193,8 @@ function makeMonster(loadout, index, count, rng, partySize = 1) {
     fleeT: 0,
     hitFlash: 0,
     anchorBlocked: false,
+    heightM: specimen.heightM,
+    percentile: specimen.percentile,
   };
 }
 
@@ -226,6 +231,14 @@ export function createFight(loadouts, opts = {}) {
   const slots = Array.isArray(loadouts) ? loadouts : [loadouts];
   const loadout = slots[0];
   const rng = opts.rng ?? Math.random;
+  /*
+   * A separate stream for the specimen's measured height, which is a Codex record
+   * and affects nothing. Rolling it from the fight's own rng would shift every
+   * subsequent draw, and re-sampling the whole distribution is too high a price
+   * for a cosmetic number: it moved the phase 0 table by five points and would
+   * have made every published balance figure irreproducible.
+   */
+  const specimenRng = opts.specimenRng ?? Math.random;
   const bonuses = opts.bonuses ?? {};
   const ai = profileFor(loadout.species);
   const packSize = Math.max(1, opts.packSize ?? 1);
@@ -254,7 +267,7 @@ export function createFight(loadouts, opts = {}) {
       invuln: 0, radius: PLAYER.radius, aim: -Math.PI / 2, hitFlash: 0,
     },
 
-    monsters: Array.from({ length: packSize }, (_, i) => makeMonster(loadout, i, packSize, rng, partySize)),
+    monsters: Array.from({ length: packSize }, (_, i) => makeMonster(loadout, i, packSize, rng, partySize, specimenRng)),
     focusIndex: 0,
 
     /*
@@ -889,6 +902,8 @@ function record(f, m, outcome, detail = {}) {
     outcome,
     hpFraction: m.hp / m.maxHp,
     clean: outcome === 'catalogued' && m.hp / m.maxHp > 0.8,
+    heightM: m.heightM,
+    percentile: m.percentile,
   });
   if (outcome === 'culled') f.stats.culled += 1;
   if (outcome === 'catalogued') f.stats.catalogued += 1;
