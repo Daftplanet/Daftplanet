@@ -59,7 +59,11 @@ Points to unlock **Research I** (weak points visible in the field), **II** (spaw
 biomes and time windows) and **III** (evolution requirements). Until Research I you
 are shooting at a silhouette.
 
-**Loadout.** Pick a weapon and a round for each chamber, and craft more. You carry
+**Bench.** Two weapon slots, each with its own lethal and capture round, magazine
+and reserve — four loaded round types in total. Switching weapons mid-fight costs
+0.9s against the chamber swap's 0.6s. This is how an apex is taken alive: anchor it
+with the Tether Harpoon, switch, and subdue with something that actually restrains
+(six times faster than the Harpoon alone). Craft more rounds here too. You carry
 24 lethal and 12 capture rounds into a fight; the rest stays at the bench. Culling
 pays 3× the alloy of a capture, which is what funds the darts.
 
@@ -68,7 +72,8 @@ pays 3× the alloy of a capture, which is what funds the darts.
 | Walk / move | `WASD` / arrows | drag (map: anywhere, fight: left half) |
 | Aim | mouse | hold the right half |
 | Fire | hold left click | hold the right half |
-| Swap chamber | `Space` / `Q` | `SWAP` |
+| Swap chamber | `Space` | `SWAP` |
+| Switch weapon | `Q`, or `1` / `2` | `WEAPON` |
 | Reload | `R` | `RELOAD` |
 | Tag | `E` or click | `TAG` |
 | Withdraw | `Esc` | `LEAVE` |

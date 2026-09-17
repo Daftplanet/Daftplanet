@@ -31,7 +31,7 @@ grows your collection.
 | [10-phase0-findings.md](10-phase0-findings.md) | What building the fight taught us, and the three maths bugs it caught |
 | [11-phase1-findings.md](11-phase1-findings.md) | The vertical slice: a collision bug that had been distorting phase 0, and what the map taught us |
 | [12-phase2-findings.md](12-phase2-findings.md) | The loop closes: a world that could not host its own bestiary, and evolution against real-world time and weather |
-| [13-phase3-findings.md](13-phase3-findings.md) | Packs, rift events and apexes: three weapons that finally have something to do, one that soft-locked the game, and one line that froze it |
+| [13-phase3-findings.md](13-phase3-findings.md) | Packs, rift events, apexes and the two-weapon loadout — including a phase 1 decision that took three phases to prove wrong |
 
 ## Machine-readable data
 

@@ -70,7 +70,18 @@ const DEFAULT = () => ({
   materials: { ember: 6, tide: 6, verdant: 10, stone: 6, gale: 4, volt: 6, gloom: 2, lumen: 2, rift: 0 },
   researchPoints: 0,
   ammo: { ball_round: 40, tranq_dart: 14 },
-  loadout: { weaponId: 'marker_pistol', lethalId: 'ball_round', captureId: 'tranq_dart' },
+  /*
+   * Two weapon slots, per 02-weapons-and-ammo.md: "A Warden carries two weapons.
+   * This forces a real choice: two lethal profiles, two capture profiles, or one
+   * of each." The second slot stays empty until a second weapon is unlocked — at
+   * rank 1 you genuinely only have the one gun.
+   */
+  loadout: {
+    slots: [
+      { weaponId: 'marker_pistol', lethalId: 'ball_round', captureId: 'tranq_dart' },
+      null,
+    ],
+  },
   codex: {},
   residents: [],
   habitats: [{ element: null }, { element: null }, { element: null }],
@@ -92,7 +103,19 @@ function read() {
     const parsed = JSON.parse(raw);
     if (parsed?.version !== 2) return DEFAULT();
     const base = DEFAULT();
-    return { ...base, ...parsed, materials: { ...base.materials, ...(parsed.materials ?? {}) } };
+    const merged = { ...base, ...parsed, materials: { ...base.materials, ...(parsed.materials ?? {}) } };
+    // Migrate the single-weapon loadout saved by earlier builds rather than
+    // wiping someone's Warden over a shape change.
+    if (merged.loadout && !Array.isArray(merged.loadout.slots)) {
+      const old = merged.loadout;
+      merged.loadout = {
+        slots: [
+          old.weaponId ? { weaponId: old.weaponId, lethalId: old.lethalId, captureId: old.captureId } : base.loadout.slots[0],
+          null,
+        ],
+      };
+    }
+    return merged;
   } catch {
     return DEFAULT();
   }
@@ -148,6 +171,15 @@ export function createProfile(content) {
         for (const r of state.residents) r.study += STUDY_PER_KM_WALKED * gained;
         this.progressContracts('walk', { km: gained });
       }
+    },
+
+    /** The configured weapon slots, empty ones filtered out. */
+    get slots() { return (state.loadout.slots ?? []).filter(Boolean); },
+    slotAt(i) { return state.loadout.slots?.[i] ?? null; },
+    setSlot(i, config) {
+      state.loadout.slots = state.loadout.slots ?? [null, null];
+      state.loadout.slots[i] = config;
+      notify();
     },
 
     // ---------------------------------------------------------- inventory

@@ -8,7 +8,7 @@
  */
 
 import { loadLoadout } from './rules.js';
-import { createFight, step, readouts, activeStatuses } from './game.js';
+import { createFight, step, readouts, activeStatuses, WEAPON_SWAP_SECONDS } from './game.js';
 import { fitCanvas, draw } from './render.js';
 import { createInput } from './input.js';
 import { createProfile, AMMO_COST, RANK_XP, WEAPON_UNLOCK, RESEARCH_COST } from './profile.js';
@@ -266,30 +266,40 @@ function boot(data) {
   // ---------------------------------------------------------------- fight
   function startFight(spawn) {
     const sp = speciesById[spawn.speciesId];
-    const L = profile.state.loadout;
-    let loadout;
+    const slots = profile.slots;
+    if (!slots.length) {
+      flash('No weapon equipped — set one up at the bench.');
+      show('loadout');
+      return;
+    }
+
+    let loadouts;
     try {
-      loadout = loadLoadout(data, { speciesId: sp.id, weaponId: L.weaponId, lethalId: L.lethalId, captureId: L.captureId });
+      loadouts = slots.map((sl) => loadLoadout(data, {
+        speciesId: sp.id, weaponId: sl.weaponId, lethalId: sl.lethalId, captureId: sl.captureId,
+      }));
     } catch (err) {
       flash(`Loadout invalid: ${err.message}`);
       show('loadout');
       return;
     }
-    const carried = {
-      lethal: Math.min(profile.ammoCount(L.lethalId), CARRY.lethal),
-      capture: L.captureId ? Math.min(profile.ammoCount(L.captureId), CARRY.capture) : 0,
-    };
-    if (carried.lethal + carried.capture === 0) {
+
+    const carried = slots.map((sl) => ({
+      lethal: Math.min(profile.ammoCount(sl.lethalId), CARRY.lethal),
+      capture: sl.captureId ? Math.min(profile.ammoCount(sl.captureId), CARRY.capture) : 0,
+    }));
+    if (carried.every((c) => c.lethal + c.capture === 0)) {
       flash('No rounds for this loadout — craft some at the bench.');
       show('loadout');
       return;
     }
 
-    fight = createFight(loadout, {
+    fight = createFight(loadouts, {
       carried, bonuses: profile.bonuses,
       packSize: spawn.packSize ?? 1,
       partySize: 1,                       // solo is the only party this build can field
     });
+    const loadout = fight.loadout;
     fightSpawn = spawn;
     restraintPeak = 0;
     shownOutcome = null;
@@ -304,10 +314,13 @@ function boot(data) {
   }
 
   function spendFired() {
-    const L = profile.state.loadout;
-    const w = fight.weapon;
-    profile.spendAmmo(L.lethalId, w.carried.lethal - (w.mag.lethal + w.reserve.lethal));
-    if (L.captureId) profile.spendAmmo(L.captureId, w.carried.capture - (w.mag.capture + w.reserve.capture));
+    const slots = profile.slots;
+    fight.weapons.forEach((w, i) => {
+      const sl = slots[i];
+      if (!sl) return;
+      profile.spendAmmo(sl.lethalId, w.carried.lethal - (w.mag.lethal + w.reserve.lethal));
+      if (sl.captureId) profile.spendAmmo(sl.captureId, w.carried.capture - (w.mag.capture + w.reserve.capture));
+    });
   }
 
   function withdraw() {
@@ -326,7 +339,7 @@ function boot(data) {
 
   function finishFight() {
     const sp = fight.loadout.species;
-    const L = profile.state.loadout;
+    const active = profile.slots[fight.activeSlot] ?? profile.slots[0];
     spendFired();
 
     const before = { xp: profile.state.xp, ess: profile.state.essence, rp: profile.state.researchPoints };
@@ -338,8 +351,8 @@ function boot(data) {
         clean: r.clean,
         hpFraction: r.hpFraction,
           method: `${fight.loadout.weapon.name} · ${fight.loadout.ammo.capture?.name ?? 'no capture round'}`,
-        methodAmmo: L.captureId,
-        weaponId: L.weaponId,
+        methodAmmo: active?.captureId ?? null,
+        weaponId: active?.weaponId ?? null,
       });
     }
     profile.resolve(fightSpawn.id);
@@ -357,6 +370,11 @@ function boot(data) {
   $('again').addEventListener('click', () => show('patrol'));
   $('withdraw').addEventListener('click', withdraw);
   $('btn-swap').addEventListener('click', () => input.pulse('swap'));
+  $('btn-weapon').addEventListener('click', () => input.pulse('swapWeapon'));
+  $('weapons').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-slot]');
+    if (b) input.pulse('swapWeapon', Number(b.dataset.slot));
+  });
   $('btn-reload').addEventListener('click', () => input.pulse('reload'));
   $('btn-tag').addEventListener('click', () => input.pulse('tag'));
   for (const el of [$('chamber-lethal'), $('chamber-capture')]) {
@@ -422,6 +440,19 @@ function boot(data) {
     if (f.anchorBlocked) chips.push('<span class="chip chip--bad">needs a Tether Harpoon to subdue</span>');
     $('statuses').innerHTML = chips.join('');
 
+    $('weapons').innerHTML = f.loadouts.map((l, i) => {
+      const w = f.weapons[i];
+      const total = w.mag.lethal + w.reserve.lethal + w.mag.capture + w.reserve.capture;
+      return `<button class="wslot" data-slot="${i}" data-active="${i === f.activeSlot}" data-dry="${total === 0}" type="button">
+                <span class="wslot__key">${i + 1}</span>
+                <span class="wslot__name">${l.weapon.name}</span>
+                <span class="wslot__ammo">${total}</span>
+              </button>`;
+    }).join('');
+    $('weapons').hidden = !f.hasTwoWeapons;
+
+    $('lethal-round').textContent = f.loadout.ammo.lethal.name;
+    $('capture-round').textContent = f.loadout.ammo.capture ? f.loadout.ammo.capture.name : 'none — pure setup';
     for (const kind of ['lethal', 'capture']) {
       $(`chamber-${kind}`).dataset.active = String(f.weapon.chamber === kind);
       $(`${kind}-ammo`).textContent = `${f.weapon.mag[kind]} / ${f.weapon.reserve[kind]}`;
@@ -433,6 +464,7 @@ function boot(data) {
     $('busy').textContent = w.swapT > 0 ? `SWAPPING ${w.swapT.toFixed(1)}s`
       : w.reloadT > 0 ? `RELOADING ${w.reloadT.toFixed(1)}s`
       : drawT && w.charge > 0 ? `DRAWING ${Math.round((w.charge / drawT) * 100)}%`
+      : f.slotSwapT > 0 ? `SWITCHING WEAPON ${f.slotSwapT.toFixed(1)}s`
       : w.mag[w.chamber] === 0 ? (w.reserve[w.chamber] > 0 ? 'EMPTY — RELOAD' : 'OUT OF ROUNDS') : '';
 
     if (!$('dev').hidden) {
@@ -624,29 +656,51 @@ function boot(data) {
   }
 
   // ---------------------------------------------------------------- loadout
+  let editingSlot = 0;
+
   function renderLoadout() {
-    const L = profile.state.loadout;
+    const slots = profile.state.loadout.slots ?? [null, null];
     const unlocked = profile.unlockedWeapons;
-    const weapon = weaponById[L.weaponId];
+    const current = slots[editingSlot];
+    const weapon = current ? weaponById[current.weaponId] : null;
+
+    const slotCards = [0, 1].map((i) => {
+      const sl = slots[i];
+      const w = sl ? weaponById[sl.weaponId] : null;
+      const rounds = sl
+        ? [ammoById[sl.lethalId]?.name, sl.captureId ? ammoById[sl.captureId]?.name : 'no capture round']
+            .filter(Boolean).join(' · ')
+        : 'empty';
+      return `
+        <button class="slotcard" data-slot="${i}" data-active="${i === editingSlot}" type="button">
+          <span class="slotcard__key">${i + 1}</span>
+          <span class="slotcard__body">
+            <b>${w ? w.name : 'No weapon'}</b>
+            <span>${rounds}</span>
+          </span>
+        </button>`;
+    }).join('');
 
     const weaponCards = data.weapons.weapons.map((w) => {
       const open = unlocked.includes(w.id);
+      const inOther = slots.some((sl, i) => sl && i !== editingSlot && sl.weaponId === w.id);
       return `
-        <button class="wcard" data-weapon="${w.id}" data-active="${w.id === L.weaponId}" ${open ? '' : 'disabled'} type="button">
-          <b>${w.name}</b>
+        <button class="wcard" data-weapon="${w.id}" data-active="${current?.weaponId === w.id}" ${open ? '' : 'disabled'} type="button">
+          <b>${w.name}${inOther ? ' <span class="wcard__dup">(in the other slot)</span>' : ''}</b>
           <span>${w.damage}${w.projectiles > 1 ? `×${w.projectiles}` : ''} dmg · ${w.restraint || '—'} res · ${w.rpm} rpm · ${w.range_m}m · mag ${w.magazine}${w.noise === 'silent' ? ' · silent' : ''}</span>
           <span class="wcard__note">${open ? w.identity : `Locked — Warden rank ${WEAPON_UNLOCK[w.id]}`}</span>
         </button>`;
     }).join('');
 
     const rounds = (kind) => {
+      if (!weapon) return '<p class="empty">Pick a weapon for this slot first.</p>';
       const list = kind === 'lethal' ? weapon.lethal_ammo : weapon.capture_ammo;
       if (!list.length) return '<p class="empty">This weapon takes no round of that kind — it is pure setup.</p>';
       return list.map((id) => {
         const a = ammoById[id];
         const cost = AMMO_COST[id] ?? { essence: 0 };
         const owned = profile.ammoCount(id);
-        const active = (kind === 'lethal' ? L.lethalId : L.captureId) === id;
+        const active = (kind === 'lethal' ? current.lethalId : current.captureId) === id;
         const price = [`${cost.essence * 5}e`, ...Object.entries(cost.mats ?? {}).map(([el, n]) => `${n * 5} ${el}`)].join(' ');
         return `
           <div class="round" data-active="${active}">
@@ -661,30 +715,42 @@ function boot(data) {
     };
 
     $('loadout-body').innerHTML = `
-      <h2>Weapon</h2>
+      <h2>Weapon slots</h2>
+      <div class="slotcards">${slotCards}</div>
+      ${slots[editingSlot] ? `<button class="ghost" id="clear-slot" type="button">Empty this slot</button>` : ''}
+      <h2>Weapon for slot ${editingSlot + 1}</h2>
       <div class="wcards">${weaponCards}</div>
       <h2>Chamber A — lethal</h2>
       <div class="rounds">${rounds('lethal')}</div>
       <h2>Chamber B — capture</h2>
       <div class="rounds">${rounds('capture')}</div>
-      <p class="dev__note">You carry ${CARRY.lethal} lethal and ${CARRY.capture} capture rounds into a fight; the rest stays here. Culling pays 3× the materials of a capture — that is what funds the darts. Rounds are gated on element materials, so wanting Rune Arrows means going and hunting something Lumen.</p>`;
+      <p class="dev__note">Two slots, per the design: two lethal profiles, two capture profiles, or one of each. <b>Q</b> cycles weapons mid-fight and takes ${WEAPON_SWAP_SECONDS}s — longer than the ${data.weapons.chamber_swap_seconds}s chamber swap. This is what makes an apex takeable: anchor it with the Tether Harpoon, switch, and subdue with something that actually restrains. You carry ${CARRY.lethal} lethal and ${CARRY.capture} capture rounds per weapon.</p>`;
 
+    for (const b of document.querySelectorAll('.slotcard')) {
+      b.addEventListener('click', () => { editingSlot = Number(b.dataset.slot); renderLoadout(); });
+    }
+    const clear = $('clear-slot');
+    if (clear) clear.addEventListener('click', () => {
+      if (profile.slots.length <= 1) { flash('You need at least one weapon.'); return; }
+      profile.setSlot(editingSlot, null);
+      renderLoadout();
+    });
     for (const b of document.querySelectorAll('[data-weapon]')) {
       b.addEventListener('click', () => {
         const w = weaponById[b.dataset.weapon];
-        profile.state.loadout = {
+        profile.setSlot(editingSlot, {
           weaponId: w.id,
           lethalId: w.lethal_ammo[0] ?? null,
           captureId: w.capture_ammo[0] ?? null,
-        };
-        profile.save();
+        });
         renderLoadout();
       });
     }
     for (const b of document.querySelectorAll('.round__pick')) {
       b.addEventListener('click', () => {
-        profile.state.loadout[b.dataset.kind === 'lethal' ? 'lethalId' : 'captureId'] = b.dataset.ammo;
-        profile.save();
+        const sl = { ...profile.slotAt(editingSlot) };
+        sl[b.dataset.kind === 'lethal' ? 'lethalId' : 'captureId'] = b.dataset.ammo;
+        profile.setSlot(editingSlot, sl);
         renderLoadout();
       });
     }

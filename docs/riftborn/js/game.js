@@ -24,6 +24,8 @@ const SPREAD_PER_PROJECTILE = 0.055;
 const SIZE_RADIUS = { mote: 13, whelp: 19, strider: 26, brute: 38, colossus: 56, titan: 80 };
 const MONSTER = { speedScale: 24 };
 
+export const WEAPON_SWAP_SECONDS = 0.9;   // slower than a chamber swap, on purpose
+
 const LUNGE = { windup: 0.45, dash: 0.35, recover: 0.85, speed: 430, cooldown: 1.6, reach: 260, steer: 1.6 };
 const AI = { wanderSpeed: 0.35, fleeSpeedMult: 1.25, fleeEscapeSeconds: 5, noiseRadius: 450 };
 
@@ -177,25 +179,52 @@ function makeMonster(loadout, index, count, rng, partySize = 1) {
   };
 }
 
-export function createFight(loadout, opts = {}) {
+/**
+ * Build the per-slot weapon state: magazine, reserve, timers.
+ * A weapon with no capture chamber carries no capture rounds.
+ */
+function makeWeaponState(loadout, requested) {
+  const carried = {
+    lethal: requested?.lethal ?? 24,
+    capture: loadout.hasCapture === false ? 0 : (requested?.capture ?? 12),
+  };
+  const magSize = loadout.weapon.magazine;
+  const startMag = {
+    lethal: Math.min(magSize, carried.lethal),
+    capture: Math.min(magSize, carried.capture),
+  };
+  return {
+    chamber: 'lethal',
+    mag: { ...startMag },
+    reserve: { lethal: carried.lethal - startMag.lethal, capture: carried.capture - startMag.capture },
+    carried,
+    cooldown: 0, reloadT: 0, swapT: 0,
+    charge: 0, wasFiring: false,
+  };
+}
+
+/**
+ * `loadouts` is one entry per weapon slot, all for the same species. A single
+ * loadout is accepted too, so callers that predate two weapons still work.
+ */
+export function createFight(loadouts, opts = {}) {
+  const slots = Array.isArray(loadouts) ? loadouts : [loadouts];
+  const loadout = slots[0];
   const rng = opts.rng ?? Math.random;
   const bonuses = opts.bonuses ?? {};
   const ai = profileFor(loadout.species);
   const packSize = Math.max(1, opts.packSize ?? 1);
   const partySize = Math.max(1, opts.partySize ?? 1);
 
+  // carried may be one object for every slot, or one per slot.
   const requested = opts.carried ?? { lethal: 24, capture: 12 };
-  // No capture chamber means no capture rounds to carry.
-  const carried = { lethal: requested.lethal, capture: loadout.hasCapture === false ? 0 : requested.capture };
-  const magSize = loadout.weapon.magazine;
-  const startMag = {
-    lethal: Math.min(magSize, carried.lethal),
-    capture: Math.min(magSize, carried.capture),
-  };
+  const perSlot = Array.isArray(requested) ? requested : slots.map(() => requested);
 
   const f = {
     rng,
-    loadout,
+    loadouts: slots,
+    activeSlot: 0,
+    slotSwapT: 0,
     bonuses,
     ai,
     t: 0,
@@ -220,14 +249,7 @@ export function createFight(loadout, opts = {}) {
      */
     attackToken: null,
 
-    weapon: {
-      chamber: 'lethal',
-      mag: { ...startMag },
-      reserve: { lethal: carried.lethal - startMag.lethal, capture: carried.capture - startMag.capture },
-      carried,
-      cooldown: 0, reloadT: 0, swapT: 0,
-      charge: 0, wasFiring: false,
-    },
+    weapons: slots.map((l, i) => makeWeaponState(l, perSlot[i])),
 
     projectiles: [],
     floaters: [],
@@ -238,15 +260,31 @@ export function createFight(loadout, opts = {}) {
       shots: 0, hits: 0, weakHits: 0,
       lethalHits: 0, captureHits: 0,
       damageDealt: 0, restraintApplied: 0,
-      ambushUsed: false, swaps: 0,
+      ambushUsed: false, swaps: 0, weaponSwaps: 0,
       hpFractionAtResolve: null, cleanCapture: false,
       failedSubdues: 0, playerHits: 0,
       culled: 0, catalogued: 0, escaped: 0,
     },
   };
 
-  /* Most of the HUD and the whole balance sim speak in terms of one target. The
-   * focused monster is that target, so they keep working unchanged. */
+  /*
+   * Most callers speak in terms of one weapon and one target. The active slot and
+   * the focused monster are those, so the HUD, the renderer and the balance sim
+   * keep working unchanged through both refactors.
+   */
+  Object.defineProperty(f, 'loadout', {
+    get() { return f.loadouts[f.activeSlot] ?? f.loadouts[0]; },
+    enumerable: false,
+  });
+  Object.defineProperty(f, 'weapon', {
+    get() { return f.weapons[f.activeSlot] ?? f.weapons[0]; },
+    enumerable: false,
+  });
+  Object.defineProperty(f, 'hasTwoWeapons', {
+    get() { return f.loadouts.length > 1; },
+    enumerable: false,
+  });
+
   Object.defineProperty(f, 'monster', {
     get() { return f.monsters[f.focusIndex] ?? f.monsters[0]; },
     enumerable: false,
@@ -329,7 +367,25 @@ export function readouts(f, target = f.monster) {
 
 function canFire(f) {
   const w = f.weapon;
-  return f.outcome === null && w.cooldown <= 0 && w.reloadT <= 0 && w.swapT <= 0 && w.mag[w.chamber] > 0;
+  return f.outcome === null && f.slotSwapT <= 0
+    && w.cooldown <= 0 && w.reloadT <= 0 && w.swapT <= 0 && w.mag[w.chamber] > 0;
+}
+
+/**
+ * Switch weapon. Slower than a chamber swap, because putting one gun away and
+ * bringing another up is a bigger commitment than thumbing a selector — and that
+ * cost is the whole reason anchoring with one weapon and subduing with the other
+ * is a decision rather than a formality.
+ */
+function startWeaponSwap(f, slot) {
+  if (!f.hasTwoWeapons || f.slotSwapT > 0) return;
+  const next = slot ?? (f.activeSlot + 1) % f.loadouts.length;
+  if (next === f.activeSlot) return;
+  f.pendingSlot = next;
+  f.slotSwapT = WEAPON_SWAP_SECONDS;
+  f.weapon.reloadT = 0;
+  f.weapon.charge = 0;
+  f.stats.weaponSwaps += 1;
 }
 
 function fire(f) {
@@ -870,7 +926,6 @@ export function step(f, dt, intent) {
   if (f.outcome !== null) { f.t += dt; decayCosmetics(f, dt); return; }
 
   f.t += dt;
-  const w = f.weapon;
   const p = f.player;
 
   p.invuln = Math.max(0, p.invuln - dt);
@@ -882,6 +937,16 @@ export function step(f, dt, intent) {
     p.y = clamp(p.y + (intent.moveY / len) * PLAYER.speed * dt, p.radius, ARENA.h - p.radius);
   }
 
+  if (f.slotSwapT > 0) {
+    f.slotSwapT = Math.max(0, f.slotSwapT - dt);
+    if (f.slotSwapT === 0 && f.pendingSlot !== undefined) {
+      f.activeSlot = f.pendingSlot;
+      f.pendingSlot = undefined;
+    }
+  }
+  if (intent.swapWeapon) startWeaponSwap(f, intent.weaponSlot);
+
+  const w = f.weapon;
   w.cooldown = Math.max(0, w.cooldown - dt);
   if (w.swapT > 0) {
     w.swapT = Math.max(0, w.swapT - dt);
@@ -908,7 +973,7 @@ export function step(f, dt, intent) {
   stepProjectiles(f, dt);
   updateFocus(f);
 
-  const noAmmo = w.mag.lethal + w.reserve.lethal + w.mag.capture + w.reserve.capture === 0;
+  const noAmmo = f.weapons.every((s) => s.mag.lethal + s.reserve.lethal + s.mag.capture + s.reserve.capture === 0);
   if (noAmmo && f.projectiles.length === 0 && f.outcome === null) finish(f, 'driven_off');
 
   decayCosmetics(f, dt);

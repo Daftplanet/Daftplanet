@@ -215,7 +215,9 @@ function drawMonsterBars(ctx, f, m) {
   ctx.fillStyle = C.hp;
   ctx.fillRect(x, y, w * Math.max(0, m.hp / m.maxHp), h);
 
-  const rFrac = Math.min(1, m.restraint / f.loadout.required);
+  // The monster's own requirement, not the loadout's: apexes scale theirs with
+  // party size, so drawing against the unscaled figure showed a full bar as a third full.
+  const rFrac = Math.min(1, m.restraint / (m.required ?? f.loadout.required));
   ctx.fillStyle = '#000';
   ctx.fillRect(x, y + h + 3, w, h);
   ctx.fillStyle = C.restraint;

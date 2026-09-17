@@ -221,3 +221,81 @@ with the harpoon, subdue with the crossbow, is what the design has said all alon
 4. Rift events currently ignore the bestiary's own placement rules: Karrahk wants
    waterside and a storm, Nyxhollow wants midnight. Right now the apex is picked by
    hash. Honouring those would make each apex feel like it belongs somewhere.
+
+---
+
+# Phase 3, part 3: The two-weapon loadout
+
+Part 2 ended by naming this the top open item, because apex capture was
+numerically impossible without it. It is now in, and the effect is larger than
+expected.
+
+## The measurement
+
+Solo Nyxhollow, wounded, in its final phase, anchored, landing perfect weak-point
+shots:
+
+| Approach | Shots | Time |
+| --- | --- | --- |
+| Tether Harpoon alone | 31 | 3.8 min |
+| **Anchor, switch, subdue with a Sting Crossbow** | **10** | **0.6 min** |
+
+A sixfold improvement, and it comes entirely from using each weapon for the job it
+was designed for. The Harpoon's Restraint of 25 stops looking like a bad stat and
+starts looking like what it is: the price of the only tool that can hold a Colossus
+still. The Crossbow's 58 — the highest in the game — finally has something to be
+the highest *for*.
+
+This is what `02-weapons-and-ammo.md` meant by "two lethal profiles, two capture
+profiles, or one of each", and I had it in front of me the whole time.
+
+## What I got wrong, and why it took three phases to surface
+
+In phase 1 I deferred the second weapon slot with this reasoning:
+
+> *a second weapon adds input complexity without testing anything new until mods
+> arrive in phase 2.*
+
+That was wrong in a specific, instructive way. I judged the feature by what it added
+to the **fight I had already built** — a single Strider, one weapon, two chambers —
+and it genuinely added nothing there. What I could not see from inside that fight
+was that the second slot is not a combat feature at all. It is the mechanism that
+makes an entire *class* of weapon coherent. The Tether Harpoon, the Arcbrand Coil
+and the Lattice Launcher are all support tools: they set a target up for something
+else to finish. With one slot there is no something else, so all three read as bad
+weapons.
+
+The cost of the deferral was not that apexes were unbalanced. It was that I then
+spent a tuning pass scaling apex Restraint by party size to paper over a problem
+whose actual cause was a missing feature. That scaling is still there and still
+correct — apexes should scale to their party — but it was reached for as a fix when
+it should only ever have been a dial.
+
+**The lesson worth keeping: a feature that "adds nothing" to the system you have
+built so far may be the one that makes the system you have *designed* work.** The
+bible said two weapons in phase 0. Three phases of evidence later, it still said two
+weapons.
+
+## Mechanics
+
+- **Two slots.** The second stays empty until a second weapon is unlocked, so at
+  rank 1 you genuinely have one gun rather than two pistols.
+- **Each slot carries its own lethal and capture round**, its own magazine and its
+  own reserve. Four loaded round types in total.
+- **Switching weapons costs 0.9s**, against 0.6s for a chamber swap. The design
+  never specified this; it needs to be longer than a chamber swap or the chamber
+  swap stops being a decision, and it needs to be short enough that the
+  anchor-switch-subdue rhythm is playable inside a six-second Anchor.
+- `Q` cycles, `1` and `2` select directly, and the HUD shows both slots with their
+  remaining rounds.
+- Saves from before this change **migrate** rather than being wiped: an old
+  single-weapon loadout becomes slot 1, with slot 2 empty.
+
+## Still open
+
+1. **Weapon mods** — the three slots per weapon in `02` are still unbuilt, and they
+   are the last piece of the loadout puzzle.
+2. **Party play**, still the honest answer to multi-capture and the two Titans.
+3. **Codex sharing and field reports** — the last unbuilt item in phase 3.
+4. The Anchor lasts six seconds, which allows roughly one crossbow magazine per
+   application. That rhythm feels right on paper but has never been played.

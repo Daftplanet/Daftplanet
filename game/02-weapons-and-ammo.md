@@ -94,7 +94,15 @@ only weapon that fires it.
 ## Loadout rules
 
 - A Warden carries **two weapons**. This forces a real choice: two lethal profiles,
-  two capture profiles, or one of each.
+  two capture profiles, or one of each. Switching between them takes **0.9 s** —
+  longer than the 0.6 s chamber swap, because putting one weapon away and bringing
+  another up is a bigger commitment than thumbing a selector.
+
+  This is what makes the support weapons coherent. The Tether Harpoon, the Arcbrand
+  Coil and the Lattice Launcher all set a target up for something else to finish;
+  with only one slot there is no something else, and all three read as bad weapons.
+  Anchoring an apex with the Harpoon and then subduing it with a Sting Crossbow is
+  six times faster than the Harpoon alone.
 - Each weapon carries **one lethal round type and one capture round type**, chosen
   before leaving the Sanctuary. You cannot carry three kinds of dart.
 - Ammo is **finite and crafted**. Lethal rounds are cheap; capture rounds are the
