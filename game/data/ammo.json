@@ -262,12 +262,13 @@
   "formulas": {
     "damage": "base_damage * ammo_damage_multiplier * element_multiplier * hit_zone_damage * (1 - armour_reduction) * ambush_multiplier",
     "restraint_gain": "weapon_base_restraint * ammo_restraint_multiplier * element_multiplier * hit_zone_restraint * status_product * wound_multiplier * ambush_multiplier / size_resistance",
-    "wound_multiplier": "1.0 + 2.0 * (1 - current_hp / max_hp)",
+    "wound_multiplier": "1.0 + 2.0 * (1 - current_hp / max_hp) ^ wound_multiplier_exponent",
     "restraint_required": "species_base_restraint * size_restraint_multiplier * (1 + 0.15 * evolution_stage) * restraint_required_scale",
-    "restraint_decay_per_second": "4.0 + 0.35 * species_tier",
-    "flee_chance_per_second": "skittishness * (1 - restraint / restraint_required)",
+    "restraint_decay_per_second": "(4.0 + 0.35 * species_tier) * status_decay_multiplier * lerp(at_zero_hp, at_full_hp, current_hp / max_hp)",
+    "flee_chance_per_second": "skittishness * flee_chance_scale * (1 - restraint / restraint_required)",
     "weak_point_damage_note": "A weak point hit uses the weapon's crit_multiplier in place of hit_zones.weak_point.damage; the hit_zones value is the default for weapons that do not define one.",
-    "restraint_decay_note": "Statuses scale decay: a status with halts_restraint_decay stops it entirely, otherwise decay_multiplier values multiply together."
+    "restraint_decay_note": "Statuses scale decay: a status with halts_restraint_decay stops it entirely, otherwise decay_multiplier values multiply together.",
+    "flee_speed": "species_speed * (0.75 + 0.6 * current_hp / max_hp) -- a badly wounded monster limps, so a chase is winnable rather than a formality"
   },
   "subdue_window_seconds": 5,
   "failed_subdue": {
@@ -275,5 +276,14 @@
     "applies": "enraged"
   },
   "restraint_required_scale": 3.0,
-  "$restraint_required_scale_note": "Converts between two independently authored ladders: weapon `restraint` (14-58 per projectile) and species `base_restraint` (22-1100). Without it a sedated weak-point dart on a wounded Strider fills the whole bar in one shot. Raise it to make every capture slower; it is the single global dial for capture pacing."
+  "$restraint_required_scale_note": "Converts between two independently authored ladders: weapon `restraint` (14-58 per projectile) and species `base_restraint` (22-1100). Without it a sedated weak-point dart on a wounded Strider fills the whole bar in one shot. Raise it to make every capture slower; it is the single global dial for capture pacing.",
+  "flee_chance_scale": 1.0,
+  "$flee_chance_scale_note": "Global multiplier on every species' skittishness, kept at 1.0 so the bestiary's published values stand. It exists because the flee rate was losing roughly a quarter of straightforward culls; that turned out to be better fixed by making a badly wounded monster limp (see formulas.flee_speed) than by blunting the flee roll, which would have removed the drama instead of giving the player an answer to it.",
+  "restraint_decay_health_scale": {
+    "at_full_hp": 1.4,
+    "at_zero_hp": 0.6
+  },
+  "$restraint_decay_health_scale_note": "A healthy monster shakes off sedative faster than a wounded one. This is what stops 'swap to darts at half health' being a strategy with no failure mode: dart it early and the meter drains against you.",
+  "wound_multiplier_exponent": 1.8,
+  "$wound_multiplier_exponent_note": "Curves the wound multiplier instead of ramping it linearly. Linear left almost no gradient between 50% and 30% health (2.0 vs 2.4), so darting early cost the same per capture as wounding deeply first and never risked the flee threshold \u2014 it strictly dominated. Curving it makes the timing of the chamber swap the decision it is supposed to be."
 }

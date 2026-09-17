@@ -145,3 +145,92 @@ the next fight faster. Time of day gives a reason to come back at a different ho
 
 Whether twenty minutes of it is genuinely worth repeating is, again, the thing a
 simulation cannot answer.
+
+---
+
+# Tuning pass
+
+Made after phase 1 landed, against the four items left open above. Measured, not
+asserted — the balance sim now also reports **darts burned**, which is what exposed
+the real problem.
+
+## `soften_50` was strictly dominant, and my excuse for it was wrong
+
+Phase 1 recorded that "swap to darts at half health" never fails, and waved it
+through on the grounds that its cost was economic. Adding a darts column to the sim
+killed that argument outright:
+
+| | success | darts | **darts per successful capture** |
+| --- | --- | --- | --- |
+| `soften_30` | 78% | 5.2 | **6.6** |
+| `soften_50` | 100% | 6.6 | **6.65** |
+
+Identical cost, and one of them never fails. It was not a trade-off, it was a
+strictly better option.
+
+The cause was the wound multiplier ramping linearly: darting at 50% health gave
+×2.0 and at 30% gave ×2.4. Too small a gap to be a decision, and staying above the
+25% flee threshold meant never risking the only failure mode capture strategies
+have. Curving it (`wound_multiplier_exponent`, currently 1.8) restores the
+gradient — deep-softening is now cheaper, and it is riskier:
+
+| | success | darts | darts per capture |
+| --- | --- | --- | --- |
+| `soften_30` | 76% | 5.0 | **6.6** |
+| `soften_50` | 100% | 7.1 | **7.1** |
+
+Still a modest margin. But it is now a choice rather than a dominant line, and
+pushing further would make the flee-threshold gamble effectively mandatory.
+
+## Fleeing: give the player an answer instead of blunting the roll
+
+`skittishness` at 0.40 was losing ~24% of straightforward culls. The obvious fix was
+a global scale to knock the flee rate down, and it worked — and it was the wrong
+fix, because it removed the drama rather than answering it. It also over-corrected
+badly: the "it's bolting, swap to darts" gamble jumped from 45% to 73% conversion,
+which is no longer a gamble.
+
+What worked instead: **a fleeing monster limps in proportion to its wounds**
+(`flee_speed = speed × (0.85 + 0.5 × hp/maxHp)`). At the flee threshold it still
+outruns you; at single-digit health you can run it down. That turns a coin flip into
+a chase you can win by committing.
+
+| | cull escapes | panic converts |
+| --- | --- | --- |
+| before | 24% | 53% |
+| global flee nerf | 9% | **73%** — drama gone |
+| limping, flee rate untouched | **18%** | **56%** |
+
+So `flee_chance_scale` exists as a dial but sits at **1.0**, and every published
+bestiary `skittishness` value stands exactly as written. Worth remembering as a
+general lesson: the first tuning lever that produces the target number is not
+necessarily the one that produces the right game.
+
+## Withdrawing now costs something — the right something
+
+Phase 1 added a withdraw with no cost at all. The rule now: **back out before it
+notices you and the spawn is still there; back out after you have woken it and it
+clears off.** That makes scouting a deliberate act, gives the silent Sylvan Bow one
+more reason to exist, and keeps the Obelisc door open, since a Colossus you never
+provoked is exactly the fight the bestiary says you can walk away from.
+
+## The rank curve was fine; my flag was pessimistic
+
+Phase 1 claimed "a patrol earns a few hundred XP" against rank 4's 2,000. That
+undercounted first-capture bonuses, which are 150 × tier and dominate early play:
+first-catching the six common and uncommon species alone is 1,350 XP. Rank 4 lands
+in roughly two to three patrols, which is a reasonable arc for a real game.
+
+It is still a poor arc for *evaluating* a prototype in one sitting, so rather than
+distort the published curve there is now an explicit **Unlock all weapons** toggle
+in the world panel, labelled as the prototype affordance it is. The design keeps its
+numbers; the evaluator gets the tool.
+
+## Still open after this pass
+
+1. `soften_50` is no longer dominant but the margin over `soften_30` is thin.
+   Watch it once a human plays; the sim cannot feel how much the flee risk weighs.
+2. The **skilled-culler paradox** persists: a Warden hunting weak points loses 42%
+   of culls against an average player's 18%, because tracking a small receding
+   target costs two-thirds of your rate of fire. Limping softens it. Whether a human
+   naturally switches to body shots on a runner is unknown.

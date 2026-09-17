@@ -57,6 +57,7 @@ const DEFAULT = () => ({
   loadout: { weaponId: 'marker_pistol', lethalId: 'ball_round', captureId: 'tranq_dart' },
   codex: {},
   metresWalked: 0,
+  devUnlockAll: false, // prototype affordance, see unlockedWeapons
   resolved: {},        // spawnId -> true, so a fought spawn does not come back
   stats: { encounters: 0, culls: 0, captures: 0, escapes: 0, cleanCaptures: 0 },
 });
@@ -101,6 +102,9 @@ export function createProfile() {
     },
     get nextRankAt() { return RANK_XP[this.rank + 1] ?? null; },
     get unlockedWeapons() {
+      // The rank gate is the design's; the override is a prototype affordance so all
+      // three weapons can be evaluated in one sitting without grinding to rank 4.
+      if (state.devUnlockAll) return Object.keys(WEAPON_UNLOCK);
       return Object.entries(WEAPON_UNLOCK).filter(([, r]) => r <= this.rank).map(([id]) => id);
     },
 

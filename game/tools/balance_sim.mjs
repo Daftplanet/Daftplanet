@@ -163,13 +163,14 @@ function runFight(seed, strat, skill, override) {
 
 function summarise(name, strat, runs, skill, override) {
   const out = { culled: 0, catalogued: 0, escaped: 0, driven_off: 0, timeout: 0 };
-  let time = 0, shots = 0, clean = 0, hpAt = 0, failed = 0, playerHits = 0;
+  let time = 0, shots = 0, clean = 0, hpAt = 0, failed = 0, playerHits = 0, darts = 0;
 
   for (let i = 0; i < runs; i++) {
     const f = runFight(i * 7919 + 13, strat, skill, override);
     const o = f.outcome ?? 'timeout';
     out[o] = (out[o] ?? 0) + 1;
     time += f.outcomeAt; shots += f.stats.shots; failed += f.stats.failedSubdues;
+    darts += f.weapon.carried.capture - (f.weapon.mag.capture + f.weapon.reserve.capture);
     playerHits += f.stats.playerHits;
     if (f.stats.cleanCapture) clean++;
     if (o === 'catalogued') hpAt += f.stats.hpFractionAtResolve;
@@ -179,7 +180,7 @@ function summarise(name, strat, runs, skill, override) {
     name, label: strat.label,
     row: `${name.padEnd(12)} ${pct(out.culled)} ${pct(out.catalogued)} ${pct(out.escaped)} ${pct(out.driven_off)} `
        + `${(time / runs).toFixed(1).padStart(6)}s ${(shots / runs).toFixed(1).padStart(6)} `
-       + `${(playerHits / runs).toFixed(1).padStart(5)} ${pct(clean)} `
+       + `${(darts / runs).toFixed(1).padStart(6)} ${(playerHits / runs).toFixed(1).padStart(5)} ${pct(clean)} `
        + `${out.catalogued ? `${((hpAt / out.catalogued) * 100).toFixed(0)}%`.padStart(5) : '    —'}`,
     out,
   };
@@ -201,26 +202,27 @@ const SKILLS = [
 for (const skill of SKILLS) {
   const label = skill.label;
   console.log(label);
-  console.log('strategy      cull  cat  esc  down   time  shots   hit  clean  HP@cat');
-  console.log('-'.repeat(74));
+  console.log('strategy      cull  cat  esc  down   time  shots  darts   hit  clean  HP@cat');
+  console.log('-'.repeat(80));
   for (const [name, strat] of Object.entries(STRATEGIES)) {
     console.log(summarise(name, strat, runs, skill).row);
   }
   console.log();
 }
-console.log('cull/cat/esc/down = outcome share. hit = times the Warden was hit. '
-          + 'clean = captures above 80% HP.');
+console.log('cull/cat/esc/down = outcome share. darts = capture rounds burned (the expensive ones). '
+          + 'hit = times the Warden was hit. clean = captures above 80% HP.');
 
 
 /*
  * Sensitivity sweep on the flee dial. Cinderfang ships at skittishness 0.4, which
  * is the single number deciding how often a nearly-won fight walks away.
  */
-console.log('\nFLEE SENSITIVITY — how often the monster gets away, by skittishness');
-console.log('skittishness   cull:esc   panic:cat   soften_30:esc');
+console.log('\nFLEE SENSITIVITY — effective skittishness = species value x flee_chance_scale');
+console.log('Cinderfang ships at 0.40; the table shows the effective figure.');
+console.log('effective   cull:esc   panic:cat   soften_30:esc');
 console.log('-'.repeat(52));
-for (const skt of [0.40, 0.30, 0.20, 0.10]) {
-  const over = { skittishness: skt };
+for (const skt of [0.40, 0.32, 0.26, 0.20]) {
+  const over = { skittishness: skt / (data.ammo.flee_chance_scale ?? 1) };
   const skill = SKILLS[1];
   const c = summarise('cull', STRATEGIES.cull, runs, skill, over).out;
   const p = summarise('panic', STRATEGIES.panic, runs, skill, over).out;
@@ -228,7 +230,7 @@ for (const skt of [0.40, 0.30, 0.20, 0.10]) {
   const pc = (n, d) => `${((n / d) * 100).toFixed(0)}%`.padStart(6);
   console.log(`${skt.toFixed(2).padStart(9)}   ${pc(c.escaped, runs)}     ${pc(p.catalogued, runs)}      ${pc(s30.escaped, runs)}`);
 }
-console.log('\nCinderfang ships at 0.40. Lower values make a nearly-won fight less likely to walk away.');
+console.log(`\nflee_chance_scale is currently ${data.ammo.flee_chance_scale ?? 1}, so Cinderfang plays at ${(0.4 * (data.ammo.flee_chance_scale ?? 1)).toFixed(2)}.`);
 
 
 /*

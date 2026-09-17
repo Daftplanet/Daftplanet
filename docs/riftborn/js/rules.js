@@ -16,22 +16,34 @@ export function elementMultiplier(effectiveness, attackerElement, defenderElemen
   return defenderElements.reduce((m, d) => m * (row[d] ?? 1), 1);
 }
 
-/** 1.0 at full health, 3.0 at zero. The reason softening a target before darting it works. */
-export function woundMultiplier(hp, maxHp) {
-  return 1 + 2 * (1 - Math.max(0, hp) / maxHp);
+/**
+ * 1.0 at full health, 3.0 at zero. The reason softening a target before darting it
+ * works — and the exponent is what gives the swap timing a gradient. Linear, the
+ * difference between darting at 50% and at 30% was too small to be a decision.
+ */
+export function woundMultiplier(hp, maxHp, exponent = 1) {
+  return 1 + 2 * Math.pow(1 - Math.max(0, hp) / maxHp, exponent);
 }
 
 export function restraintRequired(species, sizeDef, scale = 1) {
   return species.stats.base_restraint * sizeDef.restraint_multiplier * (1 + 0.15 * species.stage) * scale;
 }
 
-export function restraintDecayPerSecond(species) {
-  return 4.0 + 0.35 * species.tier;
+/**
+ * Decay scales with the target's health: a healthy monster shakes off sedative
+ * faster than a wounded one. Without this, swapping to darts early is a strategy
+ * with no failure mode.
+ */
+export function restraintDecayPerSecond(species, hpFraction = 1, healthScale = null) {
+  const base = 4.0 + 0.35 * species.tier;
+  if (!healthScale) return base;
+  const { at_zero_hp: lo, at_full_hp: hi } = healthScale;
+  return base * (lo + (hi - lo) * Math.max(0, Math.min(1, hpFraction)));
 }
 
 /** Filling the Restraint meter actively holds a monster in place. */
-export function fleeChancePerSecond(species, restraint, required) {
-  return species.stats.skittishness * Math.max(0, 1 - restraint / required);
+export function fleeChancePerSecond(species, restraint, required, scale = 1) {
+  return species.stats.skittishness * scale * Math.max(0, 1 - restraint / required);
 }
 
 /** Product of every active status' restraint multiplier, capped. */
@@ -63,7 +75,7 @@ export function computeDamage({ weapon, ammo, species, hitZone, hitZones, effect
 
 export function computeRestraint({
   weapon, ammo, species, sizeDef, hitZone, hitZones, effectiveness,
-  statusDefs, activeStatuses, statusCap, hp, maxHp, ambush, ambushCfg,
+  statusDefs, activeStatuses, statusCap, hp, maxHp, ambush, ambushCfg, woundExponent = 1,
 }) {
   const bonus = ammo.bonus_vs?.some((e) => species.elements.includes(e)) ? ammo.bonus_multiplier : 1;
   return weapon.restraint
@@ -71,7 +83,7 @@ export function computeRestraint({
     * elementMultiplier(effectiveness, ammo.element, species.elements)
     * hitZones[hitZone].restraint
     * statusProduct(statusDefs, activeStatuses, statusCap)
-    * woundMultiplier(hp, maxHp)
+    * woundMultiplier(hp, maxHp, woundExponent)
     * (ambush ? ambushCfg.restraint_multiplier : 1)
     * bonus
     / sizeDef.size_resistance;
@@ -104,5 +116,8 @@ export function loadLoadout(data, { speciesId, weaponId, lethalId, captureId }) 
     chamberSwapSeconds: data.weapons.chamber_swap_seconds,
     required: restraintRequired(species, sizeDef, data.ammo.restraint_required_scale ?? 1),
     decay: restraintDecayPerSecond(species),
+    decayHealthScale: data.ammo.restraint_decay_health_scale ?? null,
+    fleeScale: data.ammo.flee_chance_scale ?? 1,
+    woundExponent: data.ammo.wound_multiplier_exponent ?? 1,
   };
 }

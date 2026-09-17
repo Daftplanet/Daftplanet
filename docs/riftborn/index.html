@@ -38,6 +38,7 @@
       <span id="biome">—</span>
       <span class="sep">·</span>
       <span id="spawn-count">—</span>
+      <span class="flash" id="patrol-flash" hidden></span>
       <button class="ghost" id="patrol-dev-toggle" type="button" aria-expanded="false">world</button>
     </div>
 
@@ -59,6 +60,7 @@
         <label>Walk pace <em id="pace-label">×8</em>
           <input type="range" id="opt-pace" min="1" max="20" step="1" value="8"></label>
         <p class="dev__note">Spawns come from (tile, 15-minute bucket, world seed). Shift the clock and the map repopulates — Ember and Volt come out at dusk, Stone is the daytime constant.</p>
+        <label class="dev__check"><input type="checkbox" id="opt-unlock"> Unlock all weapons <em>(prototype — skips the rank 4 gate)</em></label>
         <button class="ghost" id="reset-profile" type="button">Reset Warden</button>
       </aside>
     </div>

@@ -194,15 +194,16 @@ export function readouts(f) {
     hitZones: L.hitZones, effectiveness: L.effectiveness,
     statusDefs: L.statusDefs, activeStatuses: activeStatuses(m), statusCap: L.statusCap,
     hp: m.hp, maxHp: m.maxHp, ambush: !m.aware, ambushCfg: L.ambushCfg,
+    woundExponent: L.woundExponent,
   };
   const isCapture = f.weapon.chamber === 'capture';
   return {
-    wound: woundMultiplier(m.hp, m.maxHp),
+    wound: woundMultiplier(m.hp, m.maxHp, L.woundExponent),
     statusProduct: statusProduct(L.statusDefs, activeStatuses(m), L.statusCap),
     required: L.required,
     restraint: m.restraint,
-    decay: restraintDecayPerSecond(L.species) * decayMultiplier(L, m),
-    fleeChance: fleeChancePerSecond(L.species, m.restraint, L.required),
+    decay: restraintDecayPerSecond(L.species, m.hp / m.maxHp, L.decayHealthScale) * decayMultiplier(L, m),
+    fleeChance: fleeChancePerSecond(L.species, m.restraint, L.required, L.fleeScale),
     bodyValue: isCapture
       ? computeRestraint({ ...shared, hitZone: 'body' })
       : computeDamage({ ...shared, hitZone: 'body' }),
@@ -325,7 +326,7 @@ function resolveHit(f, projectile, hitZone) {
     const gain = computeRestraint({
       ...shared,
       statusDefs: L.statusDefs, activeStatuses: activeStatuses(m), statusCap: L.statusCap,
-      hp: m.hp, maxHp: m.maxHp,
+      hp: m.hp, maxHp: m.maxHp, woundExponent: L.woundExponent,
     });
     m.restraint += gain;
     f.stats.captureHits += 1;
@@ -505,7 +506,10 @@ function stepMonster(f, dt) {
       const target = nearestEdge(m);
       const ang = Math.atan2(target.y - m.y, target.x - m.x);
       m.facing = ang;
-      move(m, Math.cos(ang), Math.sin(ang), speed * AI.fleeSpeedMult, dt);
+      // Limping: at low health it can actually be run down, so a chase is a real
+      // decision rather than a formality.
+      const flight = 0.85 + 0.5 * (m.hp / m.maxHp);
+      move(m, Math.cos(ang), Math.sin(ang), speed * flight, dt);
       const atEdge = m.x < 40 || m.x > ARENA.w - 40 || m.y < 40 || m.y > ARENA.h - 40;
       if (atEdge || m.fleeT > AI.fleeEscapeSeconds) { setState(m, 'escaped'); finish(f, 'escaped'); }
       break;
@@ -556,7 +560,7 @@ function stepFlee(f, dt) {
   if (hasStatus(m, 'enraged') || hasStatus(m, 'ensnared') || hasStatus(m, 'anchored') || hasStatus(m, 'calmed')) return;
   if (m.hp / m.maxHp >= L.species.stats.flee_threshold) return;
 
-  const perSecond = fleeChancePerSecond(L.species, m.restraint, L.required);
+  const perSecond = fleeChancePerSecond(L.species, m.restraint, L.required, L.fleeScale);
   const chance = 1 - Math.pow(1 - clamp(perSecond, 0, 0.999), dt);
   if (f.rng() < chance) { setState(m, 'flee'); m.fleeT = 0; }
 }
@@ -618,7 +622,8 @@ export function step(f, dt, intent) {
 
   // --- monster
   tickStatuses(f.monster, dt);
-  const decay = restraintDecayPerSecond(f.loadout.species) * decayMultiplier(f.loadout, f.monster);
+  const decay = restraintDecayPerSecond(f.loadout.species, f.monster.hp / f.monster.maxHp, f.loadout.decayHealthScale)
+    * decayMultiplier(f.loadout, f.monster);
   f.monster.restraint = Math.max(0, f.monster.restraint - decay * dt);
   stepMonster(f, dt);
   stepFlee(f, dt);

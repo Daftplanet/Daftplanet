@@ -122,6 +122,11 @@ function boot(data) {
     patrol.walkMultiplier = Number(e.target.value);
     $('pace-label').textContent = `×${patrol.walkMultiplier}`;
   });
+  $('opt-unlock').addEventListener('change', (e) => {
+    profile.state.devUnlockAll = e.target.checked;
+    profile.save();
+    if (view === 'loadout') renderLoadout();
+  });
   $('reset-profile').addEventListener('click', () => {
     if (confirm('Reset this Warden? Codex, rank and inventory are all lost.')) {
       profile.reset();
@@ -188,15 +193,35 @@ function boot(data) {
   /*
    * Withdrawing. An Obelisc is, by design, "a fight you choose, entirely, and can
    * walk away from at any point" — and a rank-1 Warden who meets a Colossus needs
-   * that door. Rounds already fired are spent, but the spawn is left standing and
-   * nothing is written to the Codex.
+   * that door.
+   *
+   * The cost is whether it noticed you. Back out before it is aware and the spawn
+   * is still standing when you come back; back out after you have woken it and it
+   * clears off. That makes scouting a real option and gives the silent Sylvan Bow
+   * one more reason to exist.
    */
   function withdraw() {
     if (!fight || fight.outcome) return;
+    const spooked = fight.monster.aware;
     spendFired();
+    if (spooked) {
+      profile.recordOutcome(fight.loadout.species, 'escaped');
+      profile.resolve(fightSpawn.id);
+    }
     profile.save();
     fight = null;
     show('patrol');
+    if (spooked) flash('It had already seen you — the spawn cleared off.');
+  }
+
+  /** Brief non-blocking note on the patrol strip. */
+  let flashTimer = null;
+  function flash(text) {
+    const el = $('patrol-flash');
+    el.textContent = text;
+    el.hidden = false;
+    clearTimeout(flashTimer);
+    flashTimer = setTimeout(() => { el.hidden = true; }, 4000);
   }
 
   function finishFight() {
@@ -481,6 +506,7 @@ function boot(data) {
     teleportTo(spawn) { patrol.x = spawn.x; patrol.y = spawn.y; },
   };
 
+  $('opt-unlock').checked = Boolean(profile.state.devUnlockAll);
   show('patrol');
   $('boot').hidden = true;
   requestAnimationFrame(frame);

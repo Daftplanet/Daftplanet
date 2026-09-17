@@ -310,6 +310,8 @@ canvas {
 /* ---- strip bar */
 .bar--strip { display: flex; gap: 8px; align-items: center; font-size: 11px; color: var(--ink-dim); flex-wrap: wrap; }
 .bar--strip .sep { color: var(--ink-faint); }
+.flash { color: var(--warn); }
+.dev__check { display: flex !important; gap: 6px; align-items: baseline; }
 .bar--strip .ghost { margin-left: auto; }
 
 /* ---- engage prompt */

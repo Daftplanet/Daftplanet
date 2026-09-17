@@ -59,19 +59,31 @@ restraint_gain = weapon_base_restraint
                × wound_multiplier           (see below)
                ÷ size_resistance            (see 04 — size classes)
 
-wound_multiplier = 1.0 + 2.0 × (1 − current_hp ÷ max_hp)
+wound_multiplier = 1.0 + 2.0 × (1 − current_hp ÷ max_hp) ^ 1.8
 ```
 
 `wound_multiplier` is the heart of the system. A monster at full health takes
-Restraint at ×1.0; one at 10% health takes it at ×2.8. **Softening a target with
+Restraint at ×1.0; one at 10% health takes it at ×2.66.
+
+The **exponent** is what gives the chamber swap a gradient. Ramped linearly, the
+difference between darting at 50% health and at 30% was 2.0 against 2.4 — too small
+to be a decision, and "wound it halfway then dart" ended up costing the same per
+capture as wounding it deeply while never risking the flee threshold. It strictly
+dominated. Curved, softening further is genuinely cheaper and genuinely riskier. **Softening a target with
 lethal rounds first, then swapping to darts, is the intended expert play** — and it
 is genuinely risky, because overshooting kills the thing you wanted.
 
 ### Restraint decay
 
 ```
-decay_rate = 4.0 + (0.35 × species_tier) Restraint/second
+decay_rate = (4.0 + 0.35 × species_tier)
+           × status_decay_multiplier
+           × lerp(0.6 at 0% HP → 1.4 at full HP)
 ```
+
+Decay also **scales with the target's health**: a healthy monster shakes off
+sedative faster than a wounded one, which is the second half of why darting from
+full is the hard road.
 
 Decay pauses entirely while the target is `Anchored`, and drops to ×0.35 while it is
 `Sedated`. Stop shooting a Colossus for six seconds and you start over; that is the
@@ -123,11 +135,19 @@ Every species has a `flee_threshold` (a fraction of max HP) and a `skittishness`
 rating. On dropping below the threshold, the monster rolls to flee each second:
 
 ```
-flee_chance_per_second = skittishness × (1 − restraint ÷ restraint_required)
+flee_chance_per_second = skittishness × flee_chance_scale × (1 − restraint ÷ restraint_required)
+flee_speed             = species_speed × (0.85 + 0.5 × current_hp ÷ max_hp)
 ```
 
 So a half-filled Restraint meter halves the flee chance. Committing to a capture
 actively holds the monster in place, which is a nice bit of self-reinforcing design.
+
+A fleeing monster **limps in proportion to its wounds**. At the flee threshold it
+still outruns you; at single-digit health it does not. Without this, a monster that
+decided to run was simply gone — a coin flip with no counterplay — and roughly a
+quarter of straightforward culls ended in nothing. Letting the player run down
+something they have nearly killed fixed that without blunting the flee roll itself,
+which is why `flee_chance_scale` exists but sits at a neutral **1.0**.
 
 `Ensnared`, `Anchored` and `Calmed` set flee chance to zero outright.
 
