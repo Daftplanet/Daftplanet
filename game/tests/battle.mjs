@@ -33,16 +33,21 @@ await page.addInitScript(() => {
     r.profile.save();
 
     r.show('patrol');
-    await new Promise((d) => setTimeout(d, 250));
+    /*
+     * Walk by stepping the world directly rather than nudging a coordinate and
+     * sleeping for the next animation frame. The old loop cost up to 2.65s per
+     * encounter and these checks set up dozens — it was most of two suites.
+     */
+    r.refreshSpawns();
     for (let i = 0; i < 40 && r.patrol.spawns.length === 0; i++) {
       r.patrol.x += 90; r.patrol.y += 40;
-      await new Promise((d) => setTimeout(d, 60));
+      r.refreshSpawns();
     }
     const base = r.patrol.spawns[0];
     if (!base) return null;
     r.teleportTo(base);
     r.startBattle({ ...base, id: `b-${Math.random()}`, speciesId: wildId, packSize: opts.packSize ?? 1 });
-    await new Promise((d) => setTimeout(d, 350));
+    await new Promise((d) => requestAnimationFrame(d));
     return r.battle;
   };
 
@@ -294,7 +299,7 @@ const arena = await page.evaluate(async () => {
   await new Promise((d) => setTimeout(d, 300));
   for (let i = 0; i < 40 && r.patrol.spawns.length === 0; i++) {
     r.patrol.x += 90; r.patrol.y += 40;
-    await new Promise((d) => setTimeout(d, 60));
+    r.refreshSpawns();
   }
   const s = r.patrol.spawns[0];
   r.teleportTo(s);

@@ -1816,6 +1816,14 @@ function boot(data) {
     get view() { return view; },
     get fight() { return fight; },
     show, startFight, startBattle, renderSanctuary, renderContracts,
+    /*
+     * Regenerate the spawns around the Warden, synchronously. The browser suites
+     * used to walk by nudging patrol.x and then sleeping 60ms per step to let the
+     * animation frame catch up — up to 2.65 seconds of doing nothing per
+     * encounter, in checks that set up dozens of them. This is the same work
+     * without the waiting.
+     */
+    refreshSpawns: () => stepPatrol(patrol, 0, { moveX: 0, moveY: 0 }),
     get battle() { return battle; },
     takeTurn: (a) => takeTurn(battle, a), battleOptions: () => options(battle),
     // For driving a battle the app does not own — a harness building its own.

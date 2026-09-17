@@ -123,7 +123,7 @@ const engage = (speciesId) => page.evaluate(async (id) => {
   await new Promise((res) => setTimeout(res, 300));
   for (let i = 0; i < 40 && r.patrol.spawns.length === 0; i++) {
     r.patrol.x += 90; r.patrol.y += 40;
-    await new Promise((res) => setTimeout(res, 60));
+    r.refreshSpawns();
   }
   const base = r.patrol.spawns[0];
   if (!base) return null;

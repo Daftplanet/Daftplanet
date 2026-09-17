@@ -46,7 +46,7 @@ const setup = async (weaponId, lethalId, captureId, packSize, ammo = {}) => page
   r.profile.save();
   for (let i = 0; i < 40 && r.patrol.spawns.length === 0; i++) {
     r.patrol.x += 90; r.patrol.y += 40;
-    await new Promise((res) => setTimeout(res, 60));
+    r.refreshSpawns();
   }
   const base = r.patrol.spawns.find((s) => !r.profile.isResolved(s.id)) ?? r.patrol.spawns[0];
   if (!base) return null;
@@ -155,7 +155,7 @@ const recorded = await page.evaluate(async () => {
   r.profile.save();
   for (let i = 0; i < 40 && r.patrol.spawns.length === 0; i++) {
     r.patrol.x += 90; r.patrol.y += 40;
-    await new Promise((res) => setTimeout(res, 60));
+    r.refreshSpawns();
   }
   const base = r.patrol.spawns.find((s) => !r.profile.isResolved(s.id)) ?? r.patrol.spawns[0];
   if (!base) return null;

@@ -49,13 +49,33 @@ reason. The check it was hiding had been failing two runs in three.
 Every suite counts failures now and exits on them. **A check that cannot fail
 the build is a comment with extra steps.**
 
-## They are slow now
+## How long they take
 
-About ninety minutes for the full run. `aim` simulates 24 fights x 45 seconds x
-four input profiles and dominates it; the turn-based fights doubled in length
-when a damage cap stopped them ending in two turns. Run a single suite by name
-while working (`node game/tests/run.mjs battle`) and the whole set before you
-push.
+**About a hundred seconds for all fourteen**, and `run.mjs` prints a per-suite
+breakdown so you never have to guess:
+
+```
+TIME
+  phase1          25.4s   24%  ############
+  rifts           11.3s   11%  #####
+  packs           10.0s   10%  #####
+  escort           8.5s    8%  ####
+  ...
+  total          104.5s  (1.7 min)
+```
+
+`phase1` is the slowest and will stay that way: it drives the real-time arena
+with real mouse input, and 140 iterations of aim-and-click at a 130 ms trigger
+hold is 18 seconds that is genuinely testing something.
+
+This README previously said "about ninety minutes". That was wrong by roughly
+fiftyfold and it was never measured — it came from watching a clock while
+several runs competed for one machine. It is written up in
+`game/13-phase3-findings.md` under "the suites do not take ninety minutes",
+because a wrong number in a test README makes people avoid running the tests.
+
+Run a single suite by name while working (`node game/tests/run.mjs battle`) and
+the whole set before you push.
 
 ## A warning about these suites
 

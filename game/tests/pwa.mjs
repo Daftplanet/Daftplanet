@@ -84,7 +84,7 @@ const state = booted ? await offline.evaluate(async () => {
   const r = window.__riftborn;
   for (let i = 0; i < 40 && r.patrol.spawns.length === 0; i++) {
     r.patrol.x += 90; r.patrol.y += 40;
-    await new Promise((res) => setTimeout(res, 60));
+    r.refreshSpawns();
   }
   return {
     spawns: r.patrol.spawns.length,

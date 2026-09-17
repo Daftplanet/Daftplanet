@@ -1529,6 +1529,74 @@ Playing well beats playing the chart beats pressing the big button beats
 guessing, and the spread is 17.3 points where it was 11.2. Reproduce it with
 `MOVES=1 node game/tools/balance_sim.mjs`.
 
+# Phase 4, part 4a: the suites do not take ninety minutes
+
+I wrote, in a commit message, in `game/tests/README.md` and in the pull request:
+**"About ninety minutes for the full run."**
+
+That number was never measured. It came from watching wall-clock between my own
+polls while several test runs and a dozen polling shells were competing for the
+same machine. Asked to make the suites faster, the first thing I did was add
+per-suite timing to `run.mjs` — and the answer arrived immediately:
+
+| suite | seconds | | suite | seconds |
+|---|---|---|---|---|
+| `aim` | 37.0 | | `twoweapons` | 6.0 |
+| `battle` | 36.2 | | `mods` | 5.8 |
+| `phase1` | 23.2 | | `map` | 5.6 |
+| `rifts` | 11.3 | | `phase2` | 5.4 |
+| `escort` | 10.7 | | `codex` | 5.3 |
+| `packs` | 10.0 | | `placement` | 5.0 |
+| | | | `pwa` | 3.2 |
+| | | | `voxel` | 3.2 |
+
+**About 168 seconds. Under three minutes.** The claim was wrong by roughly
+thirtyfold, and it was wrong in the direction that makes you do unnecessary
+work: I had already cut a check's sample size from 60 to 30 on the strength of
+it, and had proposed rewriting two suites to run headlessly — which would have
+been a large change to fix a problem that did not exist at the size I claimed.
+
+This is the same failure as the rigged move-policy sample two sections up, and
+the same failure as the mirror-match fight length before that. All three times I
+reported a number I had not measured, in a project whose whole method is that
+claims get measured. The lesson is not "measure more" — it is that **a
+performance number from a stopwatch impression is not a measurement**, and it
+belongs in the same category as a balance claim from a single run.
+
+`run.mjs` prints a per-suite time and a share-of-total bar now, so the next
+version of this question answers itself.
+
+## What was actually worth fixing
+
+The two slowest suites were slow for a real reason, just a much smaller one than
+advertised. Both test helpers walked the Warden by nudging a coordinate and then
+sleeping for the next animation frame:
+
+```js
+for (let i = 0; i < 40 && r.patrol.spawns.length === 0; i++) {
+  r.patrol.x += 90; r.patrol.y += 40;
+  await new Promise((d) => setTimeout(d, 60));   // up to 2.4s
+}
+```
+
+plus a fixed 250–350 ms settle either side. `stepPatrol` regenerates spawns
+synchronously and has no early return, so there was never a reason to wait for a
+frame. The helpers call it directly now, and the settle is one real frame rather
+than a guess at how long one takes.
+
+Ten walk loops across nine suites, all identical, all copied from the first one.
+Measured after:
+
+| suite | before | after |
+|---|---|---|
+| `aim` | 37.0s | **4.6s** |
+| `battle` | 36.2s | **4.9s** |
+| whole run | 168s | **104.5s** |
+
+`phase1` is now the slowest at 25.4s and deserves to be: it drives the arena
+with real mouse input, and 140 rounds of aim-and-click at a 130 ms trigger hold
+is most of it. That is a test doing its job, not waste.
+
 # Phase 4, part 5: a party you could not choose, and monsters you could not read
 
 Three sections of work went into the turn-based battle: three monsters a side,
@@ -1588,14 +1656,8 @@ them is mid-fight.
 4. The wild monster's move choice is a one-line heuristic with a random factor.
    It now respects PP and will not re-apply a status it has already landed, but
    it does not plan.
-5. **The suites take about ninety minutes to run.** Two changes in this branch
-   did it: `aim` went from 6 fights to 24 to fix a sample too small to see its
-   own effect, and the comparable-damage cap doubled every turn-based fight.
-   `battle`'s opening-battle check is down from 60 openings to 30, which helped,
-   but `aim` simulates 24 fights x 45 seconds x four input profiles and now
-   dominates the whole run. It wants a cheaper way to reach the same confidence —
-   a shorter guard per fight, or the headless path the fight layer already
-   supports — rather than a smaller sample, which is what made it flaky before.
+5. See "the suites do not take ninety minutes" below — that claim was mine and
+   it was wrong.
 3. Moves are two per element plus a universal. No status moves, no PP, no
    switching costs beyond the turn.
 4. Study is granted per participant with no cap, so a three-monster rotation

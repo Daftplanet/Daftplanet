@@ -33,10 +33,10 @@ await page.addInitScript(() => {
     r.profile.setEscort(res.uid);
 
     r.show('patrol');
-    await new Promise((d) => setTimeout(d, 250));
+    r.refreshSpawns();
     for (let i = 0; i < 40 && r.patrol.spawns.length === 0; i++) {
       r.patrol.x += 90; r.patrol.y += 40;
-      await new Promise((d) => setTimeout(d, 60));
+      r.refreshSpawns();
     }
     const base = r.patrol.spawns[0];
     if (!base) return null;
@@ -279,10 +279,10 @@ const none = await page.evaluate(async () => {
   r.profile.setEscort(null);
   r.profile.state.escortUid = null;
   r.show('patrol');
-  await new Promise((res) => setTimeout(res, 250));
+  r.refreshSpawns();
   for (let i = 0; i < 40 && r.patrol.spawns.length === 0; i++) {
     r.patrol.x += 90; r.patrol.y += 40;
-    await new Promise((res) => setTimeout(res, 60));
+    r.refreshSpawns();
   }
   const base = r.patrol.spawns[0];
   const spawn = { ...base, id: `noesc-${Math.random()}`, speciesId: 'cinderfang', packSize: 1 };

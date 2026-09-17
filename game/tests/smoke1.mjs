@@ -93,7 +93,7 @@ const engaged = await page.evaluate(async () => {
   // had no species at all and this line was quietly describing a content bug.
   for (let i = 0; i < 40 && r.patrol.spawns.length === 0; i++) {
     r.patrol.x += 90; r.patrol.y += 40;
-    await new Promise((res) => setTimeout(res, 60));
+    r.refreshSpawns();
   }
   const easiest = [...r.patrol.spawns]
     .sort((a, b) => r.speciesById[a.speciesId].stats.hp - r.speciesById[b.speciesId].stats.hp)[0];

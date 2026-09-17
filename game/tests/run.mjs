@@ -127,17 +127,38 @@ const base = `http://127.0.0.1:${server.address().port}/riftborn/`;
 
 const wanted = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(SUITES);
 let failed = 0;
+/*
+ * Time each suite. Without this the only thing anyone knew about the run was
+ * that it took "about ninety minutes", which is not a number you can act on —
+ * it says nothing about whether that is one suite or fourteen.
+ */
+const times = [];
 for (const name of wanted) {
   const file = SUITES[name];
   if (!file) { console.error(`unknown suite "${name}" — try ${Object.keys(SUITES).join(', ')}`); failed++; continue; }
   console.log(`\n=== ${name} ===`);
+  const started = Date.now();
   const code = await new Promise((done) => {
     const child = spawn(process.execPath, [new URL(file, import.meta.url).pathname],
                         { stdio: 'inherit', env: { ...process.env, RIFTBORN_URL: base } });
     child.on('exit', done);
   });
+  const seconds = (Date.now() - started) / 1000;
+  times.push({ name, seconds, ok: code === 0 });
+  console.log(`--- ${name}: ${seconds.toFixed(1)}s ---`);
   if (code !== 0) failed++;
 }
 server.close();
+
+const total = times.reduce((a, t) => a + t.seconds, 0);
+if (times.length > 1) {
+  console.log('\nTIME');
+  for (const t of [...times].sort((a, b) => b.seconds - a.seconds)) {
+    const share = total ? (t.seconds / total) * 100 : 0;
+    console.log(`  ${t.name.padEnd(12)} ${t.seconds.toFixed(1).padStart(7)}s  ${share.toFixed(0).padStart(3)}%`
+      + `  ${'#'.repeat(Math.max(0, Math.round(share / 2)))}`);
+  }
+  console.log(`  ${'total'.padEnd(12)} ${total.toFixed(1).padStart(7)}s  (${(total / 60).toFixed(1)} min)`);
+}
 console.log(failed ? `\n${failed} suite(s) failed` : '\nall suites passed');
 process.exit(failed ? 1 : 0);

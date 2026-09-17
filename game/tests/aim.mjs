@@ -24,16 +24,21 @@ await page.addInitScript(() => {
     r.profile.state.aimMode = mode;
     r.profile.save();
     r.show('patrol');
-    await new Promise((d) => setTimeout(d, 250));
+    /*
+     * Walk by stepping the world directly rather than nudging a coordinate and
+     * sleeping for the next animation frame. The old loop cost up to 2.65s per
+     * encounter and these checks set up dozens — it was most of two suites.
+     */
+    r.refreshSpawns();
     for (let i = 0; i < 40 && r.patrol.spawns.length === 0; i++) {
       r.patrol.x += 90; r.patrol.y += 40;
-      await new Promise((d) => setTimeout(d, 60));
+      r.refreshSpawns();
     }
     const base = r.patrol.spawns[0];
     if (!base) return null;
     const spawn = { ...base, id: `aim-${Math.random()}`, speciesId, packSize };
     r.teleportTo(spawn); r.startFight(spawn);
-    await new Promise((d) => setTimeout(d, 300));
+    await new Promise((d) => requestAnimationFrame(d));
     return r.fight ?? null;
   };
 });
