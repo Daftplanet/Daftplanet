@@ -94,6 +94,8 @@ pace — shift to dusk and the map fills with Ember and Volt, where daytime is S
 | `js/input.js` | Keyboard, mouse and touch → an `intent` object. |
 | `js/app.js` | View routing and glue. |
 | `data/*.json` | Synced from `game/data/`. Do not edit here. |
+| `sw.js` | Service worker: precache, offline, update-on-reconnect. |
+| `manifest.webmanifest` | PWA manifest and icon set. |
 
 The fight and world layers avoid browser APIs so that
 [`game/tools/balance_sim.mjs`](../../game/tools/balance_sim.mjs) can drive **the

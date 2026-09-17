@@ -30,7 +30,20 @@ const C = {
 
 export function fitCanvas(canvas) {
   const parent = canvas.parentElement;
-  const scale = Math.min(parent.clientWidth / ARENA.w, parent.clientHeight / ARENA.h);
+  const availW = parent.clientWidth || ARENA.w;
+  const availH = parent.clientHeight;
+
+  /*
+   * On the stacked mobile layout the stage sizes itself to its content, so the
+   * canvas height and the parent height depend on each other. A canvas measured
+   * while hidden reports a parent height of 0 and would pin itself to 0px — which
+   * silently collapsed the fight arena on phones, the one platform this is for.
+   * With no usable height to divide by, fit to width and let it letterbox.
+   */
+  const scale = availH > 40
+    ? Math.min(availW / ARENA.w, availH / ARENA.h)
+    : availW / ARENA.w;
+
   const dpr = window.devicePixelRatio || 1;
   canvas.width = Math.round(ARENA.w * dpr);
   canvas.height = Math.round(ARENA.h * dpr);

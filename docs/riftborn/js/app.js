@@ -335,7 +335,10 @@ function boot(data) {
     if (fight?.outcome && (e.code === 'Enter' || e.code === 'Space')) { e.preventDefault(); show('patrol'); }
     else if (e.code === 'Escape') { e.preventDefault(); withdraw(); }
   });
-  window.addEventListener('resize', () => { mapView = fitCanvas(mapCanvas); fightView = fitCanvas(fightCanvas); });
+  window.addEventListener('resize', () => {
+    if (view === 'patrol') mapView = fitCanvas(mapCanvas);
+    if (view === 'fight') fightView = fitCanvas(fightCanvas);
+  });
 
   function renderFightHud(elapsed) {
     const f = fight;
@@ -682,6 +685,32 @@ function boot(data) {
   show('patrol');
   $('boot').hidden = true;
   requestAnimationFrame(frame);
+}
+
+/*
+ * Register the service worker so the game installs to a home screen and keeps
+ * working with no signal. Failure here is never fatal — the page runs fine
+ * without it, and it simply will not be available over file://.
+ */
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').then((reg) => {
+      reg.addEventListener('updatefound', () => {
+        const installing = reg.installing;
+        if (!installing) return;
+        installing.addEventListener('statechange', () => {
+          // A new build is ready and an old one is still controlling the page.
+          if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+            const el = $('patrol-flash');
+            if (el) {
+              el.textContent = 'Update ready — reload to apply.';
+              el.hidden = false;
+            }
+          }
+        });
+      });
+    }).catch((err) => console.warn('[sw] registration failed', err));
+  });
 }
 
 loadData()

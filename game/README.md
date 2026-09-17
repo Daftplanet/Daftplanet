@@ -61,7 +61,11 @@ checked rather than asserted.
 ```sh
 python3 -m http.server -d docs 8000     # then open localhost:8000/riftborn/
 node game/tools/balance_sim.mjs 400     # outcome table by strategy and skill
+python3 game/tools/stamp_sw.py --check  # service worker cache stamp is current
 ```
+
+It is an installable PWA that plays fully offline, published from `main` → `docs/`
+at `https://daftplanet.github.io/Daftplanet/riftborn/`.
 
 What they changed about this bible is in [10](10-phase0-findings.md),
 [11](11-phase1-findings.md) and [12](12-phase2-findings.md).
