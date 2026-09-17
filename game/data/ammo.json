@@ -1,0 +1,46 @@
+{
+  "$comment": "RIFTBORN ammunition. Lethal rounds go in chamber A, capture rounds in chamber B.",
+  "version": 1,
+  "lethal": [
+    { "id": "ball_round",   "name": "Ball Round",   "tier": 1, "damage_multiplier": 1.0, "element": null,    "effect": null,                                       "fits": ["marker_pistol", "splitbore", "longtooth"] },
+    { "id": "slug",         "name": "Slug",         "tier": 2, "damage_multiplier": 1.6, "element": null,    "effect": "splitbore_single_projectile",              "fits": ["splitbore", "longtooth"] },
+    { "id": "piercing_round","name": "Piercing Round","tier": 2,"damage_multiplier": 1.0, "element": null,   "effect": "halve_armour_reduction",                   "fits": ["marker_pistol", "longtooth", "tether_harpoon"], "note": "Poor value against unarmoured targets." },
+    { "id": "incendiary",   "name": "Incendiary",    "tier": 3, "damage_multiplier": 0.8, "element": "ember", "effect": "burning", "dot": { "dps": 8, "seconds": 6 }, "fits": ["splitbore", "longtooth", "lattice_launcher"] },
+    { "id": "cryo_round",   "name": "Cryo Round",    "tier": 3, "damage_multiplier": 0.7, "element": "tide",  "effect": "chilled", "status_seconds": 5,             "fits": ["marker_pistol", "longtooth", "lattice_launcher"] },
+    { "id": "arc_cell",     "name": "Arc Cell",      "tier": 3, "damage_multiplier": 1.0, "element": "volt",  "effect": "stunned_on_third_chain",                   "fits": ["arcbrand_coil"] },
+    { "id": "broadhead",    "name": "Broadhead",     "tier": 2, "damage_multiplier": 1.3, "element": null,    "effect": "bleeding", "dot": { "dps": 5, "seconds": 8 }, "fits": ["sylvan_bow", "sting_crossbow"] }
+  ],
+  "capture": [
+    { "id": "tranq_dart",          "name": "Tranq Dart",           "tier": 1, "restraint_multiplier": 1.0, "applies": "sedated",  "stacks_to_apply": 3, "fits": ["marker_pistol", "longtooth", "sting_crossbow"] },
+    { "id": "heavy_sedative_dart", "name": "Heavy Sedative Dart",  "tier": 3, "restraint_multiplier": 1.4, "applies": "sedated",  "stacks_to_apply": 1, "fits": ["longtooth", "sting_crossbow"], "note": "Slow projectile with heavy drop. Leads moving targets badly." },
+    { "id": "net_shell",           "name": "Net Shell",            "tier": 2, "restraint_multiplier": 1.2, "applies": "ensnared", "stacks_to_apply": 1, "fits": ["splitbore", "lattice_launcher"], "note": "Short range only." },
+    { "id": "snare_grenade",       "name": "Snare Grenade",        "tier": 3, "restraint_multiplier": 1.1, "applies": "ensnared", "stacks_to_apply": 1, "aoe_radius_m": 6.0, "fits": ["lattice_launcher"] },
+    { "id": "rune_arrow",          "name": "Rune Arrow",           "tier": 3, "restraint_multiplier": 1.5, "applies": null,       "silent": true, "bonus_vs": ["gloom", "lumen"], "bonus_multiplier": 1.3, "fits": ["sylvan_bow", "sting_crossbow"] },
+    { "id": "lullaby_bolt",        "name": "Lullaby Bolt",         "tier": 4, "restraint_multiplier": 0.8, "applies": "calmed",   "status_seconds": 10, "never_enrages": true, "fits": ["sylvan_bow", "sting_crossbow"] },
+    { "id": "anchor_tether",       "name": "Anchor Tether",        "tier": 4, "restraint_multiplier": 1.1, "applies": "anchored", "fits": ["tether_harpoon"], "note": "Mandatory for any Colossus or Titan capture." }
+  ],
+  "statuses": {
+    "sedated":  { "restraint_multiplier": 1.8, "halts_restraint_decay": true,  "move_speed_multiplier": 0.5 },
+    "ensnared": { "restraint_multiplier": 1.5, "halts_restraint_decay": false, "prevents_flee": true, "prevents_move": true },
+    "stunned":  { "restraint_multiplier": 1.3, "halts_restraint_decay": false, "seconds": 2, "prevents_actions": true },
+    "anchored": { "restraint_multiplier": 1.4, "halts_restraint_decay": true,  "prevents_flee": true },
+    "chilled":  { "restraint_multiplier": 1.2, "move_speed_multiplier": 0.6 },
+    "burning":  { "restraint_multiplier": 0.9, "dps": 8 },
+    "bleeding": { "restraint_multiplier": 1.0, "dps": 5 },
+    "enraged":  { "restraint_multiplier": 0.6, "damage_dealt_multiplier": 1.4, "prevents_flee": true },
+    "calmed":   { "restraint_multiplier": 1.1, "prevents_flee": true }
+  },
+  "status_product_cap": 2.5,
+  "hit_zones": { "body": { "damage": 1.0, "restraint": 1.0 }, "limb": { "damage": 0.7, "restraint": 0.7 }, "weak_point": { "damage": 2.5, "restraint": 2.0 } },
+  "ambush": { "damage_multiplier": 1.8, "restraint_multiplier": 1.5, "requires": "target_unaware" },
+  "formulas": {
+    "damage": "base_damage * ammo_damage_multiplier * element_multiplier * hit_zone_damage * (1 - armour_reduction) * ambush_multiplier",
+    "restraint_gain": "ammo_restraint_multiplier * weapon_restraint_rating * hit_zone_restraint * status_product * wound_multiplier / size_resistance",
+    "wound_multiplier": "1.0 + 2.0 * (1 - current_hp / max_hp)",
+    "restraint_required": "species_base_restraint * size_restraint_multiplier * (1 + 0.15 * evolution_stage)",
+    "restraint_decay_per_second": "4.0 + 0.35 * species_tier",
+    "flee_chance_per_second": "skittishness * (1 - restraint / restraint_required)"
+  },
+  "subdue_window_seconds": 5,
+  "failed_subdue": { "restraint_retained": 0.5, "applies": "enraged" }
+}
