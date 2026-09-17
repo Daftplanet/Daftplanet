@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Checklist">
+  <rect width="64" height="64" fill="#2f6fed"/>
+  <path d="M21 33 L28.5 40.5 L43 24"
+        fill="none" stroke="#ffffff" stroke-width="6"
+        stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
