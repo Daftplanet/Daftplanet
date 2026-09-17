@@ -114,6 +114,64 @@ export function timeWindow(date = new Date()) {
   return 'night';
 }
 
+/*
+ * The bestiary's placement vocabulary is wider than `timeWindow`'s four coarse
+ * answers. `midnight` is a narrow slice inside `night`, and `event` means "only
+ * while the event that carries it is running". Neither was ever implemented, so
+ * every species asking for one — Nyxhollow among them — could never be placed.
+ *
+ * `timeWindow` keeps returning the four coarse names, because that is what the
+ * spawn weighting is built on; this is the finer question, asked separately.
+ */
+const WINDOW_HOURS = {
+  dawn: [4, 7], day: [7, 17], dusk: [17, 21], night: [21, 4], midnight: [23, 1],
+};
+
+export function inTimeWindow(name, date = new Date()) {
+  if (name === 'any') return true;
+  // `event` is not a clock window at all — whatever carries it decides when.
+  if (name === 'event') return true;
+  const span = WINDOW_HOURS[name];
+  if (!span) return false;
+  const h = date.getHours();
+  const [lo, hi] = span;
+  return lo > hi ? (h >= lo || h < hi) : (h >= lo && h < hi);
+}
+
+/*
+ * The bestiary asks for `requires_weather: "storm"`; the weather table has
+ * `thunderstorm`. Nothing bridged the two, so Karrahk's one condition could
+ * never be satisfied by any weather the world actually produces.
+ */
+const WEATHER_KINDS = { storm: ['thunderstorm'] };
+
+export function weatherIs(kind, weather) {
+  if (!kind) return true;
+  if (kind === weather) return true;
+  return (WEATHER_KINDS[kind] ?? []).includes(weather);
+}
+
+/**
+ * Does this species' published placement allow it here, now, in this weather?
+ *
+ * `rift_event` is a biome no tile ever has: it means "inside a rift", so a species
+ * asking for it fits any rift and nothing else.
+ */
+export function placementFits(species, { biome, weather, date, inRift = false }) {
+  const biomes = species.spawn.biomes ?? [];
+  const biomeOk = biomes.includes(biome) || (inRift && biomes.includes('rift_event'));
+  if (!biomeOk) return false;
+  if (!weatherIs(species.spawn.requires_weather, weather)) return false;
+  const windows = species.spawn.time_windows ?? ['any'];
+  return windows.some((w) => inTimeWindow(w, date));
+}
+
+/** Every placement term the data uses, so a test can check the engine speaks them all. */
+export const PLACEMENT_VOCABULARY = {
+  timeWindows: [...Object.keys(WINDOW_HOURS), 'any', 'event'],
+  weatherKinds: [...Object.keys(WEATHER_KINDS)],
+};
+
 export function timeBucket(date = new Date()) {
   return Math.floor(date.getTime() / BUCKET_MS);
 }
@@ -269,38 +327,85 @@ export const RIFT_DURATION_MIN = 75;
 export const APEX_WINDOW_MIN = 20;                 // the apex shows up for the finale
 export const RIFT_RANK = 12;
 
+/*
+ * The three apexes, and the rule that decides which one a rift carries.
+ *
+ * This used to be a flat random pick, which quietly contradicted the bestiary:
+ * Karrahk is published as waterside-in-a-storm and Nyxhollow as urban core or
+ * woodland at midnight, and a rift dropped either of them into a car park at two
+ * in the afternoon. Aeonrend is the rift-native one — `rift_event` / `event`, no
+ * further conditions — so it is always eligible and always the fallback.
+ *
+ * Honouring the rules is what makes Research II worth buying on an apex: once you
+ * know Karrahk wants water and a storm, you can go and find one.
+ */
 const APEX_IDS = ['karrahk', 'nyxhollow', 'aeonrend_apex'];
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 const dayIndex = (date) => Math.floor(date.getTime() / DAY_MS);
 
-/** The rift for one cell on one day, whether or not it is currently open. */
-export function riftForCell(cx, cy, day, seed = 1) {
+/**
+ * The rift for one cell on one day, whether or not it is currently open.
+ *
+ * `apexById` is optional. Without it the rift still schedules and still opens —
+ * it just falls back to the rift-native apex, because deciding which apex fits
+ * needs the bestiary's placement rules and the caller may not have them.
+ */
+export function riftForCell(cx, cy, day, seed = 1, apexById = null) {
   const roll = hash(cx, cy, day, seed + 41);
-  const startHour = 8 + Math.floor(hash(cx, cy, day, seed + 43) * 14);   // 08:00–21:00
+  /*
+   * 08:00–23:00. The old range stopped at 21:00, which capped the latest possible
+   * apex window at 22:35 — so `midnight`, the one window Nyxhollow is published
+   * in, was unreachable by construction. A late rift is rare and that is correct:
+   * a midnight apex should take planning to reach.
+   */
+  const startHour = 8 + Math.floor(hash(cx, cy, day, seed + 43) * 16);
   const startMin = Math.floor(hash(cx, cy, day, seed + 47) * 4) * 15;
 
-  const midnight = day * DAY_MS;
-  const startMs = midnight + startHour * 3600000 + startMin * 60000;
+  const dayStart = day * DAY_MS;
+  const startMs = dayStart + startHour * 3600000 + startMin * 60000;
   const endMs = startMs + RIFT_DURATION_MIN * 60000;
+  const apexFromMs = endMs - APEX_WINDOW_MIN * 60000;
 
   // Sit it a little off the cell centre so rifts are not on a visible grid.
   const ox = 0.3 + hash(cx, cy, day, seed + 53) * 0.4;
   const oy = 0.3 + hash(cx, cy, day, seed + 59) * 0.4;
+  const x = (cx + ox) * RIFT_CELL_TILES * TILE_M;
+  const y = (cy + oy) * RIFT_CELL_TILES * TILE_M;
+
+  // The context that decides the apex is the one at the moment it appears, not
+  // when the rift opens an hour earlier.
+  const at = new Date(apexFromMs);
+  const biome = biomeAt(Math.floor(x / TILE_M), Math.floor(y / TILE_M), seed);
+  const weather = weatherAt(at, seed);
+
+  let apexId = 'aeonrend_apex';
+  let eligible = null;
+  if (apexById) {
+    eligible = APEX_IDS.filter((id) => {
+      const sp = apexById[id];
+      return sp && placementFits(sp, { biome, weather, date: at, inRift: true });
+    });
+    if (eligible.length) apexId = eligible[Math.floor(roll * eligible.length)];
+  }
 
   return {
     id: `rift:${cx}:${cy}:${day}`,
-    x: (cx + ox) * RIFT_CELL_TILES * TILE_M,
-    y: (cy + oy) * RIFT_CELL_TILES * TILE_M,
+    x, y,
     startMs,
     endMs,
-    apexId: APEX_IDS[Math.floor(roll * APEX_IDS.length)],
-    apexFromMs: endMs - APEX_WINDOW_MIN * 60000,
+    apexId,
+    apexFromMs,
+    // Carried so the UI can say why this rift has the apex it has, and so a
+    // Warden reading Research II can act on it.
+    biome,
+    weather,
+    apexEligible: eligible,
   };
 }
 
 /** Every rift near a position, today and tomorrow, sorted by distance. */
-export function riftsNear(px, py, date = new Date(), seed = 1, cells = 1) {
+export function riftsNear(px, py, date = new Date(), seed = 1, cells = 1, apexById = null) {
   const cell = RIFT_CELL_TILES * TILE_M;
   const cx0 = Math.floor(px / cell), cy0 = Math.floor(py / cell);
   const today = dayIndex(date);
@@ -309,7 +414,7 @@ export function riftsNear(px, py, date = new Date(), seed = 1, cells = 1) {
   for (let dy = -cells; dy <= cells; dy++) {
     for (let dx = -cells; dx <= cells; dx++) {
       for (const day of [today, today + 1]) {
-        const r = riftForCell(cx0 + dx, cy0 + dy, day, seed);
+        const r = riftForCell(cx0 + dx, cy0 + dy, day, seed, apexById);
         r.distance = Math.hypot(r.x - px, r.y - py);
         r.opensInMs = r.startMs - date.getTime();
         r.active = date.getTime() >= r.startMs && date.getTime() < r.endMs;
@@ -322,13 +427,14 @@ export function riftsNear(px, py, date = new Date(), seed = 1, cells = 1) {
 }
 
 /** The rift the Warden is currently standing inside, if it is open. */
-export function riftAt(px, py, date = new Date(), seed = 1) {
-  return riftsNear(px, py, date, seed).find((r) => r.active && r.distance <= RIFT_RADIUS_M) ?? null;
+export function riftAt(px, py, date = new Date(), seed = 1, apexById = null) {
+  return riftsNear(px, py, date, seed, 1, apexById)
+    .find((r) => r.active && r.distance <= RIFT_RADIUS_M) ?? null;
 }
 
 /** The next rift worth walking to: open now, or opening soonest. */
-export function nextRift(px, py, date = new Date(), seed = 1) {
-  const near = riftsNear(px, py, date, seed);
+export function nextRift(px, py, date = new Date(), seed = 1, apexById = null) {
+  const near = riftsNear(px, py, date, seed, 1, apexById);
   return near.find((r) => r.active)
     ?? near.filter((r) => r.opensInMs > 0).sort((a, b) => a.opensInMs - b.opensInMs)[0]
     ?? null;
@@ -382,4 +488,52 @@ export function riftSpawns(rift, px, py, pool, apexById, bucket, seed = 1) {
   }
 
   return out.sort((a, b) => a.distance - b.distance);
+}
+
+/*
+ * The rift forecast.
+ *
+ * Honouring the bestiary's placement rules makes Karrahk and Nyxhollow genuinely
+ * rare — about 0.4% and 1.1% of rifts — which is correct and, on its own, would
+ * make them unfindable. The answer is not to loosen the rules; it is the thing
+ * 09-risks-and-roadmap.md already asks for: rifts are "scheduled, announced
+ * ahead". So scan wide and tell the Warden when and where the next one of each is.
+ *
+ * Cells are 1.2 km apart, so a ±3 scan covers about 8.4 km of city across the next
+ * four days. At that range it is a Karrahk roughly every three days and a Nyxhollow
+ * every two — an expedition to plan, not a lottery to wait out. A ±1 scan, which is
+ * all the live rift list uses, turns up neither in a month.
+ */
+export const FORECAST_CELLS = 3;        // ±3 cells ≈ 8.4 km across
+export const FORECAST_DAYS = 4;
+
+export function apexForecast(px, py, date = new Date(), seed = 1, apexById = null, opts = {}) {
+  const cells = opts.cells ?? FORECAST_CELLS;
+  const days = opts.days ?? FORECAST_DAYS;
+  const cell = RIFT_CELL_TILES * TILE_M;
+  const cx0 = Math.floor(px / cell), cy0 = Math.floor(py / cell);
+  const today = dayIndex(date);
+  const now = date.getTime();
+
+  const best = {};
+  for (let dy = -cells; dy <= cells; dy++) {
+    for (let dx = -cells; dx <= cells; dx++) {
+      for (let d = 0; d < days; d++) {
+        const r = riftForCell(cx0 + dx, cy0 + dy, today + d, seed, apexById);
+        // Only things still to come, or the one running right now.
+        if (r.endMs <= now) continue;
+        const cur = best[r.apexId];
+        if (!cur || r.apexFromMs < cur.apexFromMs) {
+          best[r.apexId] = {
+            ...r,
+            distance: Math.hypot(r.x - px, r.y - py),
+            opensInMs: r.startMs - now,
+            apexInMs: r.apexFromMs - now,
+            active: now >= r.startMs && now < r.endMs,
+          };
+        }
+      }
+    }
+  }
+  return APEX_IDS.map((id) => best[id]).filter(Boolean).sort((a, b) => a.apexFromMs - b.apexFromMs);
 }

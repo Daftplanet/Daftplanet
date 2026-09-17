@@ -283,6 +283,20 @@ canvas {
 .view { display: flex; flex-direction: column; gap: 8px; flex: 1 1 auto; min-height: 0; }
 .view--scroll { overflow: auto; }
 
+/*
+ * The patrol view grew a second board (contracts, then the rift forecast) and
+ * stopped fitting. A flex child that overflows paints outside its box, so the map
+ * canvas ended up drawn over the tab strip and silently swallowed every click on
+ * it — the Sanctuary tab was visible, enabled, and unclickable.
+ *
+ * Two independent guards, because either alone would have hidden this again:
+ * the view scrolls its own overflow, and the chrome sits in a layer above any
+ * view that manages to overflow anyway.
+ */
+#view-patrol { overflow: auto; }
+#view-patrol > .stage { flex: 1 0 auto; }
+.bar--warden { position: relative; z-index: 3; }
+
 /* ---- warden bar */
 .bar--warden { display: grid; grid-template-columns: 1fr auto auto; gap: 14px; align-items: center; }
 
@@ -622,3 +636,16 @@ select {
 
 .ability b { color: var(--c, var(--ink)); }
 .ability { color: var(--ink-dim); }
+
+/* ---- rift forecast */
+#forecast { display: grid; gap: 6px; }
+.cast {
+  display: grid; grid-template-columns: auto 1fr; gap: 9px; align-items: start;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 11px;
+}
+.cast[data-live="true"] { border-color: var(--rift, #b05ad0); }
+.cast__body { display: grid; gap: 2px; min-width: 0; }
+.cast__body b { color: var(--ink); font-size: 13px; }
+.cast__body span { font-size: 10px; color: var(--ink-dim); }
+.cast__why[data-known="false"] { color: var(--ink-faint); font-style: italic; }

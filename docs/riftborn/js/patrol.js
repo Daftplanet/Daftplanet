@@ -71,9 +71,12 @@ export function stepPatrol(p, dt, intent) {
    */
   const seed = p.profile.state.seed;
   const riftOpen = p.profile.rank >= RIFT_RANK || p.profile.state.devUnlockAll;
-  p.rifts = riftsNear(p.x, p.y, date, seed);
-  p.rift = riftOpen ? riftAt(p.x, p.y, date, seed) : null;
-  p.upcoming = riftOpen ? nextRift(p.x, p.y, date, seed) : null;
+  // apexById goes in so the rift can honour each apex's published placement:
+  // Karrahk wants waterside in a storm, Nyxhollow urban core or woodland at
+  // midnight, and Aeonrend is the one that fits any rift at all.
+  p.rifts = riftsNear(p.x, p.y, date, seed, 1, p.apexById);
+  p.rift = riftOpen ? riftAt(p.x, p.y, date, seed, p.apexById) : null;
+  p.upcoming = riftOpen ? nextRift(p.x, p.y, date, seed, p.apexById) : null;
 
   p.spawns = (p.rift
     ? riftSpawns(p.rift, p.x, p.y, p.pool, p.apexById, bucket, seed)

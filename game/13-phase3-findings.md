@@ -914,3 +914,134 @@ Both modes ship. It is a setting, and the setting persists.
 5. Assisted mode ignores the crosshair entirely, so the Splitbore's pellet cone and
    the Lattice Launcher's area shots have no aim point of their own. Both still
    work, but neither is *placed* — they just go where the lock is.
+
+---
+
+# Phase 3, part 8: The world learns to read its own bestiary
+
+The rift events built in part 2 picked their apex at random. The bestiary has always
+said otherwise:
+
+| Apex | Published placement |
+|---|---|
+| Karrahk | `waterside`, `requires_weather: storm` |
+| Nyxhollow | `urban_core` or `woodland`, `midnight` |
+| Aeonrend | `rift_event`, `event` — no further conditions |
+
+A rift dropped Karrahk into a car park at two in the afternoon. Fixing that turned
+out to be the smallest part of the job.
+
+## Three words the engine had never learned
+
+The bestiary has used `midnight`, `event` and `requires_weather: "storm"` since
+phase 0. The engine understood none of them and said nothing:
+
+- `timeWindow()` returns exactly four values — dawn, day, dusk, night. `midnight`
+  and `event` matched nothing, ever.
+- The weather table has `thunderstorm`. Nothing mapped `storm` to it, so the only
+  weather condition in the whole bestiary could never be satisfied by any weather
+  the world produces.
+
+Two of the three apexes were therefore unplaceable by their own rules, and the
+only reason they appeared at all was that the code was ignoring the rules.
+
+There is now a placement layer — `inTimeWindow`, `weatherIs`, `placementFits` —
+and, more usefully, a `PLACEMENT_VOCABULARY` export and **a test that walks every
+placement term the data uses and fails if the engine does not speak it.** That is
+the check that would have caught this in phase 0, and it is the generalisable
+fix: content and code drift apart silently, and only an assertion that compares
+them catches it.
+
+## A schedule that could not reach the one window it needed
+
+Honouring `midnight` was not enough, because rifts opened between 08:00 and 21:00
+and ran 75 minutes with the apex in the last 20. The latest possible apex window
+was **22:35**. Nyxhollow's only window was unreachable by construction: the rules
+would have been obeyed to the letter and the species still never seen.
+
+Rifts now open 08:00–23:00. A late rift is rare, which is right — a midnight apex
+should take planning.
+
+## Honouring the rules makes them vanish, so announce them
+
+With the conditions enforced, Karrahk is **0.4%** of rifts and Nyxhollow **1.1%**.
+Within the 1.2 km the live rift list scans, neither turns up in a month.
+
+The answer is not to loosen the rules. It is the thing `09-risks-and-roadmap.md`
+already asked for and the build had never delivered: rifts are *"scheduled,
+announced ahead"*. There is now a **rift forecast** that scans about 8 km of city
+across four days and says when and where each apex is next due — a Karrahk roughly
+every three days, a Nyxhollow every two.
+
+What it will not tell you is *why* a given rift carries that apex. The conditions
+stay behind **Research II**, which is exactly what `07-codex-wiki.md` sells at that
+tier: "spawn biome, time window, weather modifier — you can hunt it deliberately
+instead of hoping." Until then the board reads `Research II reveals its conditions`.
+
+That is the first time research on an apex has been worth anything.
+
+## And then the world turned out to have dead ground
+
+Chasing an intermittent phase 1 failure — `spawns generated — 0 in range` — into a
+per-biome density count turned up this:
+
+```
+industrial   12 species     urban_core   15     woodland    12
+open_ground  12             waterside     9     works        9
+parkland      9             transit       6     residential  0
+```
+
+**`residential` is 16% of the map and had nothing living in it.** It is also the
+biome a player is most often standing in, because it is where people live.
+
+`08-world-and-progression.md` is explicit about the intent — *"Mixed, low rate"*,
+*"deliberately the thinnest table"* — and the generator implements that faithfully
+with a 7% tile rate, the lowest on the map. No species listed the biome, so 7%
+was really 0%.
+
+It now has a mixed table: one common species from each of six families — Ember,
+Verdant, Stone, Volt, Gloom, Lumen — so no element dominates. A bit of everything
+and a lot of nothing, which is what "we do not want the optimal play to be standing
+in someone's front garden" should feel like.
+
+The suite that had been failing on this intermittently for weeks carried a comment,
+which I wrote, saying *"a residential tile only spawns 7% of the time, so an empty
+patch is the world working"*. It was not the world working. **A comment that
+explains away a failure is worth exactly as much as the measurement behind it, and
+that one had none.** There is now a check that every biome the generator can
+produce has something that lives in it — the mirror of phase 2's "every wild species
+is reachable".
+
+## Two regressions the suites caught, and one theory they disproved
+
+**The forecast board made the patrol view overflow, and the map canvas painted over
+the tab strip.** The Sanctuary tab was visible, enabled, and unclickable — Playwright
+reported `<canvas id="map"> … intercepts pointer events` after 30 seconds of
+retrying. A flex child that overflows paints outside its box. Fixed twice over,
+because either fix alone would have hidden it again: the patrol view scrolls its own
+overflow now, and the chrome sits in a layer above any view that overflows anyway.
+
+**The rift suite jumped its clock to a window in the past.** It picked its target
+with `riftsNear(...)[0]` — nearest by distance, out of today's *and* tomorrow's
+rifts — and the widened schedule changed which one that was. It now picks through
+the forecast: the soonest apex window still ahead, which is also what a player
+would do.
+
+And one theory that did not survive contact. The intermittent freeze looked like a
+cache bug I had just written: the forecast recomputed whenever its result was empty,
+so an empty result would never be cached and 196 rift schedules would rebuild every
+frame. Plausible, and wrong — **0 of 200 world seeds produce an empty forecast, and
+60 scans cost 14 ms.** The cache is still fixed, because caching only non-empty
+results is wrong on its own merits, but it was never the freeze. The freeze was the
+canvas above.
+
+## Still open
+
+1. **Party play** — the last untouched phase 3 item, still netcode-bound.
+2. **Public profiles and local leaderboards** — transport, not data.
+3. The forecast scans a fixed 8 km. A real build would scan what the player can
+   plausibly travel, which is a different distance in Tokyo than in the Highlands.
+4. Nothing warns you that the Karrahk you have been waiting for is in two hours.
+   The board is a board; it is not a notification.
+5. Residential's six species are a first pass. The design says "mixed", and six
+   families out of twelve is only half a mix.

@@ -31,7 +31,7 @@ grows your collection.
 | [10-phase0-findings.md](10-phase0-findings.md) | What building the fight taught us, and the three maths bugs it caught |
 | [11-phase1-findings.md](11-phase1-findings.md) | The vertical slice: a collision bug that had been distorting phase 0, and what the map taught us |
 | [12-phase2-findings.md](12-phase2-findings.md) | The loop closes: a world that could not host its own bestiary, and evolution against real-world time and weather |
-| [13-phase3-findings.md](13-phase3-findings.md) | Packs, rift events, apexes, the two-weapon loadout, weapon mods, the Codex as a record, and roadmap decisions 1 and 2 answered with numbers — including a phase 1 decision that took three phases to prove wrong, a magazine that kills fewer monsters by being bigger, a cosmetic number that cost five points of culls, a burn that made its target immortal, and three separate routes to the discovery that this game punishes precision on a capture |
+| [13-phase3-findings.md](13-phase3-findings.md) | Packs, rift events, apexes, the two-weapon loadout, weapon mods, the Codex as a record, roadmap decisions 1 and 2 answered with numbers, and the world learning to read its own bestiary — including a phase 1 decision that took three phases to prove wrong, a magazine that kills fewer monsters by being bigger, a cosmetic number that cost five points of culls, a burn that made its target immortal, three separate routes to the discovery that this game punishes precision on a capture, and 16% of the map that had nothing living in it |
 
 ## Machine-readable data
 
@@ -59,8 +59,10 @@ I–III, contracts and weather — and now pack spawns, scheduled rift events, t
 three phased apexes, a two-weapon loadout, the full weapon-mod table, measured
 specimens with shareable field reports, the first of the Codex completion rewards,
 an escort that brings one resident's ability into the fight, and both answers to the
-aim question — free aim and an assisted mode built for a thumb. Party play and the
-server-side half of Codex sharing are what remain. It runs the design's real formulas out of `data/`, and the same
+aim question — free aim and an assisted mode built for a thumb. Apexes now appear
+only where and when the bestiary says they do, and a rift forecast says where the
+next one is due. Party play and the server-side half of Codex sharing are what
+remain. It runs the design's real formulas out of `data/`, and the same
 fight and world code runs headlessly in a balance sim so tuning claims can be
 checked rather than asserted.
 
@@ -73,7 +75,7 @@ ESCORT=1 node game/tools/balance_sim.mjs     # what one resident's ability is wo
 ESCORT=1 SPECIES=railmane WEAPON=longtooth LETHAL=slug node game/tools/balance_sim.mjs
 AIM=1 node game/tools/balance_sim.mjs        # free aim vs assisted, by input quality
 python3 game/tools/stamp_sw.py --check  # service worker cache stamp is current
-node game/tests/run.mjs                 # ten browser suites against the real UI
+node game/tests/run.mjs                 # eleven browser suites against the real UI
 ```
 
 It is an installable PWA that plays fully offline, published from `main` → `docs/`

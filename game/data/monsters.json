@@ -48,7 +48,8 @@
         "biomes": [
           "industrial",
           "urban_core",
-          "works"
+          "works",
+          "residential"
         ],
         "time_windows": [
           "dusk",
@@ -721,7 +722,8 @@
       "spawn": {
         "biomes": [
           "parkland",
-          "woodland"
+          "woodland",
+          "residential"
         ],
         "time_windows": [
           "day"
@@ -1051,7 +1053,8 @@
         "biomes": [
           "works",
           "open_ground",
-          "industrial"
+          "industrial",
+          "residential"
         ],
         "time_windows": [
           "any"
@@ -1332,7 +1335,8 @@
         "biomes": [
           "transit",
           "urban_core",
-          "industrial"
+          "industrial",
+          "residential"
         ],
         "time_windows": [
           "dusk",
@@ -1523,7 +1527,8 @@
       "spawn": {
         "biomes": [
           "urban_core",
-          "woodland"
+          "woodland",
+          "residential"
         ],
         "time_windows": [
           "night"
@@ -1664,7 +1669,8 @@
         "biomes": [
           "parkland",
           "urban_core",
-          "open_ground"
+          "open_ground",
+          "residential"
         ],
         "time_windows": [
           "day"

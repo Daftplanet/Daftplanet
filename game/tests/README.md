@@ -1,6 +1,6 @@
 # Browser suites
 
-Ten Playwright suites that drive the real prototype in a real browser: they click
+Eleven Playwright suites that drive the real prototype in a real browser: they click
 the real buttons, read the real HUD, and fail on any console error. Between them
 they cover every phase that has been built.
 
@@ -16,12 +16,13 @@ they cover every phase that has been built.
 | `codex.mjs` | measured specimens and their percentiles, Your Records, the field-report card and what it refuses to put on it, completion rewards, lineage and the showcase |
 | `escort.mjs` | the escort's one charge, all nine element abilities doing what they claim, stage scaling, the HUD button, and that a burn never resurrects what a bullet killed |
 | `aim.mjs` | free aim unchanged, the assisted lock holding through an aim sweep, the ring's tempo and gold band, and that a player who never aims can still resolve a fight |
+| `placement.mjs` | that the engine speaks every placement term the bestiary uses, that no biome is dead ground, that each apex appears only where and when its entry allows, and that the forecast finds it |
 
 ## Running them
 
 ```sh
 npm install playwright        # once, anywhere on your path
-node game/tests/run.mjs       # serves docs/ itself and runs all ten
+node game/tests/run.mjs       # serves docs/ itself and runs all eleven
 node game/tests/run.mjs mods rifts
 ```
 
@@ -45,4 +46,11 @@ monster into position without moving its motion history, so the next frame read 
 jump as velocity and reported an 11-degree spray as 163 degrees — the same mistake
 this project had already made once, three suites earlier.
 
-When a suite tells you something surprising, suspect the suite first.
+The other direction is just as real, though. A phase 1 check had been failing
+intermittently on "0 spawns in range" for weeks, and a comment — mine — explained it
+away as the world working as designed. It was not: 16% of the map had no species
+that could spawn on it. A comment that explains away a failure is worth exactly as
+much as the measurement behind it.
+
+When a suite tells you something surprising, suspect the suite first — and then go
+and check.

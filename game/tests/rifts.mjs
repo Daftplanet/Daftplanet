@@ -31,7 +31,16 @@ const enterRift = (apexWindow) => page.evaluate(async (wantApex) => {
   r.profile.state.devUnlockAll = true;
   r.profile.save();
   const W = await import('./js/world.js');
-  const target = W.riftsNear(r.patrol.x, r.patrol.y, new Date(), r.profile.state.seed)[0];
+  /*
+   * Pick the rift whose apex window is soonest and still ahead, not merely the
+   * nearest one. `riftsNear` sorts by distance and carries both today's and
+   * tomorrow's rift for every cell, so `[0]` was as likely to be one that had
+   * already finished — the suite then jumped the clock to a window in the past
+   * and reported "opens in 480m".
+   */
+  const target = W.apexForecast(
+    r.patrol.x, r.patrol.y, new Date(), r.profile.state.seed, r.patrol.apexById,
+  )[0] ?? W.riftsNear(r.patrol.x, r.patrol.y, new Date(), r.profile.state.seed)[0];
   r.patrol.x = target.x; r.patrol.y = target.y;
   const aim = wantApex ? target.apexFromMs + 5 * 60000 : target.startMs + 10 * 60000;
   r.patrol.hourOffset = (aim - Date.now()) / 3600000;

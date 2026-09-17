@@ -72,8 +72,10 @@ await page.evaluate(() => { window.__riftborn.patrol.hourOffset = 0; });
 await page.waitForTimeout(300);
 const engaged = await page.evaluate(async () => {
   const r = window.__riftborn;
-  // Walk on if this starting tile happens to be empty; a residential tile only
-  // spawns 7% of the time, so an empty patch is the world working.
+  // Walk on if this starting tile happens to be empty. Residential is the
+  // thinnest table by design at a 7% tile rate, so an empty patch is the world
+  // working — though for a long time it was the world being broken: residential
+  // had no species at all and this line was quietly describing a content bug.
   for (let i = 0; i < 40 && r.patrol.spawns.length === 0; i++) {
     r.patrol.x += 90; r.patrol.y += 40;
     await new Promise((res) => setTimeout(res, 60));

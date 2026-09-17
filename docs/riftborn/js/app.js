@@ -16,7 +16,10 @@ import { fitCanvas, draw } from './render.js';
 import { createInput } from './input.js';
 import { createProfile, AMMO_COST, RANK_XP, WEAPON_UNLOCK, RESEARCH_COST } from './profile.js';
 import { drawFieldReport, toPng } from './report.js';
-import { buildPool, WEATHER, RIFT_RANK, RIFT_RADIUS_M } from './world.js';
+import {
+  buildPool, apexForecast, riftForCell, placementFits, inTimeWindow, weatherIs, biomeAt,
+  PLACEMENT_VOCABULARY, WEATHER, RIFT_RANK, RIFT_RADIUS_M,
+} from './world.js';
 import { blockers, escortAbility } from './sanctuary.js';
 import { createPatrol, stepPatrol, drawPatrol, patrolClock, biomeUnderfoot, ELEMENT_COLOUR } from './patrol.js';
 
@@ -258,6 +261,8 @@ function boot(data) {
       riftEl.dataset.state = 'locked';
       riftEl.hidden = false;
     }
+
+    renderForecast(date);
 
     const near = patrol.nearest;
     $('engage').hidden = !near;
@@ -633,6 +638,65 @@ function boot(data) {
     }
 
     $('overlay').hidden = false;
+  }
+
+  // ---------------------------------------------------------------- rift forecast
+  /*
+   * Rifts are "scheduled, announced ahead" in 09-risks-and-roadmap.md, and now
+   * that each apex's published placement is honoured, being told in advance is the
+   * only way Karrahk and Nyxhollow are findable at all: they are 0.4% and 1.1% of
+   * rifts. The board scans wider than the live rift list — about 8 km of city over
+   * four days — and says when and where each is next due.
+   *
+   * What it will NOT say, until you have researched the species to II, is *why* a
+   * rift carries that apex. The conditions are the Codex's to sell.
+   */
+  let forecastAt = 0;
+  let forecastRows = [];
+
+  function renderForecast(date) {
+    const board = $('forecast-board');
+    if (profile.rank < RIFT_RANK && !profile.state.devUnlockAll) { board.hidden = true; return; }
+    board.hidden = false;
+
+    /*
+     * Scanning 49 cells across four days is cheap but not free; once a minute is
+     * far more often than a forecast can change.
+     *
+     * The freshness test is the timer and ONLY the timer. An earlier version also
+     * recomputed when `forecastRows` was empty, which looks like a sensible
+     * fallback and is a page-freezing bug: on a world seed where no apex is due
+     * within range, the empty result is the correct answer and is never cached, so
+     * 196 rift schedules were rebuilt on every frame. It presented as the whole app
+     * locking up on some profiles and not others.
+     */
+    const now = date.getTime();
+    if (now - forecastAt > 60000) {
+      forecastAt = now;
+      forecastRows = apexForecast(patrol.x, patrol.y, date, profile.state.seed, patrol.apexById);
+    }
+
+    $('forecast').innerHTML = forecastRows.map((r) => {
+      const sp = speciesById[r.apexId];
+      const when = new Date(r.apexFromMs);
+      const mins = Math.round(r.apexInMs / 60000);
+      const due = r.apexInMs <= 0 ? 'now'
+        : mins < 90 ? `in ${mins}m`
+        : when.toLocaleString(undefined, { weekday: 'short', hour: '2-digit', minute: '2-digit' });
+      const researched = profile.researchTier(r.apexId) >= 2;
+      const why = researched
+        ? `${title(r.biome)} · ${WEATHER[r.weather]?.name ?? r.weather}`
+        : 'Research II reveals its conditions';
+      return `
+        <article class="cast" data-live="${r.apexInMs <= 0}">
+          <div class="entry__dot" style="--c:${ELEMENT_COLOUR[sp?.elements[0]] ?? '#888'}"></div>
+          <div class="cast__body">
+            <b>${sp?.name ?? r.apexId}</b>
+            <span>${due} · ${(r.distance / 1000).toFixed(1)} km</span>
+            <span class="cast__why" data-known="${researched}">${why}</span>
+          </div>
+        </article>`;
+    }).join('') || '<p class="empty">No apex due in the next four days within range.</p>';
   }
 
   // ---------------------------------------------------------------- field report
@@ -1168,6 +1232,8 @@ function boot(data) {
     loadLoadout, applyMods, modUnlocked, fittedMods,
     speciesHeight, rollSpecimen, heightPercentile, createFight, drawFieldReport,
     escortAbility, useEscort, cycleLock, assistPhase, assistMiss, ringSeconds,
+    apexForecast, riftForCell, placementFits, inTimeWindow, weatherIs, biomeAt,
+    PLACEMENT_VOCABULARY, WEATHER,
     step, weakPointPositions,
     /** One modelled body shot, for suites that need a damage number without a trigger pull. */
     applyLethalForTest: (f, m) => applyLethal(f, m, f.loadout.ammo.lethal, 'body'),
