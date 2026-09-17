@@ -462,3 +462,24 @@ select {
   .resident { grid-template-columns: 1fr; }
   .habitats { grid-template-columns: 1fr; }
 }
+
+/* ---- pack roster: one pip per member, filled by remaining health */
+.pack { display: flex; gap: 4px; margin-top: 6px; }
+.pip {
+  position: relative;
+  width: 26px; height: 6px;
+  background: #000;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.pip::after {
+  content: ""; position: absolute; inset: 0;
+  width: var(--hp, 0%);
+  background: var(--hp-colour, var(--hp));
+}
+.pip--focus { border-color: var(--ink-dim); }
+.pip--tagged { --hp-colour: var(--restraint); background: var(--restraint); }
+.pip--culled { background: #4a2725; }
+.pip--gone { background: transparent; border-style: dashed; }
+.pip--subdued { --hp-colour: var(--restraint); }

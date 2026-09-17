@@ -141,11 +141,25 @@ export function drawPatrol(ctx, p, view, speciesById) {
     ctx.lineWidth = inRange ? 2.5 : 1.5;
     ctx.stroke();
 
+    // A pack draws satellite dots so the map shows what you are walking into.
+    const pack = s.packSize ?? 1;
+    if (pack > 1) {
+      ctx.fillStyle = colour;
+      ctx.globalAlpha = 0.75;
+      for (let i = 1; i < pack; i++) {
+        const a = (i / (pack - 1 || 1)) * Math.PI * 1.4 - Math.PI * 0.7;
+        ctx.beginPath();
+        ctx.arc(sx + Math.cos(a) * (r + 7), sy + Math.sin(a) * (r + 7), Math.max(2.5, r * 0.4), 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+
     if (s.distance <= DETECT_M * 0.55 || inRange) {
       ctx.fillStyle = inRange ? '#e6e9ed' : 'rgba(230,233,237,0.65)';
       ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
       ctx.textAlign = 'center';
-      ctx.fillText(sp.name, sx, sy - r - 6);
+      ctx.fillText(pack > 1 ? `${sp.name} ×${pack}` : sp.name, sx, sy - r - 6);
     }
   }
 

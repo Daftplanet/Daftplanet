@@ -94,18 +94,29 @@ export function loadLoadout(data, { speciesId, weaponId, lethalId, captureId }) 
   const species = data.monsters.monsters.find((m) => m.id === speciesId);
   const weapon = data.weapons.weapons.find((w) => w.id === weaponId);
   const lethal = data.ammo.lethal.find((a) => a.id === lethalId);
-  const capture = data.ammo.capture.find((a) => a.id === captureId);
   const sizeDef = data.sizes.sizes.find((s) => s.id === species.size);
 
   if (!species) throw new Error(`unknown species ${speciesId}`);
   if (!weapon) throw new Error(`unknown weapon ${weaponId}`);
-  if (!lethal || !capture) throw new Error('unknown ammo');
+  if (!lethal) throw new Error(`unknown lethal round ${lethalId}`);
   if (!weapon.lethal_ammo.includes(lethalId)) throw new Error(`${weaponId} cannot fire ${lethalId}`);
-  if (!weapon.capture_ammo.includes(captureId)) throw new Error(`${weaponId} cannot fire ${captureId}`);
+
+  /*
+   * A weapon may legitimately have no capture chamber — the Arcbrand Coil is
+   * "pure setup. No capture round at all." Requiring one made picking it at the
+   * bench reject every loadout and lock the player out of engaging anything.
+   */
+  const hasCapture = weapon.capture_ammo.length > 0;
+  const capture = hasCapture ? data.ammo.capture.find((a) => a.id === captureId) : null;
+  if (hasCapture && !capture) throw new Error(`unknown capture round ${captureId}`);
+  if (hasCapture && !weapon.capture_ammo.includes(captureId)) {
+    throw new Error(`${weaponId} cannot fire ${captureId}`);
+  }
 
   return {
     species, weapon, sizeDef,
     ammo: { lethal, capture },
+    hasCapture,
     hitZones: data.ammo.hit_zones,
     statusDefs: data.ammo.statuses,
     statusCap: data.ammo.status_product_cap,

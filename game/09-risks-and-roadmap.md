@@ -114,7 +114,9 @@ Findings in [12-phase2-findings.md](12-phase2-findings.md).
   gates on real time and weather you cannot rush. Whether that is a reason rather
   than a mechanism needs hands on it. Pack spawns are now blocking three weapons.*
 
-### Phase 3 — Together
+### Phase 3 — Together — **part 1 built (packs)**
+
+Findings in [13-phase3-findings.md](13-phase3-findings.md).
 
 - Rift events, the 3 apexes, party play.
 - Multi-capture (snare + partner tag).

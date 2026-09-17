@@ -6,7 +6,7 @@
  * get in the way of that question.
  */
 
-import { ARENA, weakPointPositions, activeStatuses } from './game.js';
+import { ARENA, weakPointPositions, activeStatuses, isDone } from './game.js';
 
 const C = {
   floor: '#191b1e',
@@ -67,8 +67,9 @@ export function draw(ctx, f, view) {
   ctx.translate(sx, sy);
 
   drawFloor(ctx);
-  drawTelegraph(ctx, f);
-  drawMonster(ctx, f, view);
+  for (const m of f.monsters) drawTelegraph(ctx, m);
+  drawBursts(ctx, f);
+  for (const m of f.monsters) drawMonster(ctx, f, m, view, m === f.monster);
   drawPlayer(ctx, f);
   drawProjectiles(ctx, f);
   drawFloaters(ctx, f);
@@ -95,8 +96,7 @@ function drawFloor(ctx) {
 }
 
 /** The lunge tell. If a player can't read this, the attack is unfair. */
-function drawTelegraph(ctx, f) {
-  const m = f.monster;
+function drawTelegraph(ctx, m) {
   if (m.state !== 'windup') return;
   const progress = Math.min(1, m.stateT / 0.45);
   ctx.save();
@@ -111,14 +111,32 @@ function drawTelegraph(ctx, f) {
   ctx.restore();
 }
 
-function drawMonster(ctx, f, view) {
-  const m = f.monster;
+/** Area blasts and chain arcs, drawn under the monsters so they read as ground effects. */
+function drawBursts(ctx, f) {
+  for (const b of f.bursts) {
+    const k = b.t / 0.4;
+    ctx.save();
+    ctx.globalAlpha = 1 - k;
+    if (b.kind === 'chain') {
+      ctx.strokeStyle = '#d9c04a';
+      ctx.lineWidth = 3 * (1 - k) + 1;
+      ctx.beginPath(); ctx.moveTo(b.x1, b.y1); ctx.lineTo(b.x2, b.y2); ctx.stroke();
+    } else {
+      ctx.strokeStyle = b.kind === 'capture' ? C.dart : '#ff9d8a';
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(b.x, b.y, b.radius * (0.55 + 0.45 * k), 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+function drawMonster(ctx, f, m, view, focused) {
   if (m.state === 'escaped' || m.state === 'tagged') return;
 
   const statuses = activeStatuses(m);
   let body = ELEMENT_TINT[f.loadout.species.elements[0]] ?? C.monster;
   if (statuses.includes('enraged')) body = C.monsterEnraged;
-  else if (statuses.includes('sedated')) body = C.monsterSedated;
+  else if (statuses.includes('sedated') || statuses.includes('stunned')) body = C.monsterSedated;
   if (m.hitFlash > 0) body = C.monsterLit;
 
   const dead = m.state === 'dead';
@@ -160,13 +178,33 @@ function drawMonster(ctx, f, view) {
     }
   }
 
-  if (!dead) drawMonsterBars(ctx, f);
-  if (subdued) drawSubduePrompt(ctx, f);
+  if (focused && !dead && !subdued) {
+    // A soft ring marks which pack member the crosshair is reading.
+    ctx.strokeStyle = 'rgba(230,233,237,0.22)';
+    ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.arc(m.x, m.y, m.radius + 9, 0, Math.PI * 2); ctx.stroke();
+  }
+
+  if (statuses.includes('ensnared') && !dead) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(105,210,231,0.7)';
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI;
+      ctx.beginPath();
+      ctx.moveTo(m.x + Math.cos(a) * m.radius, m.y + Math.sin(a) * m.radius);
+      ctx.lineTo(m.x - Math.cos(a) * m.radius, m.y - Math.sin(a) * m.radius);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  if (!dead) drawMonsterBars(ctx, f, m);
+  if (subdued) drawSubduePrompt(ctx, f, m);
 }
 
-function drawMonsterBars(ctx, f) {
-  const m = f.monster;
-  const w = 86, h = 5;
+function drawMonsterBars(ctx, f, m) {
+  const w = Math.max(54, Math.min(110, m.radius * 3)), h = 5;
   const x = m.x - w / 2, y = m.y - m.radius - 26;
 
   ctx.fillStyle = 'rgba(0,0,0,0.5)';
@@ -184,8 +222,7 @@ function drawMonsterBars(ctx, f) {
   ctx.fillRect(x, y + h + 3, w * rFrac, h);
 }
 
-function drawSubduePrompt(ctx, f) {
-  const m = f.monster;
+function drawSubduePrompt(ctx, f, m) {
   const left = Math.max(0, f.loadout.subdueWindow - m.stateT);
   const frac = left / f.loadout.subdueWindow;
 

@@ -197,11 +197,31 @@ export function spawnsInTile(tx, ty, bucket, pool, biome, window, seed = 1, weat
   return [{
     id: `${tx}:${ty}:${bucket}`,
     speciesId: chosen.id,
+    packSize: packSizeFor(chosen, hash(tx, ty, bucket, seed + 23)),
     x: (tx + ox) * TILE_M,
     y: (ty + oy) * TILE_M,
     biome,
     bucket,
   }];
+}
+
+/**
+ * How many turn up together.
+ *
+ * Small things swarm and big things come alone, which is both what the bestiary
+ * describes — the Cinder family are pack canids, a Pebblit is a pebble — and what
+ * the arsenal needs: a pellet cone, an area snare and a three-target chain have
+ * nothing to say to a single monster. Rare species stay solitary so meeting one
+ * remains an event rather than a wall.
+ */
+export function packSizeFor(species, roll) {
+  if (['brute', 'colossus', 'titan'].includes(species.size)) return 1;
+  if (['rare', 'very_rare', 'apex'].includes(species.rarity)) return 1;
+  // The exponent biases towards the low end: a lone monster stays the common case,
+  // so meeting a group reads as a distinct kind of encounter rather than the norm.
+  if (species.size === 'mote') return 1 + Math.floor(roll ** 1.7 * 4);    // 1-4
+  if (species.size === 'whelp') return 1 + Math.floor(roll ** 2.0 * 3);   // 1-3
+  return 1 + Math.floor(roll ** 2.4 * 2);                                 // strider 1-2
 }
 
 /** Every spawn the Warden can currently see. */

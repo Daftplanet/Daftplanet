@@ -11,9 +11,14 @@ built on the design bible's real data and formulas.
   Sanctuary, evolution with its four branch conditions, Research I–III, daily
   contracts, weather, and ammunition gated on element materials.
 
+- **Phase 3 (part 1)** — packs. Encounters hold several monsters, which is what the
+  Splitbore's pellet cone, the Lattice Launcher's area snare and the Arcbrand's
+  three-target chain were built for.
+
 > **Phase 2 exit criterion:** a player has a reason to log in on day 30.
 
-No AR, no geolocation, no rift events, no pack spawns. Those are phase 3 and later.
+No AR, no geolocation, no rift events, no apexes, no party play. Those are the rest
+of phase 3 and later.
 
 ## Running it
 

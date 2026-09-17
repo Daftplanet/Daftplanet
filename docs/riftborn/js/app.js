@@ -25,6 +25,7 @@ const fmt = (n) => Math.round(n).toLocaleString();
 const title = (s) => String(s).replace(/_/g, ' ');
 
 const VERDICTS = {
+  resolved: ['ENCOUNTER OVER', 'The pack is dealt with.'],
   culled: ['CULLED', 'Materials banked, fast and certain. Nothing for the Codex.'],
   catalogued: ['CATALOGUED', 'Tagged and recorded. It goes to the Sanctuary.'],
   escaped: ['ESCAPED', 'It got out. All that ammunition spent and the entry is still blank.'],
@@ -201,7 +202,8 @@ function boot(data) {
     if (near) {
       const sp = speciesById[near.speciesId];
       const e = profile.entry(sp.id);
-      $('engage-name').textContent = sp.name;
+      const pack = near.packSize ?? 1;
+      $('engage-name').textContent = pack > 1 ? `${sp.name} ×${pack}` : sp.name;
       $('engage-meta').textContent =
         `${sp.elements.join('/')} · ${sp.size} · ${title(sp.rarity)} · ${STATE_LABEL[e.state]}`;
     }
@@ -248,7 +250,7 @@ function boot(data) {
     }
     const carried = {
       lethal: Math.min(profile.ammoCount(L.lethalId), CARRY.lethal),
-      capture: Math.min(profile.ammoCount(L.captureId), CARRY.capture),
+      capture: L.captureId ? Math.min(profile.ammoCount(L.captureId), CARRY.capture) : 0,
     };
     if (carried.lethal + carried.capture === 0) {
       flash('No rounds for this loadout — craft some at the bench.');
@@ -256,15 +258,17 @@ function boot(data) {
       return;
     }
 
-    fight = createFight(loadout, { carried, bonuses: profile.bonuses });
+    fight = createFight(loadout, { carried, bonuses: profile.bonuses, packSize: spawn.packSize ?? 1 });
     fightSpawn = spawn;
     restraintPeak = 0;
     shownOutcome = null;
     $('overlay').hidden = true;
     $('monster-name').textContent = sp.name;
+    const pack = spawn.packSize ?? 1;
+    $('monster-name').textContent = pack > 1 ? `${sp.name} ×${pack}` : sp.name;
     $('monster-meta').textContent = `${sp.elements.join('/')} · ${loadout.sizeDef.name} · ${sp.aggression}`;
     $('lethal-round').textContent = loadout.ammo.lethal.name;
-    $('capture-round').textContent = loadout.ammo.capture.name;
+    $('capture-round').textContent = loadout.ammo.capture ? loadout.ammo.capture.name : 'none — pure setup';
     show('fight');
   }
 
@@ -272,7 +276,7 @@ function boot(data) {
     const L = profile.state.loadout;
     const w = fight.weapon;
     profile.spendAmmo(L.lethalId, w.carried.lethal - (w.mag.lethal + w.reserve.lethal));
-    profile.spendAmmo(L.captureId, w.carried.capture - (w.mag.capture + w.reserve.capture));
+    if (L.captureId) profile.spendAmmo(L.captureId, w.carried.capture - (w.mag.capture + w.reserve.capture));
   }
 
   function withdraw() {
@@ -296,13 +300,17 @@ function boot(data) {
 
     const before = { xp: profile.state.xp, ess: profile.state.essence, rp: profile.state.researchPoints };
     const residentsBefore = profile.state.residents.length;
-    profile.recordOutcome(sp, fight.outcome, {
-      clean: fight.stats.cleanCapture,
-      hpFraction: fight.stats.hpFractionAtResolve,
-      method: `${fight.loadout.weapon.name} · ${fight.loadout.ammo.capture.name}`,
-      methodAmmo: L.captureId,
-      weaponId: L.weaponId,
-    });
+
+    // A pack resolves per member: three Sparkmites can end as two culls and a capture.
+    for (const r of fight.results) {
+      profile.recordOutcome(sp, r.outcome, {
+        clean: r.clean,
+        hpFraction: r.hpFraction,
+          method: `${fight.loadout.weapon.name} · ${fight.loadout.ammo.capture?.name ?? 'no capture round'}`,
+        methodAmmo: L.captureId,
+        weaponId: L.weaponId,
+      });
+    }
     profile.resolve(fightSpawn.id);
 
     const after = profile.state;
@@ -359,6 +367,20 @@ function boot(data) {
         : ['sedated', 'ensnared', 'stunned', 'anchored', 'chilled', 'calmed'].includes(id) ? 'chip--good' : 'chip--warn';
       return `<span class="chip ${cls}">${id}</span>`;
     });
+    if (f.monsters.length > 1) {
+      const pips = f.monsters.map((o) => {
+        const done = ['dead', 'tagged', 'escaped'].includes(o.state);
+        const kind = o.state === 'dead' ? 'culled' : o.state === 'tagged' ? 'tagged'
+          : o.state === 'escaped' ? 'gone' : o.state === 'subdued' ? 'subdued' : 'live';
+        const frac = done ? 0 : Math.max(0, o.hp / o.maxHp);
+        return `<span class="pip pip--${kind}${o === m ? ' pip--focus' : ''}" style="--hp:${frac * 100}%"></span>`;
+      }).join('');
+      $('pack').innerHTML = pips;
+      $('pack').hidden = false;
+    } else {
+      $('pack').hidden = true;
+    }
+
     if (m.state === 'flee') chips.push('<span class="chip chip--bad">fleeing</span>');
     if (!m.aware) chips.push('<span class="chip chip--warn">unaware</span>');
     if (f.anchorBlocked) chips.push('<span class="chip chip--bad">needs a Tether Harpoon to subdue</span>');
@@ -399,11 +421,18 @@ function boot(data) {
   }
 
   function showOutcome(f) {
-    const [t, blurb] = VERDICTS[f.outcome];
+    const [t, blurb] = VERDICTS[f.outcome] ?? VERDICTS.resolved;
     const sp = f.loadout.species;
     const e = profile.entry(sp.id);
-    $('verdict').textContent = f.stats.cleanCapture ? 'CLEAN CAPTURE' : t;
-    $('verdict-blurb').textContent = f.outcome === 'culled' && e.state === 'data_lost'
+    const pack = f.monsters.length > 1;
+    $('verdict').textContent = f.stats.cleanCapture && !pack ? 'CLEAN CAPTURE' : t;
+    if (pack) {
+      const bits = [];
+      if (f.stats.catalogued) bits.push(`${f.stats.catalogued} catalogued`);
+      if (f.stats.culled) bits.push(`${f.stats.culled} culled`);
+      if (f.stats.escaped) bits.push(`${f.stats.escaped} got away`);
+      $('verdict-blurb').textContent = bits.join(' · ') || blurb;
+    } else $('verdict-blurb').textContent = f.outcome === 'culled' && e.state === 'data_lost'
       ? 'Culled before it was ever catalogued. The entry is marked Data Lost — repairable by catalogueing one later, but the first-capture bonus is gone.'
       : f.stats.cleanCapture
         ? 'Subdued above 80% health. That is the flex — and it cost you every material the kill would have dropped.'
@@ -610,7 +639,7 @@ function boot(data) {
         profile.state.loadout = {
           weaponId: w.id,
           lethalId: w.lethal_ammo[0] ?? null,
-          captureId: w.capture_ammo[0] ?? w.lethal_ammo[0] ?? null,
+          captureId: w.capture_ammo[0] ?? null,
         };
         profile.save();
         renderLoadout();
