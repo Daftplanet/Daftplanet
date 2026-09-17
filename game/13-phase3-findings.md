@@ -291,11 +291,159 @@ weapons.
 - Saves from before this change **migrate** rather than being wiped: an old
   single-weapon loadout becomes slot 1, with slot 2 empty.
 
+---
+
+# Phase 3, part 4: Weapon mods
+
+`02-weapons-and-ammo.md` gives every weapon three mod slots — barrel, core, sight —
+with four options each, and `game/data/weapons.json` has carried the full table
+since phase 0. None of it was wired up. It is now, and it turned out to be the most
+informative thing built this phase, because unlike packs or rifts it could be
+*measured* against the existing balance work rather than just played.
+
+## What a mod does
+
+Numeric effects are proportional deltas applied to the base weapon before the fight
+starts, so a mod is invisible to the rest of the engine: `loadLoadout` returns a
+fitted weapon and everything downstream reads the same fields it always did. Two of
+the published effects have no meaning in a top-down arena and are mapped honestly
+rather than faked:
+
+- `zoom` becomes **reach** (+15% range). There is no zoom to give.
+- `reveal_through_cover` does **nothing**, and the bench says so. This arena has no
+  cover. It is left in the data because the design's outdoor spaces will have some.
+
+Three effects needed new machinery in the fight itself:
+
+- **Recoil** did not exist. It is now deliberately **mod-only** — every stock weapon
+  has zero — which means the existing balance numbers are untouched by definition,
+  Fast Cycle is a real trade rather than a free upgrade, and Stabiliser only earns
+  its slot next to something that shakes.
+- **Noise** now drives the alert radius on a four-rung ladder
+  (`silent`/`low`/`medium`/`high` → 0×/0.5×/1×/1.4× the wake distance), so a
+  Suppressor buys distance rather than surprise.
+- **Illumination**: Shadelet's `weak_point_requires: "illumination"` had never been
+  implemented. Its weak point now has no position at all until a Thermal sight or a
+  Lumen round lights it.
+
+## A Suppressor must not be able to buy silence
+
+The first version stepped noise down the ladder without a floor. Fitted to the
+Sting Crossbow — which ships at `low` — that produced a `silent` weapon, and
+`silent` means an alert radius of zero, which means *every shot keeps the Ambush
+multiplier*. One barrel mod bought the Sylvan Bow's entire identity.
+
+The floor is now: a mod can step you towards silence and stops one rung short of
+it. Only a weapon that ships silent is silent. This is the second time a support
+mechanic has quietly tried to hand out the bow's ambush bonus, and it will not be
+the last — the rule belongs in the data eventually, not in `applyMods`.
+
+## The sights had to cost the stock HUD something
+
+`bio_scanner`'s published effect is "shows the exact Restraint meter". But the HUD
+already drew a full-precision Restraint bar with exact figures next to it, so the
+mod's effect was *nothing*. A mod whose effect is already free is not a decision.
+
+So the stock readout was made worse, which is the honest direction:
+
+- **Without a Bio-Scanner**: the meter is notched into quarters and the bar snaps to
+  them, and the figure reads `■■□□`. You can see roughly where you are and you
+  cannot tell 70% from 95% — exactly the judgement call the swap timing is supposed
+  to be.
+- **With one**: smooth bar, exact `65 / 110`, and a live `bolt risk 24%/s` chip —
+  the flee chance the player has never been shown outside the dev panel.
+
+`tracker_lens` rings the weak points you have already researched; it does not teach
+you one you have never studied, so the Codex still has to be earned first.
+
+Both gated sights read `requires: research_1` / `research_2` as **Codex progress**
+(5 species at Research I, 3 at Research II) rather than a rank. They are the only
+unlocks in the game that walking cannot buy, which is what the bible means by
+putting them "behind Codex research". The gate is enforced on the way into the
+fight, not only at the bench, so an edited save cannot smuggle one in.
+
+## What the mods actually do — and a measurement that was wrong twice
+
+`MODS=1 node game/tools/balance_sim.mjs` runs each mod alone against Cinderfang.
+
+The first run said **every mod that changes a number makes culling worse**, by up to
+19 points, including Extended Cell — which has no damage or rate penalty at all and
+cannot possibly make you worse at killing. That was my own harness lying again.
+Fitting a mod shifts the RNG stream (a different magazine reloads on a different
+frame), so the runs are *not* paired with the baseline; they are independent
+samples. `MODNOISE=1` measures the noise floor directly: the same strategy, same
+code, only the seed base changed, scores **79%–89% at 200 runs**. My baseline had
+landed on the luckiest base in that range and every mod was being compared against
+it. The diagnostic now runs 800 apiece and prints "(noise)" against anything inside
+±2.5 points.
+
+With that fixed the table is clean, and it says something good about the design:
+
+```
+cull                         soften_30 (capture)
+mod             win   Δ      mod             win   Δ
+stock           85%   —      stock           82%   —
+suppressor      76%  -9pt    suppressor      88%  +6pt
+flechette       79%  -6pt    flechette       91%  +9pt
+potency_coil    74% -10pt    potency_coil    87%  +5pt
+extended_cell   72% -13pt    extended_cell   84%  +2pt (noise)
+```
+
+**Every mod that trades damage away is a loss for killing and a gain for taking
+alive.** Nobody designed that; it falls out of the wound multiplier. Lower damage
+means the target spends longer in the wounded band where Restraint accrues fastest,
+which is the whole reason softening works. The barrel and core rails are therefore
+already a kill-build/take-alive-build split with no rebalancing needed.
+
+## Extended Cell: a bigger magazine does not remove the reload, it *moves* it
+
+Extended Cell survived the noise correction at **−13 points on the cull**, which
+still looks impossible: +50% magazine, no damage change, no rate change, and it
+reloads *less often* (0.86 reloads per fight against 1.22).
+
+The mechanism, once measured, is the reload's **position**:
+
+| | stock (mag 8) | Extended Cell (mag 12) |
+|---|---|---|
+| first reload at shot | 8.0 | 12.0 |
+| seconds below the flee threshold | 1.03 | 1.35 |
+| …of which spent reloading | 0.18 | **0.63** |
+| fights reaching `flee` at all | 363/800 | 452/800 |
+
+Cinderfang dies in about 13.7 shots. With a magazine of 8 your one reload lands at
+shot 8 — while the target is still healthy and the flee roll is not even running.
+With a magazine of 12 it lands at shot 12, which is inside the window where the
+target is below its flee threshold and rolling to bolt every frame. You reload less
+and are punished more, because the reload you do take is the one that matters.
+
+This is not a bug and has not been "fixed". It is the most interesting thing the
+mod table produced: magazine size is not a quantity, it is a *phase* relationship
+with how long the target takes to die. Extended Cell is a capture-build mod — where
+`sedated`, `ensnared` and `calmed` suppress the flee roll outright — and a trap in a
+cull build. Nothing on the card says that, and nothing should; it is the kind of
+thing a player works out.
+
+## Mechanics
+
+- **One mod per category per slot.** Mods are fitted to the slot, cleared by
+  clicking the fitted card again, and replaced by clicking a sibling.
+- Mods are **free and reversible** — they are not consumed and there is no cost.
+  Their scarcity is the three slots, not a currency.
+- Changing a slot's weapon clears its mods; re-picking the same weapon keeps them.
+- Saves from before this change **migrate**: every slot gains an empty `mods`
+  object, and nothing else is touched.
+
 ## Still open
 
-1. **Weapon mods** — the three slots per weapon in `02` are still unbuilt, and they
-   are the last piece of the loadout puzzle.
-2. **Party play**, still the honest answer to multi-capture and the two Titans.
-3. **Codex sharing and field reports** — the last unbuilt item in phase 3.
-4. The Anchor lasts six seconds, which allows roughly one crossbow magazine per
+1. **Party play**, still the honest answer to multi-capture and the two Titans.
+2. **Codex sharing and field reports** — the last unbuilt item in phase 3.
+3. The Anchor lasts six seconds, which allows roughly one crossbow magazine per
    application. That rhythm feels right on paper but has never been played.
+4. The noise floor now lives in `applyMods` rather than in the data. A weapon that
+   ships silent should carry that as a property mods cannot touch.
+5. Mods are unlocked, not owned. If they should ever be crafted or found, the
+   inventory hook does not exist yet.
+6. The phase 1 browser suite's "fight reaches an outcome" test has failed
+   intermittently against fast fliers in packs. It passed ten runs in a row after
+   this change; the diagnostic now reports how many loops it ran and what stopped
+   it, so the next failure will say why rather than just that.

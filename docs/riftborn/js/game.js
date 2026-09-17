@@ -29,6 +29,13 @@ export const WEAPON_SWAP_SECONDS = 0.9;   // slower than a chamber swap, on purp
 const LUNGE = { windup: 0.45, dash: 0.35, recover: 0.85, speed: 430, cooldown: 1.6, reach: 260, steer: 1.6 };
 const AI = { wanderSpeed: 0.35, fleeSpeedMult: 1.25, fleeEscapeSeconds: 5, noiseRadius: 450 };
 
+/*
+ * How far a shot carries. A suppressor steps a weapon one rung down this ladder,
+ * which buys distance rather than silence — true silence, and the Ambush multiplier
+ * that comes with it, stays the Sylvan Bow's alone.
+ */
+const NOISE_REACH = { silent: 0, low: 0.5, medium: 1, high: 1.4 };
+
 const AGGRESSION = {
   passive:     { alert: 110, preferred: 210, attacks: false, cooldown: 99, reach: 0 },
   skittish:    { alert: 180, preferred: 240, attacks: true,  cooldown: 2.8, reach: 110 },
@@ -164,7 +171,14 @@ function makeMonster(loadout, index, count, rng, partySize = 1) {
     armourScale: 1,
     phaseBlocked: false,
     speed: sp.stats.speed * MONSTER.speedScale,
+    /*
+     * Some species have no weak point until they are lit: the bestiary gives
+     * Shadelet `weak_point_requires: illumination` and an empty list. A Thermal
+     * sight, or a Lumen-element hit, exposes one.
+     */
     weakPoints: phases > 1 ? apexWeakPoints(sp.id, 1, sp.weak_points) : sp.weak_points,
+    hiddenWeakPoints: sp.weak_point_requires === 'illumination' ? ['core'] : null,
+    illuminated: 0,
     state: 'unaware', stateT: 0,
     aware: false,
     restraint: 0,
@@ -200,6 +214,7 @@ function makeWeaponState(loadout, requested) {
     carried,
     cooldown: 0, reloadT: 0, swapT: 0,
     charge: 0, wasFiring: false,
+    heat: 0,
   };
 }
 
@@ -399,12 +414,21 @@ function fire(f) {
   const ammo = (w.chamber === 'lethal' ? L.ammo.lethal : L.ammo.capture) ?? L.ammo.lethal;
   const single = ammo.effect === 'splitbore_single_projectile';
   const count = single ? 1 : (L.weapon.projectiles ?? 1);
-  const spread = count > 1 ? SPREAD_PER_PROJECTILE * (count - 1) : 0;
+  const spread = count > 1 ? SPREAD_PER_PROJECTILE * (count - 1) * (L.spreadScale ?? 1) : 0;
+
+  /*
+   * Recoil climbs through a burst and settles between them. Stock weapons have
+   * none — it only exists because a mod put it there, so fitting Fast Cycle is a
+   * real trade rather than a free upgrade.
+   */
+  const recoilKick = (L.recoil ?? 0) * 0.5 * w.heat;
+  w.heat = Math.min(1, w.heat + 0.34);
 
   for (let i = 0; i < count; i++) {
     const offset = count > 1 ? -spread / 2 + (spread * i) / (count - 1) : 0;
-    const jitter = count > 1 ? (f.rng() - 0.5) * SPREAD_PER_PROJECTILE : 0;
-    const a = f.player.aim + offset + jitter;
+    const jitter = count > 1 ? (f.rng() - 0.5) * SPREAD_PER_PROJECTILE * (L.spreadScale ?? 1) : 0;
+    const kick = recoilKick ? (f.rng() - 0.5) * recoilKick : 0;
+    const a = f.player.aim + offset + jitter + kick;
     f.projectiles.push({
       x: f.player.x + Math.cos(a) * 16,
       y: f.player.y + Math.sin(a) * 16,
@@ -419,9 +443,10 @@ function fire(f) {
 
   // Anything louder than `silent` gives you away before the round lands, so a loud
   // weapon can never collect the Ambush multiplier. That bonus belongs to the bow.
-  if (L.weapon.noise !== 'silent') {
+  const reach = AI.noiseRadius * (NOISE_REACH[L.weapon.noise] ?? 1);
+  if (reach > 0) {
     for (const m of f.monsters) {
-      if (!isDone(m) && dist(m, f.player) < AI.noiseRadius) wake(f, m);
+      if (!isDone(m) && dist(m, f.player) < reach) wake(f, m);
     }
   }
 }
@@ -508,7 +533,8 @@ function applyLethal(f, m, ammo, hitZone, scale = 1, ambush = false) {
   const dmg = computeDamage({
     weapon: L.weapon, ammo, species: L.species, sizeDef: L.sizeDef,
     hitZone, hitZones: L.hitZones, effectiveness: L.effectiveness,
-    ambush, ambushCfg: L.ambushCfg, armourScale: m.armourScale ?? 1,
+    ambush, ambushCfg: L.ambushCfg,
+    armourScale: (m.armourScale ?? 1) * (1 - (L.armourPierce ?? 0)),
   }) * (1 + (f.bonuses.lethal_damage ?? 0)) * scale;
 
   m.hp = Math.max(0, m.hp - dmg);
@@ -559,6 +585,9 @@ function resolveHit(f, projectile, m, hitZone) {
   }
 
   splashIfNeeded(f, projectile, m, ammo);
+
+  // Light it up: a Lumen round exposes a hidden weak point for 8 seconds.
+  if (m.hiddenWeakPoints && ammo.element === 'lumen') m.illuminated = 8;
 
   m.hitFlash = 0.12;
   f.shake = Math.min(f.shake + (hitZone === 'weak_point' ? 3.5 : 1.5), 8);
@@ -689,6 +718,13 @@ function stepMonster(f, m, dt) {
 
   m.stateT += dt;
   m.hitFlash = Math.max(0, m.hitFlash - dt);
+
+  if (m.hiddenWeakPoints) {
+    // A Thermal sight holds it lit; a Lumen hit lights it for a few seconds.
+    if (f.loadout.modFlags?.revealHidden) m.illuminated = Math.max(m.illuminated, 0.2);
+    m.illuminated = Math.max(0, m.illuminated - dt);
+    m.weakPoints = m.illuminated > 0 ? m.hiddenWeakPoints : [];
+  }
 
   advancePhase(f, m);
   if (m.phaseShield > 0) {
@@ -948,6 +984,7 @@ export function step(f, dt, intent) {
 
   const w = f.weapon;
   w.cooldown = Math.max(0, w.cooldown - dt);
+  w.heat = Math.max(0, w.heat - dt * 1.6);
   if (w.swapT > 0) {
     w.swapT = Math.max(0, w.swapT - dt);
     if (w.swapT === 0) w.chamber = w.chamber === 'lethal' ? 'capture' : 'lethal';

@@ -526,3 +526,37 @@ select {
 #clear-slot { justify-self: start; }
 
 @media (max-width: 720px) { .slotcards { grid-template-columns: 1fr; } }
+
+/* ---- bench weapon mods */
+.modrail { display: grid; gap: 4px; }
+.modrail__head {
+  margin: 10px 0 2px; font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--ink-faint); font-weight: 600;
+}
+.modcards { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.modcard {
+  display: grid; gap: 2px; text-align: left;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 10px; color: var(--ink-dim); font: inherit; cursor: pointer;
+}
+.modcard[data-active="true"] { border-color: var(--restraint); color: var(--ink); }
+.modcard:disabled { opacity: 0.4; cursor: not-allowed; }
+.modcard b { color: var(--ink); font-size: 12px; }
+.modcard span { font-size: 10px; }
+.modcard__lock { color: var(--warn); }
+
+.fitted { display: flex; flex-wrap: wrap; gap: 5px; margin: 2px 0 4px; }
+.fitted__d {
+  font-size: 10px; padding: 2px 7px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--ink-dim); font-variant-numeric: tabular-nums;
+}
+.fitted__d[data-up="true"] { border-color: var(--restraint); color: var(--restraint); }
+.fitted__d[data-up="false"] { border-color: var(--warn); color: var(--warn); }
+
+/* A coarse Restraint meter reads in quarters, so notch the track to say so. */
+.meter__track[data-coarse="true"] {
+  background-image: repeating-linear-gradient(
+    90deg, transparent 0 calc(25% - 1px), var(--line) calc(25% - 1px) 25%);
+}
+
+@media (max-width: 720px) { .modcards { grid-template-columns: 1fr; } }

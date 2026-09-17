@@ -7,7 +7,7 @@
  * you have never seen — which need catalogueing too.
  */
 
-import { loadLoadout } from './rules.js';
+import { loadLoadout, applyMods, modUnlocked } from './rules.js';
 import { createFight, step, readouts, activeStatuses, WEAPON_SWAP_SECONDS } from './game.js';
 import { fitCanvas, draw } from './render.js';
 import { createInput } from './input.js';
@@ -75,6 +75,22 @@ function boot(data) {
   const speciesById = Object.fromEntries(allSpecies.map((m) => [m.id, m]));
   const ammoById = Object.fromEntries([...data.ammo.lethal, ...data.ammo.capture].map((a) => [a.id, a]));
   const weaponById = Object.fromEntries(data.weapons.weapons.map((w) => [w.id, w]));
+  const MOD_SLOTS = ['barrel', 'core', 'sight'];
+  const modById = Object.fromEntries(Object.values(data.weapons.mods ?? {}).flat().map((m) => [m.id, m]));
+
+  /*
+   * The mods a slot actually gets to use. Anything still behind Codex research is
+   * dropped here rather than at the bench alone, so an old save — or a hand-edited
+   * one — can't carry an unearned sight into a fight.
+   */
+  function fittedMods(sl) {
+    const out = {};
+    for (const cat of MOD_SLOTS) {
+      const mod = modById[sl?.mods?.[cat]];
+      if (mod && modUnlocked(mod, profile.codexProgress)) out[cat] = mod.id;
+    }
+    return out;
+  }
   const families = [...new Set(allSpecies.map((m) => m.family))].filter((f) => f !== 'apex');
   const pool = buildPool(allSpecies, families);
   const codexSpecies = allSpecies.filter((m) => m.family !== 'apex');
@@ -277,6 +293,7 @@ function boot(data) {
     try {
       loadouts = slots.map((sl) => loadLoadout(data, {
         speciesId: sp.id, weaponId: sl.weaponId, lethalId: sl.lethalId, captureId: sl.captureId,
+        mods: fittedMods(sl),
       }));
     } catch (err) {
       flash(`Loadout invalid: ${err.message}`);
@@ -405,11 +422,22 @@ function boot(data) {
     $('hp-fill').style.width = `${Math.max(0, m.hp / m.maxHp) * 100}%`;
     $('hp-value').textContent = `${Math.ceil(Math.max(0, m.hp))} / ${m.maxHp}`;
 
+    /*
+     * Restraint reads coarse by default and exact with a Bio-Scanner fitted. The
+     * mod is worthless if the stock HUD already shows the number, so the stock
+     * HUD doesn't: you get quarter-bar notches and have to judge the swap. This
+     * is the one readout in the game you can buy precision on.
+     */
+    const exact = !!f.loadout.modFlags?.showRestraintNumbers;
     const rFrac = Math.min(1, m.restraint / r.required);
-    restraintPeak = Math.max(rFrac, restraintPeak - elapsed * 0.6);
-    $('restraint-fill').style.width = `${rFrac * 100}%`;
+    const shown = exact ? rFrac : Math.floor(rFrac * 4) / 4;
+    restraintPeak = Math.max(shown, restraintPeak - elapsed * 0.6);
+    $('restraint-fill').style.width = `${shown * 100}%`;
     $('restraint-decay').style.width = `${restraintPeak * 100}%`;
-    $('restraint-value').textContent = `${m.restraint.toFixed(0)} / ${r.required.toFixed(0)}`;
+    $('restraint-bar').dataset.coarse = String(!exact);
+    $('restraint-value').textContent = exact
+      ? `${m.restraint.toFixed(0)} / ${r.required.toFixed(0)}`
+      : `${'\u25a0'.repeat(Math.floor(rFrac * 4))}${'\u25a1'.repeat(4 - Math.floor(rFrac * 4))}`;
 
     const chips = activeStatuses(m).map((id) => {
       const cls = id === 'enraged' ? 'chip--bad'
@@ -430,6 +458,10 @@ function boot(data) {
       $('pack').hidden = true;
     }
 
+    if (f.loadout.modFlags?.showFleeThreshold && !['dead', 'tagged', 'escaped'].includes(m.state)) {
+      const pct = r.fleeChance * 100;
+      chips.push(`<span class="chip ${pct > 8 ? 'chip--bad' : 'chip--good'}">bolt risk ${pct.toFixed(0)}%/s</span>`);
+    }
     if (m.state === 'flee') chips.push('<span class="chip chip--bad">fleeing</span>');
     if (!m.aware) chips.push('<span class="chip chip--warn">unaware</span>');
     if (f.isApex) {
@@ -655,6 +687,42 @@ function boot(data) {
     }
   }
 
+
+  // ---------------------------------------------------------------- mods
+  const PCT = (v) => `${v > 0 ? '+' : '\u2212'}${Math.round(Math.abs(v) * 100)}%`;
+
+  const MOD_EFFECT_TEXT = {
+    range_m: (v) => `${PCT(v)} range`,
+    rpm: (v) => `${PCT(v)} rate of fire`,
+    magazine: (v) => `${PCT(v)} magazine`,
+    reload_seconds: (v) => `${PCT(v)} reload time`,
+    restraint: (v) => `${PCT(v)} Restraint`,
+    damage: (v) => `${PCT(v)} damage`,
+    spread: (v) => `${PCT(v)} spread`,
+    noise_step: (v) => (v < 0 ? 'a step quieter' : 'a step louder'),
+    armour_pierce: (v) => `${PCT(v)} armour pierce`,
+    recoil: (v) => `${PCT(v)} recoil`,
+    zoom: () => '+15% reach',
+    highlight_weak_points: () => 'marks weak points you have researched',
+    show_restraint_meter: () => 'exact Restraint figures, not a coarse bar',
+    show_flee_threshold: () => 'reads the flee chance live',
+    reveal_gloom: () => 'holds a hidden weak point lit',
+    reveal_through_cover: () => null,          // no cover in this arena; footnoted below
+  };
+
+  const MOD_REQUIREMENT = {
+    research_1: (p) => ['Research 5 species to Research I', `${p.researchI} / 5`],
+    research_2: (p) => ['Research 3 species to Research II', `${p.researchII} / 3`],
+  };
+
+  function modEffectText(mod) {
+    return Object.entries(mod.effect ?? {})
+      // `?? k` would resurrect a key whose formatter deliberately returns null.
+      .map(([k, v]) => (k in MOD_EFFECT_TEXT ? MOD_EFFECT_TEXT[k](v) : k))
+      .filter(Boolean)
+      .join(' \u00b7 ');
+  }
+
   // ---------------------------------------------------------------- loadout
   let editingSlot = 0;
 
@@ -667,8 +735,10 @@ function boot(data) {
     const slotCards = [0, 1].map((i) => {
       const sl = slots[i];
       const w = sl ? weaponById[sl.weaponId] : null;
+      const fitted = sl ? Object.values(fittedMods(sl)).length : 0;
       const rounds = sl
-        ? [ammoById[sl.lethalId]?.name, sl.captureId ? ammoById[sl.captureId]?.name : 'no capture round']
+        ? [ammoById[sl.lethalId]?.name, sl.captureId ? ammoById[sl.captureId]?.name : 'no capture round',
+           fitted ? `${fitted} mod${fitted > 1 ? 's' : ''}` : null]
             .filter(Boolean).join(' · ')
         : 'empty';
       return `
@@ -714,6 +784,52 @@ function boot(data) {
       }).join('');
     };
 
+    const modCards = () => {
+      if (!weapon) return '<p class="empty">Pick a weapon for this slot first.</p>';
+      const progress = profile.codexProgress;
+      return MOD_SLOTS.map((cat) => {
+        const cards = (data.weapons.mods[cat] ?? []).map((mod) => {
+          const open = modUnlocked(mod, progress);
+          const [why, count] = open ? ['', ''] : (MOD_REQUIREMENT[mod.requires]?.(progress) ?? ['Locked', '']);
+          const fitted = current.mods?.[cat] === mod.id;
+          return `
+            <button class="modcard" data-mod="${mod.id}" data-cat="${cat}" data-active="${fitted}"
+                    ${open ? '' : 'disabled'} type="button">
+              <b>${mod.name}</b>
+              <span>${modEffectText(mod)}</span>
+              ${open ? '' : `<span class="modcard__lock">${why} \u00b7 ${count}</span>`}
+            </button>`;
+        }).join('');
+        return `<h3 class="modrail__head">${cat}</h3><div class="modcards">${cards}</div>`;
+      }).join('')
+      + '<p class="dev__note">One mod per category. A stock weapon has no recoil at all, so Fast Cycle'
+      + ' is a real trade and Stabiliser only earns its slot next to something that shakes. A Suppressor'
+      + ' steps you towards silence and stops one rung short of it \u2014 true silence, and the Ambush'
+      + ' multiplier that comes with it, stays the Sylvan Bow\u2019s. Thermal\u2019s see-through-cover'
+      + ' line does nothing here: this arena has no cover.</p>';
+    };
+
+    const fittedLine = () => {
+      if (!weapon) return '';
+      const ids = Object.values(fittedMods(current)).filter(Boolean);
+      if (!ids.length) return '<p class="dev__note">Stock \u2014 no mods fitted. A stock weapon has no recoil at all.</p>';
+      const fit = applyMods(weapon, ids, data.weapons.mods);
+      const w2 = fit.weapon;
+      const delta = (label, a, b, unit = '') => (Math.abs(a - b) < 0.05 ? ''
+        : `<span class="fitted__d" data-up="${b > a}">${label} ${a}${unit} \u2192 ${Math.round(b * 10) / 10}${unit}</span>`);
+      const extras = [
+        delta('dmg', weapon.damage, w2.damage),
+        delta('res', weapon.restraint, w2.restraint),
+        delta('rpm', weapon.rpm, w2.rpm),
+        delta('range', weapon.range_m, w2.range_m, 'm'),
+        delta('mag', weapon.magazine, w2.magazine),
+        weapon.noise !== w2.noise ? `<span class="fitted__d" data-up="true">noise ${weapon.noise} \u2192 ${w2.noise}</span>` : '',
+        fit.armourPierce ? `<span class="fitted__d" data-up="true">pierce ${Math.round(fit.armourPierce * 100)}%</span>` : '',
+        fit.recoil ? `<span class="fitted__d" data-up="false">recoil ${Math.round(fit.recoil * 100)}%</span>` : '',
+      ].filter(Boolean).join('');
+      return `<div class="fitted">${extras || '<span class="fitted__d">sight only \u2014 no change to the numbers</span>'}</div>`;
+    };
+
     $('loadout-body').innerHTML = `
       <h2>Weapon slots</h2>
       <div class="slotcards">${slotCards}</div>
@@ -724,6 +840,9 @@ function boot(data) {
       <div class="rounds">${rounds('lethal')}</div>
       <h2>Chamber B — capture</h2>
       <div class="rounds">${rounds('capture')}</div>
+      <h2>Mods for slot ${editingSlot + 1}</h2>
+      ${fittedLine()}
+      <div class="modrail">${modCards()}</div>
       <p class="dev__note">Two slots, per the design: two lethal profiles, two capture profiles, or one of each. <b>Q</b> cycles weapons mid-fight and takes ${WEAPON_SWAP_SECONDS}s — longer than the ${data.weapons.chamber_swap_seconds}s chamber swap. This is what makes an apex takeable: anchor it with the Tether Harpoon, switch, and subdue with something that actually restrains. You carry ${CARRY.lethal} lethal and ${CARRY.capture} capture rounds per weapon.</p>`;
 
     for (const b of document.querySelectorAll('.slotcard')) {
@@ -742,6 +861,8 @@ function boot(data) {
           weaponId: w.id,
           lethalId: w.lethal_ammo[0] ?? null,
           captureId: w.capture_ammo[0] ?? null,
+          // Mods are fitted to the weapon, not the slot: a new gun comes stock.
+          mods: current?.weaponId === w.id ? (current.mods ?? {}) : {},
         });
         renderLoadout();
       });
@@ -756,6 +877,9 @@ function boot(data) {
     }
     for (const b of document.querySelectorAll('.round__craft')) {
       b.addEventListener('click', () => { profile.craft(b.dataset.ammo, 5); renderLoadout(); });
+    }
+    for (const b of document.querySelectorAll('.modcard')) {
+      b.addEventListener('click', () => { profile.setMod(editingSlot, b.dataset.cat, b.dataset.mod); renderLoadout(); });
     }
   }
 
@@ -795,7 +919,14 @@ function boot(data) {
         drawPatrol(mapCtx, patrol, mapView, speciesById);
         renderPatrolHud();
       } else if (view === 'fight' && fight) {
-        draw(fightCtx, fight, { ...fightView, showWeakPoints: profile.weakPointsKnown(fight.loadout.species.id) });
+        draw(fightCtx, fight, {
+          ...fightView,
+          // The Tracker Lens marks what you already researched; it doesn't teach
+          // you a weak point you have never studied.
+          showWeakPoints: profile.weakPointsKnown(fight.loadout.species.id),
+          markWeakPoints: !!fight.loadout.modFlags?.highlightWeakPoints,
+          coarseRestraint: !fight.loadout.modFlags?.showRestraintNumbers,
+        });
         renderFightHud(elapsed);
       }
     } catch (err) {
@@ -819,6 +950,7 @@ function boot(data) {
     get view() { return view; },
     get fight() { return fight; },
     show, startFight, renderSanctuary, renderContracts,
+    loadLoadout, applyMods, modUnlocked, fittedMods,
     teleportTo(spawn) { patrol.x = spawn.x; patrol.y = spawn.y; },
   };
 

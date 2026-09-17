@@ -31,7 +31,7 @@ grows your collection.
 | [10-phase0-findings.md](10-phase0-findings.md) | What building the fight taught us, and the three maths bugs it caught |
 | [11-phase1-findings.md](11-phase1-findings.md) | The vertical slice: a collision bug that had been distorting phase 0, and what the map taught us |
 | [12-phase2-findings.md](12-phase2-findings.md) | The loop closes: a world that could not host its own bestiary, and evolution against real-world time and weather |
-| [13-phase3-findings.md](13-phase3-findings.md) | Packs, rift events, apexes and the two-weapon loadout — including a phase 1 decision that took three phases to prove wrong |
+| [13-phase3-findings.md](13-phase3-findings.md) | Packs, rift events, apexes, the two-weapon loadout and weapon mods — including a phase 1 decision that took three phases to prove wrong, and a magazine that kills fewer monsters by being bigger |
 
 ## Machine-readable data
 
@@ -55,15 +55,19 @@ are all in the JSON so they can be rebalanced in one place.
 Phases 0 through 2 are built at [`docs/riftborn/`](../docs/riftborn/), plus most of
 phase 3: the grey-box fight, the vertical slice, the closed loop — all 12 families,
 all 8 weapons, the Sanctuary, evolution with its four branch conditions, Research
-I–III, contracts and weather — and now pack spawns, scheduled rift events and the
-three phased apexes. Party play and Codex sharing are what remain. It runs the design's real formulas out of `data/`, and the same
+I–III, contracts and weather — and now pack spawns, scheduled rift events, the
+three phased apexes, a two-weapon loadout and the full weapon-mod table. Party play
+and Codex sharing are what remain. It runs the design's real formulas out of `data/`, and the same
 fight and world code runs headlessly in a balance sim so tuning claims can be
 checked rather than asserted.
 
 ```sh
 python3 -m http.server -d docs 8000     # then open localhost:8000/riftborn/
 node game/tools/balance_sim.mjs 400     # outcome table by strategy and skill
+MODS=1 node game/tools/balance_sim.mjs  # what each weapon mod is worth, one at a time
+MODNOISE=1 node game/tools/balance_sim.mjs   # the seed-noise floor those deltas sit on
 python3 game/tools/stamp_sw.py --check  # service worker cache stamp is current
+node game/tests/run.mjs                 # seven browser suites against the real UI
 ```
 
 It is an installable PWA that plays fully offline, published from `main` → `docs/`

@@ -138,9 +138,9 @@ function botIntent(f, strat, rng, skill, memory) {
   };
 }
 
-function runFight(seed, strat, skill, override) {
+function runFight(seed, strat, skill, override, mods) {
   const rng = mulberry32(seed);
-  const loadout = loadLoadout(data, LOADOUT);
+  const loadout = loadLoadout(data, { ...LOADOUT, mods });
   if (override) {
     loadout.species = { ...loadout.species, stats: { ...loadout.species.stats, ...override } };
   }
@@ -267,6 +267,63 @@ if (process.env.PROBE) {
         ft += f.stats.fleeTime; fs += f.stats.fleeShots;
       }
       console.log(`${sigma.toFixed(3).padStart(9)}   ${String(weak).padStart(11)}   ${`${((esc/runs)*100).toFixed(0)}%`.padStart(8)}   ${`${((hits/shots)*100).toFixed(0)}%`.padStart(8)}   ${(shots/time).toFixed(2).padStart(9)}   ${(ft ? fs/ft : 0).toFixed(2).padStart(12)}`);
+    }
+  }
+}
+
+
+/*
+ * MODS=1 asks the only question that matters about a weapon mod: does fitting it
+ * change the fight, or is it a number on a card? Each mod is run alone.
+ *
+ * Fitting a mod shifts the RNG stream (a different magazine size reloads on a
+ * different frame), so runs are NOT paired with the baseline — they are
+ * independent samples. At the headline table's 200 runs the same strategy swings
+ * 79-89% purely on the seed base, which is wider than most of the effects here;
+ * MODNOISE=1 reproduces that. So this runs 800 apiece and prints the noise band,
+ * and anything inside it is reported as noise rather than as a finding.
+ */
+if (process.env.MODNOISE) {
+  // Control: how much does the headline figure move when only the seeds change?
+  const skill = SKILLS[1];
+  for (const base of [13, 14, 15, 16, 17]) {
+    let win = 0;
+    for (let i = 0; i < 200; i++) if (runFight(i * 7919 + base, STRATEGIES.cull, skill).outcome === 'culled') win++;
+    console.log(`seed base ${base}: cull ${((win / 200) * 100).toFixed(0)}%`);
+  }
+}
+
+if (process.env.MODS) {
+  const N = 800;
+  const skill = SKILLS[1];                       // average aim: mods should help the median Warden
+  const cases = [['stock', undefined]];
+  for (const [cat, list] of Object.entries(data.weapons.mods)) {
+    for (const mod of list) cases.push([mod.id, { [cat]: mod.id }]);
+  }
+
+  console.log(`\nMOD DIAGNOSTIC — one mod at a time, Marker Pistol vs Cinderfang, average aim, ${N} runs each`);
+  console.log('Seed noise at this sample size is about \u00b12pt; treat anything smaller as no effect.');
+  for (const [stratName, strat] of [['cull', STRATEGIES.cull], ['soften_30', STRATEGIES.soften_30]]) {
+    console.log(`\n${stratName}`);
+    console.log('mod              win   esc   time   shots  darts   Δwin');
+    let baseWin = null;
+    for (const [name, mods] of cases) {
+      const want = stratName === 'cull' ? 'culled' : 'catalogued';
+      let win = 0, esc = 0, time = 0, shots = 0, darts = 0;
+      for (let i = 0; i < N; i++) {
+        const f = runFight(i * 7919 + 13, strat, skill, null, mods);
+        if (f.outcome === want) win++;
+        if (f.outcome === 'escaped') esc++;
+        time += f.outcomeAt; shots += f.stats.shots;
+        darts += f.weapon.carried.capture - (f.weapon.mag.capture + f.weapon.reserve.capture);
+      }
+      if (baseWin === null) baseWin = win / N;
+      const d = win / N - baseWin;
+      console.log(`${name.padEnd(15)} ${`${((win/N)*100).toFixed(0)}%`.padStart(4)} `
+        + `${`${((esc/N)*100).toFixed(0)}%`.padStart(5)} ${(time/N).toFixed(1).padStart(6)}s `
+        + `${(shots/N).toFixed(1).padStart(6)} ${(darts/N).toFixed(1).padStart(6)}  `
+        + `${name === 'stock' ? '    —' : `${d >= 0 ? '+' : ''}${(d*100).toFixed(0)}pt`.padStart(5)}`
+        + `${name !== 'stock' && Math.abs(d) < 0.025 ? '  (noise)' : ''}`);
     }
   }
 }

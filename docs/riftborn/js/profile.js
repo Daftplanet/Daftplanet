@@ -78,7 +78,7 @@ const DEFAULT = () => ({
    */
   loadout: {
     slots: [
-      { weaponId: 'marker_pistol', lethalId: 'ball_round', captureId: 'tranq_dart' },
+      { weaponId: 'marker_pistol', lethalId: 'ball_round', captureId: 'tranq_dart', mods: {} },
       null,
     ],
   },
@@ -115,6 +115,9 @@ function read() {
         ],
       };
     }
+    // Slots saved before mods existed have no `mods` key. Give them an empty
+    // one rather than letting every read guess at the shape.
+    for (const sl of merged.loadout?.slots ?? []) if (sl && !sl.mods) sl.mods = {};
     return merged;
   } catch {
     return DEFAULT();
@@ -180,6 +183,29 @@ export function createProfile(content) {
       state.loadout.slots = state.loadout.slots ?? [null, null];
       state.loadout.slots[i] = config;
       notify();
+    },
+    /** Fit or clear one mod on a slot. Passing the id already fitted takes it off. */
+    setMod(i, category, modId) {
+      const sl = state.loadout.slots?.[i];
+      if (!sl) return;
+      sl.mods = sl.mods ?? {};
+      if (modId && sl.mods[category] !== modId) sl.mods[category] = modId;
+      else delete sl.mods[category];
+      notify();
+    },
+    /*
+     * What a mod's `requires` is measured against. The bible puts the two gated
+     * sights "behind Codex research", so they are earned by studying monsters,
+     * not by rank — the one unlock in the game that a walk alone cannot buy.
+     */
+    get codexProgress() {
+      let researchI = 0;
+      let researchII = 0;
+      for (const e of Object.values(state.codex)) {
+        if ((e.research ?? 0) >= 1) researchI += 1;
+        if ((e.research ?? 0) >= 2) researchII += 1;
+      }
+      return { researchI, researchII };
     },
 
     // ---------------------------------------------------------- inventory

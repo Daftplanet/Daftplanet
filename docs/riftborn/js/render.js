@@ -166,6 +166,8 @@ function drawMonster(ctx, f, m, view, focused) {
   // Hiding weak points stands in for an unresearched Codex entry: they are still
   // there and still take the multiplier, you just cannot see where.
   if (!dead && !subdued && view.showWeakPoints !== false) {
+    // A gloom-shrouded weak point is already absent from m.weakPoints while dark,
+    // so there is nothing to filter here — it simply has no position to draw.
     for (const wp of Object.values(weakPointPositions(m))) {
       const pulse = 0.65 + 0.35 * Math.sin(f.t * 7);
       ctx.fillStyle = C.weak;
@@ -175,6 +177,12 @@ function drawMonster(ctx, f, m, view, focused) {
       ctx.strokeStyle = 'rgba(0,0,0,0.5)';
       ctx.lineWidth = 1;
       ctx.stroke();
+      // The Tracker Lens rings what the plain eye only tints.
+      if (view.markWeakPoints) {
+        ctx.strokeStyle = C.weak;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.arc(wp.x, wp.y, wp.radius + 5 + Math.sin(f.t * 4) * 1.5, 0, Math.PI * 2); ctx.stroke();
+      }
     }
   }
 
@@ -199,11 +207,11 @@ function drawMonster(ctx, f, m, view, focused) {
     ctx.restore();
   }
 
-  if (!dead) drawMonsterBars(ctx, f, m);
+  if (!dead) drawMonsterBars(ctx, f, m, view);
   if (subdued) drawSubduePrompt(ctx, f, m);
 }
 
-function drawMonsterBars(ctx, f, m) {
+function drawMonsterBars(ctx, f, m, view = {}) {
   const w = Math.max(54, Math.min(110, m.radius * 3)), h = 5;
   const x = m.x - w / 2, y = m.y - m.radius - 26;
 
@@ -217,7 +225,9 @@ function drawMonsterBars(ctx, f, m) {
 
   // The monster's own requirement, not the loadout's: apexes scale theirs with
   // party size, so drawing against the unscaled figure showed a full bar as a third full.
-  const rFrac = Math.min(1, m.restraint / (m.required ?? f.loadout.required));
+  const raw = Math.min(1, m.restraint / (m.required ?? f.loadout.required));
+  // Coarse without a Bio-Scanner, to the quarter, same as the HUD meter.
+  const rFrac = view.coarseRestraint ? Math.floor(raw * 4) / 4 : raw;
   ctx.fillStyle = '#000';
   ctx.fillRect(x, y + h + 3, w, h);
   ctx.fillStyle = C.restraint;

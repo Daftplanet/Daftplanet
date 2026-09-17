@@ -91,31 +91,41 @@ export function computeRestraint({
 }
 
 /** Pull the one species / weapon / round the prototype needs out of the shipped data files. */
-export function loadLoadout(data, { speciesId, weaponId, lethalId, captureId }) {
+export function loadLoadout(data, { speciesId, weaponId, lethalId, captureId, mods }) {
   const species = data.monsters.monsters.find((m) => m.id === speciesId);
-  const weapon = data.weapons.weapons.find((w) => w.id === weaponId);
+  const baseWeapon = data.weapons.weapons.find((w) => w.id === weaponId);
+  const fitted = baseWeapon
+    ? applyMods(baseWeapon, Object.values(mods ?? {}).filter(Boolean), data.weapons.mods)
+    : null;
+  const weapon = fitted?.weapon ?? baseWeapon;
   const lethal = data.ammo.lethal.find((a) => a.id === lethalId);
   const sizeDef = data.sizes.sizes.find((s) => s.id === species.size);
 
   if (!species) throw new Error(`unknown species ${speciesId}`);
-  if (!weapon) throw new Error(`unknown weapon ${weaponId}`);
+  if (!baseWeapon) throw new Error(`unknown weapon ${weaponId}`);
   if (!lethal) throw new Error(`unknown lethal round ${lethalId}`);
-  if (!weapon.lethal_ammo.includes(lethalId)) throw new Error(`${weaponId} cannot fire ${lethalId}`);
+  if (!baseWeapon.lethal_ammo.includes(lethalId)) throw new Error(`${weaponId} cannot fire ${lethalId}`);
 
   /*
    * A weapon may legitimately have no capture chamber — the Arcbrand Coil is
    * "pure setup. No capture round at all." Requiring one made picking it at the
    * bench reject every loadout and lock the player out of engaging anything.
    */
-  const hasCapture = weapon.capture_ammo.length > 0;
+  const hasCapture = baseWeapon.capture_ammo.length > 0;
   const capture = hasCapture ? data.ammo.capture.find((a) => a.id === captureId) : null;
   if (hasCapture && !capture) throw new Error(`unknown capture round ${captureId}`);
-  if (hasCapture && !weapon.capture_ammo.includes(captureId)) {
+  if (hasCapture && !baseWeapon.capture_ammo.includes(captureId)) {
     throw new Error(`${weaponId} cannot fire ${captureId}`);
   }
 
   return {
     species, weapon, sizeDef,
+    baseWeapon,
+    mods: mods ?? {},
+    spreadScale: fitted?.spreadScale ?? 1,
+    armourPierce: fitted?.armourPierce ?? 0,
+    recoil: fitted?.recoil ?? 0,
+    modFlags: fitted?.flags ?? {},
     ammo: { lethal, capture },
     hasCapture,
     hitZones: data.ammo.hit_zones,
@@ -132,4 +142,85 @@ export function loadLoadout(data, { speciesId, weaponId, lethalId, captureId }) 
     fleeScale: data.ammo.flee_chance_scale ?? 1,
     woundExponent: data.ammo.wound_multiplier_exponent ?? 1,
   };
+}
+
+// ---------------------------------------------------------------- weapon mods
+
+const NOISE_LADDER = ['silent', 'low', 'medium', 'high'];
+
+function stepNoise(noise, step, floor = 0) {
+  const i = NOISE_LADDER.indexOf(noise);
+  if (i < 0) return noise;
+  return NOISE_LADDER[Math.max(floor, Math.min(NOISE_LADDER.length - 1, i + step))];
+}
+
+/**
+ * Apply fitted mods to a weapon.
+ *
+ * Numeric effects are proportional deltas on the base stat. Two of them have no
+ * meaning in a top-down arena and are mapped honestly rather than faked: `zoom`
+ * becomes reach, and `reveal_through_cover` does nothing because there is no cover.
+ *
+ * Recoil is deliberately **mod-only**: a stock weapon has none, so fitting
+ * `fast_cycle` is a real trade (rate of fire for accuracy) and `stabiliser` only
+ * earns its slot alongside something that generates recoil.
+ *
+ * A Suppressor steps a weapon TOWARDS silence but can never reach it. Without the
+ * floor, fitting one to the Sting Crossbow (`low`) made it `silent`, which zeroes
+ * the alert radius and hands every shot the Ambush multiplier — the Sylvan Bow's
+ * whole identity, bought for one barrel slot. Only a weapon that ships silent is.
+ */
+export function applyMods(weapon, modIds, modTable) {
+  const out = { ...weapon };
+  const flags = {
+    highlightWeakPoints: false,
+    showRestraintNumbers: false,
+    showFleeThreshold: false,
+    revealHidden: false,
+  };
+  let spreadScale = 1;
+  let armourPierce = 0;
+  let recoil = 0;
+
+  const noiseFloor = weapon.noise === 'silent' ? 0 : 1;
+  const all = Object.values(modTable ?? {}).flat();
+  for (const id of modIds ?? []) {
+    const mod = all.find((m) => m.id === id);
+    if (!mod) continue;
+    for (const [key, value] of Object.entries(mod.effect ?? {})) {
+      switch (key) {
+        case 'range_m': out.range_m *= 1 + value; break;
+        case 'rpm': out.rpm *= 1 + value; break;
+        case 'magazine': out.magazine = Math.max(1, Math.round(out.magazine * (1 + value))); break;
+        case 'reload_seconds': out.reload_seconds *= 1 + value; break;
+        case 'restraint': out.restraint *= 1 + value; break;
+        case 'damage': out.damage *= 1 + value; break;
+        case 'spread': spreadScale *= 1 + value; break;
+        case 'noise_step': out.noise = stepNoise(out.noise, value, noiseFloor); break;
+        case 'armour_pierce': armourPierce += value; break;
+        case 'recoil': recoil += value; break;
+        case 'zoom': out.range_m *= 1.15; break;              // top-down: zoom reads as reach
+        case 'highlight_weak_points': flags.highlightWeakPoints = true; break;
+        case 'show_restraint_meter': flags.showRestraintNumbers = true; break;
+        case 'show_flee_threshold': flags.showFleeThreshold = true; break;
+        case 'reveal_gloom': flags.revealHidden = true; break;
+        case 'reveal_through_cover': break;                   // no cover in this arena
+        default: break;
+      }
+    }
+  }
+
+  return { weapon: out, spreadScale, armourPierce: Math.min(0.9, armourPierce), recoil: Math.max(0, recoil), flags };
+}
+
+/**
+ * Whether a mod's `requires` is satisfied. The data says `research_1` and
+ * `research_2`, which the bible describes as sitting "behind Codex research" —
+ * so they are read as Codex progress, not a rank.
+ */
+export function modUnlocked(mod, codexProgress) {
+  if (!mod?.requires) return true;
+  if (mod.requires === 'research_1') return (codexProgress.researchI ?? 0) >= 5;
+  if (mod.requires === 'research_2') return (codexProgress.researchII ?? 0) >= 3;
+  return true;
 }
