@@ -21,8 +21,10 @@ export const BIOMES = {
   industrial:  { name: 'Industrial',  colour: '#4a4132', rate: 0.22 },
   works:       { name: 'Works',       colour: '#5c4c33', rate: 0.24 },
   transit:     { name: 'Transit',     colour: '#2a3138', rate: 0.21 },
-  open_ground: { name: 'Open Ground', colour: '#31463a', rate: 0.15 },
+  waterside:   { name: 'Waterside',   colour: '#25445c', rate: 0.22 },
+  woodland:    { name: 'Woodland',    colour: '#22412a', rate: 0.20 },
   parkland:    { name: 'Parkland',    colour: '#2d5436', rate: 0.16 },
+  open_ground: { name: 'Open Ground', colour: '#31463a', rate: 0.15 },
   residential: { name: 'Residential', colour: '#2b2f36', rate: 0.07 },
 };
 
@@ -65,11 +67,21 @@ function noise(x, y, freq, seed) {
 // ---------------------------------------------------------------- biomes
 
 /**
- * Classify a tile. Transit runs as ridges across the map so rail and tram lines
- * read as lines rather than blobs; everything else is overlapping density fields.
+ * Classify a tile.
+ *
+ * Water and rail are drawn as lines rather than blobs, because that is what they
+ * are: a river you follow and a track you cross. Everything else is overlapping
+ * density fields. Order matters — linear features win over area ones.
  */
 export function biomeAt(tx, ty, seed = 1) {
   const drift = noise(tx, ty, 0.03, seed + 90) * 26 - 13;
+
+  // A meandering river, repeating every 80 tiles (~3.2 km), plus standing water.
+  const meander = Math.sin(tx * 0.05 + seed) * 11 + noise(tx, 0, 0.06, seed + 50) * 22 - 11;
+  const ry = ((ty - meander) % 80 + 80) % 80;
+  if (Math.min(ry, 80 - ry) < 1.7) return 'waterside';
+  if (noise(tx, ty, 0.085, seed + 60) > 0.82) return 'waterside';      // lakes and docks
+
   const rail = Math.abs(((ty + drift) % 34 + 34) % 34 - 17);
   const rail2 = Math.abs(((tx * 0.7 + drift) % 41 + 41) % 41 - 20.5);
   if (rail < 1.1 || rail2 < 1.0) return 'transit';
@@ -78,12 +90,17 @@ export function biomeAt(tx, ty, seed = 1) {
   const green = noise(tx, ty, 0.07, seed + 2);
   const urban = noise(tx, ty, 0.045, seed + 1);
   const works = noise(tx, ty, 0.16, seed + 4);
+  const canopy = noise(tx, ty, 0.10, seed + 70);
 
   if (industry > 0.66) return works > 0.62 ? 'works' : 'industrial';
-  if (green > 0.66) return green > 0.76 ? 'parkland' : 'open_ground';
+  // Dense tree cover is woodland; managed green is parkland.
+  if (green > 0.62) {
+    if (canopy > 0.56) return 'woodland';
+    return green > 0.74 ? 'parkland' : 'open_ground';
+  }
   if (urban > 0.60) return 'urban_core';
   if (industry > 0.56) return 'industrial';
-  if (green > 0.56) return 'open_ground';
+  if (green > 0.54) return 'open_ground';
   return 'residential';
 }
 
@@ -101,13 +118,39 @@ export function timeBucket(date = new Date()) {
   return Math.floor(date.getTime() / BUCKET_MS);
 }
 
+/*
+ * Weather.
+ *
+ * Simulated here, deterministically from the hour and the world seed, so the
+ * prototype needs no third-party feed and sends nobody's location anywhere. A real
+ * build swaps this one function for a live forecast; everything downstream only
+ * asks "what is the weather", not where it came from.
+ */
+export const WEATHER = {
+  clear:        { name: 'Clear',        elements: { ember: 1.8, lumen: 1.4 } },
+  rain:         { name: 'Rain',         elements: { tide: 2.0, ember: 0.5 } },
+  thunderstorm: { name: 'Thunderstorm', elements: { volt: 2.5, tide: 1.4, ember: 0.4 } },
+  snow:         { name: 'Snow',         elements: { tide: 1.6, gale: 1.4, ember: 0.4 }, freezing: true },
+  fog:          { name: 'Fog',          elements: { gloom: 1.8 }, detectionScale: 0.6 },
+  wind:         { name: 'High Wind',    elements: { gale: 2.2 } },
+  overcast:     { name: 'Overcast',     elements: {} },
+};
+
+const WEATHER_TABLE = ['clear', 'overcast', 'overcast', 'rain', 'wind', 'fog', 'thunderstorm', 'clear', 'rain', 'snow'];
+
+export function weatherAt(date = new Date(), seed = 1) {
+  const hourBucket = Math.floor(date.getTime() / (3600 * 1000) / 3);   // shifts every 3 hours
+  const roll = hash(hourBucket, seed + 31, 0);
+  return WEATHER_TABLE[Math.floor(roll * WEATHER_TABLE.length)];
+}
+
 // ---------------------------------------------------------------- spawns
 
 /**
  * Weight a species for this tile. A biome mismatch is a hard zero — that is what
  * makes walking somewhere different worth doing.
  */
-function speciesWeight(species, biome, window) {
+function speciesWeight(species, biome, window, weather) {
   if (species.is_branch_form || species.apex) return 0;          // evolution-only / event-only
   if (!species.spawn.biomes.includes(biome)) return 0;
 
@@ -121,6 +164,9 @@ function speciesWeight(species, biome, window) {
   const byElement = TIME_ELEMENT[window] ?? {};
   for (const el of species.elements) w *= byElement[el] ?? 1;
 
+  const byWeather = WEATHER[weather]?.elements ?? {};
+  for (const el of species.elements) w *= byWeather[el] ?? 1;
+
   return w;
 }
 
@@ -128,12 +174,12 @@ function speciesWeight(species, biome, window) {
  * Every spawn in a tile, derived purely from (tile, bucket, seed). No state, so
  * the same call anywhere returns the same answer.
  */
-export function spawnsInTile(tx, ty, bucket, pool, biome, window, seed = 1) {
+export function spawnsInTile(tx, ty, bucket, pool, biome, window, seed = 1, weather = 'overcast') {
   const roll = hash(tx, ty, bucket, seed + 7);
   const rate = BIOMES[biome].rate;
   if (roll > rate) return [];
 
-  const weights = pool.map((s) => speciesWeight(s, biome, window));
+  const weights = pool.map((s) => speciesWeight(s, biome, window, weather));
   const total = weights.reduce((a, b) => a + b, 0);
   if (total <= 0) return [];
 
@@ -159,17 +205,18 @@ export function spawnsInTile(tx, ty, bucket, pool, biome, window, seed = 1) {
 }
 
 /** Every spawn the Warden can currently see. */
-export function visibleSpawns(px, py, bucket, pool, window, seed = 1) {
-  const reach = Math.ceil(DETECT_M / TILE_M) + 1;
+export function visibleSpawns(px, py, bucket, pool, window, seed = 1, weather = 'overcast') {
+  const range = DETECT_M * (WEATHER[weather]?.detectionScale ?? 1);
+  const reach = Math.ceil(range / TILE_M) + 1;
   const ctx = Math.floor(px / TILE_M), cty = Math.floor(py / TILE_M);
   const out = [];
 
   for (let ty = cty - reach; ty <= cty + reach; ty++) {
     for (let tx = ctx - reach; tx <= ctx + reach; tx++) {
       const biome = biomeAt(tx, ty, seed);
-      for (const s of spawnsInTile(tx, ty, bucket, pool, biome, window, seed)) {
+      for (const s of spawnsInTile(tx, ty, bucket, pool, biome, window, seed, weather)) {
         s.distance = Math.hypot(s.x - px, s.y - py);
-        if (s.distance <= DETECT_M) out.push(s);
+        if (s.distance <= range) out.push(s);
       }
     }
   }

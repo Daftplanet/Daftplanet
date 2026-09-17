@@ -15,6 +15,7 @@ export const ARENA = { w: 960, h: 640 };
 export const PX_PER_METRE = 22;
 
 const PLAYER = { radius: 12, speed: 150, maxHp: 100, invulnSeconds: 0.6 };
+const SPREAD_PER_PROJECTILE = 0.055;   // radians between scattergun pellets
 const SIZE_RADIUS = { mote: 13, whelp: 19, strider: 26, brute: 38, colossus: 56, titan: 80 };
 const MONSTER = { speedScale: 24 };
 
@@ -87,6 +88,9 @@ export function weakPointPositions(m) {
 }
 
 export function createFight(loadout, opts = {}) {
+  // Account-wide passive bonuses from Sanctuary residents. Defaulted so the
+  // headless sim and any caller without a profile still work.
+  const bonuses = opts.bonuses ?? {};
   const rng = opts.rng ?? Math.random;
   const ai = profileFor(loadout.species);
   const radius = SIZE_RADIUS[loadout.species.size] ?? 26;
@@ -99,6 +103,7 @@ export function createFight(loadout, opts = {}) {
   return {
     rng,
     loadout,
+    bonuses,
     t: 0,
     outcome: null,          // culled | catalogued | escaped | driven_off
     outcomeAt: 0,
@@ -229,15 +234,26 @@ function fire(f) {
   f.stats.shots += 1;
 
   const speed = w.chamber === 'lethal' ? 950 : 760;
-  f.projectiles.push({
-    x: f.player.x + Math.cos(f.player.aim) * 16,
-    y: f.player.y + Math.sin(f.player.aim) * 16,
-    vx: Math.cos(f.player.aim) * speed,
-    vy: Math.sin(f.player.aim) * speed,
-    travelled: 0,
-    maxDist: L.weapon.range_m * PX_PER_METRE,
-    kind: w.chamber,
-  });
+  // A Slug collapses the Splitbore to a single projectile, per its ammo entry.
+  const ammo = w.chamber === 'lethal' ? L.ammo.lethal : L.ammo.capture;
+  const single = ammo.effect === 'splitbore_single_projectile';
+  const count = single ? 1 : (L.weapon.projectiles ?? 1);
+  const spread = count > 1 ? SPREAD_PER_PROJECTILE * (count - 1) : 0;
+
+  for (let i = 0; i < count; i++) {
+    const offset = count > 1 ? -spread / 2 + (spread * i) / (count - 1) : 0;
+    const jitter = count > 1 ? (f.rng() - 0.5) * SPREAD_PER_PROJECTILE : 0;
+    const a = f.player.aim + offset + jitter;
+    f.projectiles.push({
+      x: f.player.x + Math.cos(a) * 16,
+      y: f.player.y + Math.sin(a) * 16,
+      vx: Math.cos(a) * speed,
+      vy: Math.sin(a) * speed,
+      travelled: 0,
+      maxDist: L.weapon.range_m * PX_PER_METRE,
+      kind: w.chamber,
+    });
+  }
   f.shake = Math.min(f.shake + 1.6, 6);
 
   // Anything louder than `silent` gives you away before the round lands, so a
@@ -253,7 +269,7 @@ function startReload(f) {
   if (w.reloadT > 0 || w.swapT > 0) return;
   if (w.mag[w.chamber] >= f.loadout.weapon.magazine) return;
   if (w.reserve[w.chamber] <= 0) return;
-  w.reloadT = f.loadout.weapon.reload_seconds;
+  w.reloadT = f.loadout.weapon.reload_seconds / (1 + (f.bonuses.reload_speed ?? 0));
 }
 
 function finishReload(f) {
@@ -317,7 +333,7 @@ function resolveHit(f, projectile, hitZone) {
   if (hitZone === 'weak_point') f.stats.weakHits += 1;
 
   if (projectile.kind === 'lethal') {
-    const dmg = computeDamage(shared);
+    const dmg = computeDamage(shared) * (1 + (f.bonuses.lethal_damage ?? 0));
     m.hp = Math.max(0, m.hp - dmg);
     f.stats.lethalHits += 1;
     f.stats.damageDealt += dmg;
@@ -328,7 +344,7 @@ function resolveHit(f, projectile, hitZone) {
       statusDefs: L.statusDefs, activeStatuses: activeStatuses(m), statusCap: L.statusCap,
       hp: m.hp, maxHp: m.maxHp, woundExponent: L.woundExponent,
     });
-    m.restraint += gain;
+    m.restraint += gain * (1 + (f.bonuses.restraint_gain ?? 0));
     f.stats.captureHits += 1;
     f.stats.restraintApplied += gain;
     f.floaters.push({ x: projectile.x, y: projectile.y, text: `+${gain.toFixed(0)}`, kind: 'restraint', t: 0 });
@@ -542,7 +558,9 @@ function nearestEdge(m) {
 function hitPlayer(f) {
   const m = f.monster;
   const enraged = hasStatus(m, 'enraged');
-  const dmg = f.loadout.species.stats.attack * (enraged ? (f.loadout.statusDefs.enraged.damage_dealt_multiplier ?? 1.4) : 1);
+  const dmg = f.loadout.species.stats.attack
+    * (enraged ? (f.loadout.statusDefs.enraged.damage_dealt_multiplier ?? 1.4) : 1)
+    * (1 - Math.min(0.5, f.bonuses.damage_resistance ?? 0));
   f.player.hp = Math.max(0, f.player.hp - dmg);
   f.player.invuln = PLAYER.invulnSeconds;
   f.player.hitFlash = 0.3;

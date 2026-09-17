@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
-<title>RIFTBORN — Phase 1</title>
-<meta name="description" content="Vertical slice for RIFTBORN: patrol a biome-driven map, then cull or catalogue what you find.">
+<title>RIFTBORN — Phase 2</title>
+<meta name="description" content="RIFTBORN: patrol a biome-driven map, cull or catalogue what you find, and raise what you catch until it evolves.">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="css/style.css">
 </head>
@@ -20,13 +20,14 @@
     </div>
     <div class="purse">
       <span title="Essence"><b id="essence">0</b> ess</span>
-      <span title="Alloy"><b id="alloy">0</b> alloy</span>
       <span title="Research Points"><b id="rp">0</b> RP</span>
+      <span class="mats" id="mats"></span>
     </div>
     <nav class="tabs">
       <button class="tab" data-view="patrol" type="button">Patrol</button>
       <button class="tab" data-view="codex" type="button">Codex</button>
-      <button class="tab" data-view="loadout" type="button">Loadout</button>
+      <button class="tab" data-view="sanctuary" type="button">Sanctuary</button>
+      <button class="tab" data-view="loadout" type="button">Bench</button>
     </nav>
   </header>
 
@@ -34,6 +35,8 @@
   <section class="view" id="view-patrol">
     <div class="bar bar--strip">
       <span id="clock">—</span>
+      <span class="sep">·</span>
+      <span id="weather">—</span>
       <span class="sep">·</span>
       <span id="biome">—</span>
       <span class="sep">·</span>
@@ -59,11 +62,19 @@
           <input type="range" id="opt-hour" min="-12" max="12" step="1" value="0"></label>
         <label>Walk pace <em id="pace-label">×8</em>
           <input type="range" id="opt-pace" min="1" max="20" step="1" value="8"></label>
-        <p class="dev__note">Spawns come from (tile, 15-minute bucket, world seed). Shift the clock and the map repopulates — Ember and Volt come out at dusk, Stone is the daytime constant.</p>
-        <label class="dev__check"><input type="checkbox" id="opt-unlock"> Unlock all weapons <em>(prototype — skips the rank 4 gate)</em></label>
+        <label>Weather <select id="opt-weather"></select></label>
+        <label>Study rate <em id="study-label">×1</em>
+          <input type="range" id="opt-study" min="1" max="500" step="1" value="1"></label>
+        <p class="dev__note">Spawns come from (tile, 15-minute bucket, weather, world seed). Shift the clock and the map repopulates — Ember and Volt come out at dusk, Stone is the daytime constant. Study accrues in real time at 1/minute, so crank the rate to see an evolution without waiting seven hours.</p>
+        <label class="dev__check"><input type="checkbox" id="opt-unlock"> Unlock all weapons <em>(prototype — skips the rank gates)</em></label>
         <button class="ghost" id="reset-profile" type="button">Reset Warden</button>
       </aside>
     </div>
+
+    <section class="board">
+      <h2>Today's contracts</h2>
+      <div id="contracts"></div>
+    </section>
 
     <p class="keys">
       <span class="keys__desktop"><b>WASD</b> walk · walk into a marker to engage</span>
@@ -157,6 +168,18 @@
       <span>Research I reveals weak points in the field</span>
     </div>
     <div class="codex" id="codex-list"></div>
+  </section>
+
+  <!-- ---------------------------------------------------------- sanctuary -->
+  <section class="view view--scroll" id="view-sanctuary" hidden>
+    <div class="bar bar--strip">
+      <span id="sanctuary-summary">—</span>
+    </div>
+    <div class="bar bar--strip" id="bonus-list"></div>
+    <h2 class="section">Habitats</h2>
+    <div class="habitats" id="habitats"></div>
+    <h2 class="section">Residents</h2>
+    <div class="residents" id="residents"></div>
   </section>
 
   <!-- ---------------------------------------------------------- loadout -->

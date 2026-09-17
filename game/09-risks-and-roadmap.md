@@ -100,7 +100,9 @@ Findings in [11-phase1-findings.md](11-phase1-findings.md).
 - *Status: the loop closes — cull funds darts, darts fill the Codex, the Codex
   reveals weak points, weak points speed up the next fight. Needs hands on it.*
 
-### Phase 2 — The loop closes
+### Phase 2 — The loop closes — **built**
+
+Findings in [12-phase2-findings.md](12-phase2-findings.md).
 
 - All 12 families, 40 non-apex species.
 - All 8 weapons, all 14 ammo types, mods.
@@ -108,6 +110,9 @@ Findings in [11-phase1-findings.md](11-phase1-findings.md).
 - Research I–III, contracts, crafting economy.
 - Weather and time-of-day spawn modifiers.
 - **Exit criterion:** a player has a reason to log in on day 30.
+- *Status: the mechanism exists — Study accrues while you are away and evolution
+  gates on real time and weather you cannot rush. Whether that is a reason rather
+  than a mechanism needs hands on it. Pack spawns are now blocking three weapons.*
 
 ### Phase 3 — Together
 

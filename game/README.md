@@ -30,6 +30,7 @@ grows your collection.
 | [09-risks-and-roadmap.md](09-risks-and-roadmap.md) | Open questions, content-rating and safety notes, build phases |
 | [10-phase0-findings.md](10-phase0-findings.md) | What building the fight taught us, and the three maths bugs it caught |
 | [11-phase1-findings.md](11-phase1-findings.md) | The vertical slice: a collision bug that had been distorting phase 0, and what the map taught us |
+| [12-phase2-findings.md](12-phase2-findings.md) | The loop closes: a world that could not host its own bestiary, and evolution against real-world time and weather |
 
 ## Machine-readable data
 
@@ -50,9 +51,10 @@ are all in the JSON so they can be rebalanced in one place.
 
 ## The prototype
 
-Phases 0 and 1 are built at [`docs/riftborn/`](../docs/riftborn/): the grey-box
-fight, then the vertical slice — a biome-driven map, 9 wild species, 3 weapons and a
-persistent Codex. It runs the design's real formulas out of `data/`, and the same
+Phases 0 through 2 are built at [`docs/riftborn/`](../docs/riftborn/): the grey-box
+fight, the vertical slice, and now the closed loop — all 12 families, all 8 weapons,
+the Sanctuary, evolution with its four branch conditions, Research I–III, contracts
+and weather. It runs the design's real formulas out of `data/`, and the same
 fight and world code runs headlessly in a balance sim so tuning claims can be
 checked rather than asserted.
 
@@ -61,8 +63,8 @@ python3 -m http.server -d docs 8000     # then open localhost:8000/riftborn/
 node game/tools/balance_sim.mjs 400     # outcome table by strategy and skill
 ```
 
-What they changed about this bible is in [10-phase0-findings.md](10-phase0-findings.md)
-and [11-phase1-findings.md](11-phase1-findings.md).
+What they changed about this bible is in [10](10-phase0-findings.md),
+[11](11-phase1-findings.md) and [12](12-phase2-findings.md).
 
 ## Glossary
 

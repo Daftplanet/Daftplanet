@@ -7,10 +7,13 @@ built on the design bible's real data and formulas.
 - **Phase 1** — the vertical slice. A biome-driven map, 9 wild species across
   3 families, 3 weapons, a persistent Codex with Research I, and an economy that
   makes culling pay for capturing.
+- **Phase 2** — the loop closes. All 12 families, all 8 weapons, all 14 rounds, the
+  Sanctuary, evolution with its four branch conditions, Research I–III, daily
+  contracts, weather, and ammunition gated on element materials.
 
-> **Phase 1 exit criterion:** a 20-minute Patrol session is worth repeating tomorrow.
+> **Phase 2 exit criterion:** a player has a reason to log in on day 30.
 
-No AR, no geolocation, no Sanctuary, no evolution. Those are phase 2 and later.
+No AR, no geolocation, no rift events, no pack spawns. Those are phase 3 and later.
 
 ## Running it
 
@@ -32,10 +35,18 @@ world simulation behind it. Walk within 25 m of a marker to engage.
 **Fight.** Same as phase 0. Hold click to fire, `Space` swaps chamber at its real
 0.6 s cost, `E` tags a subdued monster, `Esc` withdraws.
 
+**Sanctuary.** Catalogued monsters live here and accrue **Study** in real time —
+1 per minute, so stage 1→2 is about seven hours. Assign a resident to a habitat
+matching its element for 25% more, feed it materials for a burst, and evolve it when
+the gates clear. Two of the four branches gate on the actual world (local time,
+weather) and one on *how you captured it* weeks earlier. The world panel has a Study
+rate multiplier so you can see an evolution without waiting a day.
+
 **Codex.** Every species you see, fight, kill or catalogue is recorded. Culling
-something you have never catalogued marks the entry **Data Lost**. Spend a Research
-Point on a catalogued entry to unlock **Research I** — which makes that species'
-weak points visible in the field. Until then you are shooting at a silhouette.
+something you have never catalogued marks the entry **Data Lost**. Spend Research
+Points to unlock **Research I** (weak points visible in the field), **II** (spawn
+biomes and time windows) and **III** (evolution requirements). Until Research I you
+are shooting at a silhouette.
 
 **Loadout.** Pick a weapon and a round for each chamber, and craft more. You carry
 24 lethal and 12 capture rounds into a fight; the rest stays at the bench. Culling
@@ -77,7 +88,8 @@ pace — shift to dusk and the map fills with Ember and Volt, where daytime is S
 | `js/game.js` | The fight: entities, AI, `step()`. Also DOM-free. |
 | `js/world.js` | Tiles, biomes, deterministic spawns. Also DOM-free. |
 | `js/patrol.js` | The map: walking, markers, rendering. |
-| `js/profile.js` | Progression, inventory, the Codex, persistence. |
+| `js/profile.js` | Progression, inventory, the Codex, the Sanctuary, persistence. |
+| `js/sanctuary.js` | Evolution gates and branch conditions. Pure functions. |
 | `js/render.js` | Fight canvas drawing. |
 | `js/input.js` | Keyboard, mouse and touch → an `intent` object. |
 | `js/app.js` | View routing and glue. |

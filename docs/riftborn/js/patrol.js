@@ -7,8 +7,8 @@
  */
 
 import {
-  TILE_M, DETECT_M, ENGAGE_M, BIOMES,
-  biomeAt, visibleSpawns, timeWindow, timeBucket,
+  TILE_M, DETECT_M, ENGAGE_M, BIOMES, WEATHER,
+  biomeAt, visibleSpawns, timeWindow, timeBucket, weatherAt,
 } from './world.js';
 
 export const VIEW = { w: 960, h: 640 };
@@ -31,13 +31,19 @@ export function createPatrol(profile, pool) {
     nearest: null,
     hourOffset: 0,          // dev scrubber: shift the clock without waiting for dusk
     walkMultiplier: 8,      // simulated pace, so a 20-minute patrol fits an evaluation
+    weatherOverride: null,  // dev: pin the weather to reach a branch condition
     lastBucket: null,
   };
 }
 
 export function patrolClock(p) {
   const d = new Date(Date.now() + p.hourOffset * 3600 * 1000);
-  return { date: d, window: timeWindow(d), bucket: timeBucket(d) };
+  return {
+    date: d,
+    window: timeWindow(d),
+    bucket: timeBucket(d),
+    weather: p.weatherOverride ?? weatherAt(d, p.profile.state.seed),
+  };
 }
 
 export function stepPatrol(p, dt, intent) {
@@ -48,11 +54,12 @@ export function stepPatrol(p, dt, intent) {
     const dy = (intent.moveY / len) * speed * dt;
     p.x += dx; p.y += dy;
     p.heading = Math.atan2(dy, dx);
-    p.profile.walk(Math.hypot(dx, dy));
+    p.profile.walk(Math.hypot(dx, dy), biomeUnderfoot(p));
   }
 
-  const { window, bucket } = patrolClock(p);
-  p.spawns = visibleSpawns(p.x, p.y, bucket, p.pool, window, p.profile.state.seed)
+  const { window, bucket, weather } = patrolClock(p);
+  p.weather = weather;
+  p.spawns = visibleSpawns(p.x, p.y, bucket, p.pool, window, p.profile.state.seed, weather)
     .filter((s) => !p.profile.isResolved(s.id));
 
   // Anything you can see goes into the Codex as Sighted.
@@ -95,11 +102,14 @@ export function drawPatrol(ctx, p, view, speciesById) {
     }
   }
 
-  // --- detection radius
+  // --- detection radius (fog pulls it in, Gale residents push it out)
+  const detect = DETECT_M
+    * (WEATHER[p.weather ?? 'overcast']?.detectionScale ?? 1)
+    * (1 + (p.profile.bonus?.('detection_radius') ?? 0));
   ctx.strokeStyle = 'rgba(105,210,231,0.22)';
   ctx.lineWidth = 1.5;
   ctx.setLineDash([6, 6]);
-  ctx.beginPath(); ctx.arc(cx, cy, DETECT_M * PX_PER_M, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, detect * PX_PER_M, 0, Math.PI * 2); ctx.stroke();
   ctx.setLineDash([]);
 
   // --- engage radius
