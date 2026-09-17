@@ -15,6 +15,10 @@ The **approach** phase is where the bow earns its keep. Monsters have an awarene
 cone and a noise threshold; open with a silent weapon and you get a free
 **Ambush** multiplier (×1.8 damage, ×1.5 Restraint) on the first projectile.
 
+Firing anything louder than `silent` alerts a monster within earshot the moment you
+pull the trigger — before the round lands. So a loud weapon never earns Ambush,
+which is precisely what the Sylvan Bow is paying for with its one-arrow magazine.
+
 ## Damage
 
 ```
@@ -34,7 +38,7 @@ top of that band, which is what makes Piercing rounds worth a slot.
 Every species has 1–3 weak points — a Cragback's cracked shoulder plate, a
 Tempestrix's eye, a Rotmatron's exposed gill cluster. They are:
 
-- **×2.5 damage** with lethal rounds.
+- **×2.5 damage** with lethal rounds (a weapon's own `crit_multiplier` overrides this).
 - **×2.0 Restraint** with capture rounds.
 - **Hidden until researched.** At Codex research rank 1 the entry names them; at
   rank 2 the `Tracker Lens` / `Bio-Scanner` sight highlights them live in AR.
@@ -48,8 +52,8 @@ Capture is **not** a random roll. Each capture projectile adds to a Restraint me
 that decays over time. Fill it and the monster is subdued.
 
 ```
-restraint_gain = ammo_restraint
-               × weapon_restraint_rating
+restraint_gain = weapon_base_restraint
+               × ammo_restraint_multiplier
                × hit_zone_multiplier        (weak point = ×2.0)
                × status_multiplier          (product of active statuses, capped ×2.5)
                × wound_multiplier           (see below)
@@ -69,14 +73,23 @@ is genuinely risky, because overshooting kills the thing you wanted.
 decay_rate = 4.0 + (0.35 × species_tier) Restraint/second
 ```
 
-Decay pauses entirely while the target is `Sedated` or `Anchored`. Stop shooting a
-Colossus for six seconds and you start over; that is the pressure.
+Decay pauses entirely while the target is `Anchored`, and drops to ×0.35 while it is
+`Sedated`. Stop shooting a Colossus for six seconds and you start over; that is the
+pressure. Sedation buys you time, it does not stop the clock — an early prototype
+build where it did made darting a full-health monster the dominant strategy.
 
 ### The subdue threshold
 
 ```
-restraint_required = species_base_restraint × size_multiplier × (1 + 0.15 × evolution_stage)
+restraint_required = species_base_restraint
+                   × size_multiplier
+                   × (1 + 0.15 × evolution_stage)
+                   × restraint_required_scale      (global, currently 3.0)
 ```
+
+`restraint_required_scale` converts between the weapon `RES` ladder and the species
+`base_restraint` ladder, which were authored independently. It is the one global dial
+for how long every capture in the game takes.
 
 When Restraint ≥ `restraint_required`, the monster collapses into a **Subdued**
 state lasting 5 seconds. Tap it in that window to tag it. Miss the window and it
@@ -89,7 +102,7 @@ deliberately generous — the game is played while walking.
 
 | Status | Source | Effect | Restraint multiplier |
 | --- | --- | --- | --- |
-| `Sedated` | Tranq ×3, Heavy Sedative ×1 | Slows monster 50%, **halts Restraint decay** | ×1.8 |
+| `Sedated` | Tranq ×3, Heavy Sedative ×1 | Slows monster 50%, **Restraint decay ×0.35** | ×1.8 |
 | `Ensnared` | Net Shell, Snare Grenade | Cannot move or flee, can still attack | ×1.5 |
 | `Stunned` | Arcbrand 3rd chain hit | No actions for 2 s | ×1.3 |
 | `Anchored` | Anchor Tether | Colossus/Titan held in place, halts decay | ×1.4 |

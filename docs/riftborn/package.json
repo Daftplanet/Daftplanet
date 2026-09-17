@@ -1,0 +1,6 @@
+{
+  "name": "riftborn-prototype",
+  "private": true,
+  "type": "module",
+  "//": "Not an npm package and nothing installs from it. It exists so Node treats js/*.js as ES modules, letting game/tools/balance_sim.mjs import the exact same fight code the browser runs."
+}

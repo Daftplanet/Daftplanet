@@ -74,14 +74,19 @@ some of that. Rules:
 
 ## Build roadmap
 
-### Phase 0 — Paper and prototype (no map)
+### Phase 0 — Paper and prototype (no map) — **built**
 
 Prove the fight is fun before touching geolocation.
+
+Lives at [`docs/riftborn/`](../docs/riftborn/); findings in
+[10-phase0-findings.md](10-phase0-findings.md).
 
 - One monster (Cinderfang), one weapon (Marker Pistol), both ammo types.
 - Restraint meter, wound multiplier, weak points, flee behaviour.
 - **Exit criterion:** the kill-or-capture decision is tense with a single monster in
   a grey box. If it isn't fun here, no amount of map makes it fun.
+- *Status: the structure holds up and the maths is fixed. Whether it is fun is the
+  one thing the sim cannot answer — it needs hands on it.*
 
 ### Phase 1 — Vertical slice
 

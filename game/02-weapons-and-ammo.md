@@ -19,7 +19,8 @@ cannot fire a rune arrow. The compatibility grid below is where weapon identity 
 ## Weapon roster
 
 Eight weapons, four tiers. `DMG` is per-projectile lethal damage before modifiers.
-`RES` is Restraint per capture projectile before modifiers. `Noise` drives whether a
+`RES` is the base Restraint a single capture projectile from this weapon contributes,
+before the ammo, hit zone, status, wound and size terms are applied. `Noise` drives whether a
 monster is alerted or enraged (see [03](03-combat-and-capture.md)).
 
 | # | Weapon | Class | Tier | DMG | RES | RPM | Range | Mag | Reload | Noise | Identity |
@@ -31,7 +32,7 @@ monster is alerted or enraged (see [03](03-combat-and-capture.md)).
 | 5 | **Sting Crossbow** | Crossbow | 3 | 55 | 58 | 28 | 45 m | 2 | 2.9 s | Low | Heavy sedative delivery. The capture specialist. |
 | 6 | **Lattice Launcher** | Launcher | 3 | 45 (AoE) | 40 (AoE) | 22 | 30 m | 3 | 3.4 s | High | Area denial. Can snare a whole pack at once. |
 | 7 | **Arcbrand Coil** | Coilgun | 3 | 26 chain | 20 chain | 120 | 22 m | 40 cells | 2.0 s | Med | Chains to 3 targets. Applies `Stunned` reliably. |
-| 8 | **Tether Harpoon** | Harpoon | 4 | 90 | 25 + anchor | 18 | 35 m | 1 | 4.0 s | Med | **The only way to hold a Colossus or Titan still.** |
+| 8 | **Tether Harpoon** | Harpoon | 4 | 90 | 25 | 18 | 35 m | 1 | 4.0 s | Med | **The only way to hold a Colossus or Titan still.** |
 
 ### Notes on identity
 

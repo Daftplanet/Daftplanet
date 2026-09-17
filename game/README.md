@@ -28,6 +28,7 @@ grows your collection.
 | [07-codex-wiki.md](07-codex-wiki.md) | The player wiki: entries, research ranks, completion rewards |
 | [08-world-and-progression.md](08-world-and-progression.md) | Biomes, spawn tables, weather, time of day, Warden ranks |
 | [09-risks-and-roadmap.md](09-risks-and-roadmap.md) | Open questions, content-rating and safety notes, build phases |
+| [10-phase0-findings.md](10-phase0-findings.md) | What building the prototype taught us, and the three maths bugs it caught |
 
 ## Machine-readable data
 
@@ -45,6 +46,20 @@ instead of re-typing tables out of markdown.
 All numbers in this bible are **first-pass tuning values**, not final. They are
 internally consistent so that a prototype has something real to run on, and they
 are all in the JSON so they can be rebalanced in one place.
+
+## The prototype
+
+Phase 0 is built: a grey-box version of the fight, one monster and one weapon, at
+[`docs/riftborn/`](../docs/riftborn/). It runs the design's real formulas out of
+`data/`, and the same fight code runs headlessly in a balance sim so tuning claims
+can be checked rather than asserted.
+
+```sh
+python3 -m http.server -d docs 8000     # then open localhost:8000/riftborn/
+node game/tools/balance_sim.mjs 400     # outcome table by strategy and skill
+```
+
+What it changed about this bible is in [10-phase0-findings.md](10-phase0-findings.md).
 
 ## Glossary
 
