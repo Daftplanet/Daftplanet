@@ -114,11 +114,12 @@ Findings in [12-phase2-findings.md](12-phase2-findings.md).
   gates on real time and weather you cannot rush. Whether that is a reason rather
   than a mechanism needs hands on it. Pack spawns are now blocking three weapons.*
 
-### Phase 3 — Together — **part 1 built (packs)**
+### Phase 3 — Together — **packs, rift events and apexes built**
 
 Findings in [13-phase3-findings.md](13-phase3-findings.md).
 
-- Rift events, the 3 apexes, party play.
+- Rift events, the 3 apexes, party play. *Rift events and all three apexes are
+  built and solo-playable; party play needs netcode and is untouched.*
 - Multi-capture (snare + partner tag).
 - Codex sharing, field reports, local leaderboards.
 - **Exit criterion:** an Expedition session pulls people out of the house.

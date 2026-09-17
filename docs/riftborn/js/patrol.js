@@ -7,8 +7,9 @@
  */
 
 import {
-  TILE_M, DETECT_M, ENGAGE_M, BIOMES, WEATHER,
+  TILE_M, DETECT_M, ENGAGE_M, BIOMES, WEATHER, RIFT_RADIUS_M, RIFT_RANK,
   biomeAt, visibleSpawns, timeWindow, timeBucket, weatherAt,
+  riftAt, nextRift, riftsNear, riftSpawns,
 } from './world.js';
 
 export const VIEW = { w: 960, h: 640 };
@@ -21,9 +22,12 @@ const ELEMENT_COLOUR = {
 };
 const SIZE_MARKER = { mote: 5, whelp: 7, strider: 9, brute: 12, colossus: 16, titan: 20 };
 
-export function createPatrol(profile, pool) {
+export function createPatrol(profile, pool, apexById = {}) {
   return {
-    profile, pool,
+    profile, pool, apexById,
+    rift: null,
+    rifts: [],
+    upcoming: null,
     x: 5000 + Math.random() * 400,
     y: 5000 + Math.random() * 400,
     heading: -Math.PI / 2,
@@ -57,10 +61,24 @@ export function stepPatrol(p, dt, intent) {
     p.profile.walk(Math.hypot(dx, dy), biomeUnderfoot(p));
   }
 
-  const { window, bucket, weather } = patrolClock(p);
+  const { date, window, bucket, weather } = patrolClock(p);
   p.weather = weather;
-  p.spawns = visibleSpawns(p.x, p.y, bucket, p.pool, window, p.profile.state.seed, weather)
-    .filter((s) => !p.profile.isResolved(s.id));
+
+  /*
+   * Rift events replace the local spawn table entirely while you are inside one:
+   * Rift-element species exist nowhere else, and in the closing minutes the apex
+   * turns up at the centre. Gated on rank, like every other late-game system.
+   */
+  const seed = p.profile.state.seed;
+  const riftOpen = p.profile.rank >= RIFT_RANK || p.profile.state.devUnlockAll;
+  p.rifts = riftsNear(p.x, p.y, date, seed);
+  p.rift = riftOpen ? riftAt(p.x, p.y, date, seed) : null;
+  p.upcoming = riftOpen ? nextRift(p.x, p.y, date, seed) : null;
+
+  p.spawns = (p.rift
+    ? riftSpawns(p.rift, p.x, p.y, p.pool, p.apexById, bucket, seed)
+    : visibleSpawns(p.x, p.y, bucket, p.pool, window, seed, weather)
+  ).filter((s) => !p.profile.isResolved(s.id));
 
   // Anything you can see goes into the Codex as Sighted.
   for (const s of p.spawns) p.profile.sight(s.speciesId);
@@ -79,6 +97,7 @@ export function drawPatrol(ctx, p, view, speciesById) {
   ctx.clearRect(0, 0, VIEW.w, VIEW.h);
 
   const cx = VIEW.w / 2, cy = VIEW.h / 2;
+  const t = performance.now() / 1000;
   const toScreen = (wx, wy) => [cx + (wx - p.x) * PX_PER_M, cy + (wy - p.y) * PX_PER_M];
 
   // --- biome tiles
@@ -116,15 +135,45 @@ export function drawPatrol(ctx, p, view, speciesById) {
   ctx.strokeStyle = 'rgba(105,210,231,0.5)';
   ctx.beginPath(); ctx.arc(cx, cy, ENGAGE_M * PX_PER_M, 0, Math.PI * 2); ctx.stroke();
 
+  // --- rifts: a ring you can see from outside and walk into
+  for (const r of p.rifts) {
+    if (r.distance > 1400) continue;
+    if (!r.active && r.opensInMs <= 0) continue;      // already been and gone
+    const [rx, ry] = toScreen(r.x, r.y);
+    const rad = RIFT_RADIUS_M * PX_PER_M;
+    ctx.save();
+    if (r.active) {
+      ctx.strokeStyle = r.apexUp ? '#e0403a' : '#b05ad0';
+      ctx.globalAlpha = 0.5 + 0.3 * Math.sin(t * 3);
+      ctx.lineWidth = 3;
+      ctx.beginPath(); ctx.arc(rx, ry, rad, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 0.09;
+      ctx.fillStyle = r.apexUp ? '#e0403a' : '#b05ad0';
+      ctx.fill();
+    } else {
+      ctx.strokeStyle = 'rgba(176,90,208,0.35)';
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([5, 7]);
+      ctx.beginPath(); ctx.arc(rx, ry, rad, 0, Math.PI * 2); ctx.stroke();
+      ctx.setLineDash([]);
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = r.active ? '#e6e9ed' : 'rgba(176,90,208,0.8)';
+    ctx.font = '11px ui-monospace, Menlo, Consolas, monospace';
+    ctx.textAlign = 'center';
+    const mins = Math.round(r.opensInMs / 60000);
+    ctx.fillText(r.active ? (r.apexUp ? 'RIFT — APEX' : 'RIFT — OPEN') : `rift · ${mins}m`, rx, ry - rad - 8);
+    ctx.restore();
+  }
+
   // --- spawn markers
-  const t = performance.now() / 1000;
   for (const s of p.spawns) {
     const sp = speciesById[s.speciesId];
     const [sx, sy] = toScreen(s.x, s.y);
     const r = SIZE_MARKER[sp.size] ?? 8;
     const colour = ELEMENT_COLOUR[sp.elements[0]] ?? '#aaa';
     const inRange = s.distance <= ENGAGE_M;
-    const rare = ['rare', 'very_rare'].includes(sp.rarity);
+    const rare = ['rare', 'very_rare'].includes(sp.rarity) || s.isApex;
 
     if (rare) {
       // A wild stage-3 should announce itself.

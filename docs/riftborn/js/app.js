@@ -12,7 +12,7 @@ import { createFight, step, readouts, activeStatuses } from './game.js';
 import { fitCanvas, draw } from './render.js';
 import { createInput } from './input.js';
 import { createProfile, AMMO_COST, RANK_XP, WEAPON_UNLOCK, RESEARCH_COST } from './profile.js';
-import { buildPool, WEATHER } from './world.js';
+import { buildPool, WEATHER, RIFT_RANK, RIFT_RADIUS_M } from './world.js';
 import { blockers } from './sanctuary.js';
 import { createPatrol, stepPatrol, drawPatrol, patrolClock, biomeUnderfoot, ELEMENT_COLOUR } from './patrol.js';
 
@@ -92,7 +92,11 @@ function boot(data) {
   const input = createInput(fightCanvas);
   const mapInput = createInput(mapCanvas, { allTouchSteers: true });
 
-  const patrol = createPatrol(profile, pool);
+  // The rift pool carries the two Rift-element species plus the three apexes, none
+  // of which exist anywhere outside an event.
+  const riftPool = allSpecies.filter((m) => m.spawn.biomes.includes('rift_event'));
+  const apexById = Object.fromEntries(allSpecies.filter((m) => m.apex).map((m) => [m.id, m]));
+  const patrol = createPatrol(profile, [...pool, ...riftPool], apexById);
   let view = 'patrol';
   let fight = null;
   let fightSpawn = null;
@@ -197,6 +201,28 @@ function boot(data) {
     $('biome').textContent = title(biomeUnderfoot(patrol));
     $('spawn-count').textContent = `${patrol.spawns.length} in range`;
 
+    const riftEl = $('rift-status');
+    if (patrol.rift) {
+      const left = Math.max(0, Math.round((patrol.rift.endMs - date.getTime()) / 60000));
+      riftEl.textContent = patrol.rift.apexUp
+        ? `INSIDE A RIFT · apex up · ${left}m left`
+        : `INSIDE A RIFT · ${left}m left`;
+      riftEl.dataset.state = patrol.rift.apexUp ? 'apex' : 'open';
+      riftEl.hidden = false;
+    } else if (patrol.upcoming) {
+      const r = patrol.upcoming;
+      const km = (r.distance / 1000).toFixed(1);
+      riftEl.textContent = r.active
+        ? `rift open · ${km} km away`
+        : `next rift · ${km} km · opens in ${Math.round(r.opensInMs / 60000)}m`;
+      riftEl.dataset.state = 'pending';
+      riftEl.hidden = false;
+    } else {
+      riftEl.textContent = `rift events unlock at Warden rank ${RIFT_RANK}`;
+      riftEl.dataset.state = 'locked';
+      riftEl.hidden = false;
+    }
+
     const near = patrol.nearest;
     $('engage').hidden = !near;
     if (near) {
@@ -204,8 +230,9 @@ function boot(data) {
       const e = profile.entry(sp.id);
       const pack = near.packSize ?? 1;
       $('engage-name').textContent = pack > 1 ? `${sp.name} ×${pack}` : sp.name;
-      $('engage-meta').textContent =
-        `${sp.elements.join('/')} · ${sp.size} · ${title(sp.rarity)} · ${STATE_LABEL[e.state]}`;
+      $('engage-meta').textContent = sp.apex
+        ? `APEX · ${sp.elements.join('/')} · ${sp.phases} phases · needs a Tether Harpoon to take alive`
+        : `${sp.elements.join('/')} · ${sp.size} · ${title(sp.rarity)} · ${STATE_LABEL[e.state]}`;
     }
   }
 
@@ -258,7 +285,11 @@ function boot(data) {
       return;
     }
 
-    fight = createFight(loadout, { carried, bonuses: profile.bonuses, packSize: spawn.packSize ?? 1 });
+    fight = createFight(loadout, {
+      carried, bonuses: profile.bonuses,
+      packSize: spawn.packSize ?? 1,
+      partySize: 1,                       // solo is the only party this build can field
+    });
     fightSpawn = spawn;
     restraintPeak = 0;
     shownOutcome = null;
@@ -383,6 +414,11 @@ function boot(data) {
 
     if (m.state === 'flee') chips.push('<span class="chip chip--bad">fleeing</span>');
     if (!m.aware) chips.push('<span class="chip chip--warn">unaware</span>');
+    if (f.isApex) {
+      chips.unshift(`<span class="chip chip--warn">phase ${m.phase} / ${m.phases}</span>`);
+      if (m.phaseShield > 0) chips.push('<span class="chip chip--bad">shielded — breaking</span>');
+    }
+    if (f.phaseBlocked) chips.push('<span class="chip chip--bad">break it down further before subduing</span>');
     if (f.anchorBlocked) chips.push('<span class="chip chip--bad">needs a Tether Harpoon to subdue</span>');
     $('statuses').innerHTML = chips.join('');
 
@@ -668,21 +704,36 @@ function boot(data) {
     if (elapsed > 0.25) elapsed = 0.25;
     accumulator += elapsed;
 
-    while (accumulator >= FIXED_DT) {
-      if (view === 'patrol') stepPatrol(patrol, FIXED_DT, mapInput.getIntent({ player: { x: 0, y: 0, aim: 0 } }));
-      else if (view === 'fight' && fight) step(fight, FIXED_DT, input.getIntent(fight));
-      accumulator -= FIXED_DT;
+    try {
+      while (accumulator >= FIXED_DT) {
+        if (view === 'patrol') stepPatrol(patrol, FIXED_DT, mapInput.getIntent({ player: { x: 0, y: 0, aim: 0 } }));
+        else if (view === 'fight' && fight) step(fight, FIXED_DT, input.getIntent(fight));
+        accumulator -= FIXED_DT;
+      }
+    } catch (err) {
+      accumulator = 0;
+      if (!frame.warnedStep) { console.error('[riftborn] step error', err); frame.warnedStep = true; }
     }
 
     studyClock += elapsed;
     if (studyClock > 5) { studyClock = 0; if (profile.tickStudy()) profile.save(); }
 
-    if (view === 'patrol') {
-      drawPatrol(mapCtx, patrol, mapView, speciesById);
-      renderPatrolHud();
-    } else if (view === 'fight' && fight) {
-      draw(fightCtx, fight, { ...fightView, showWeakPoints: profile.weakPointsKnown(fight.loadout.species.id) });
-      renderFightHud(elapsed);
+    /*
+     * Never let one bad frame end the game. An exception escaping this callback
+     * means requestAnimationFrame is never re-armed and the whole app silently
+     * freezes — which is exactly what a temporal-dead-zone slip in the rift
+     * drawing did: the loop died the moment a rift came within range.
+     */
+    try {
+      if (view === 'patrol') {
+        drawPatrol(mapCtx, patrol, mapView, speciesById);
+        renderPatrolHud();
+      } else if (view === 'fight' && fight) {
+        draw(fightCtx, fight, { ...fightView, showWeakPoints: profile.weakPointsKnown(fight.loadout.species.id) });
+        renderFightHud(elapsed);
+      }
+    } catch (err) {
+      if (!frame.warned) { console.error('[riftborn] frame error', err); frame.warned = true; }
     }
     requestAnimationFrame(frame);
   }

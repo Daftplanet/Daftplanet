@@ -63,7 +63,44 @@ const WEAK_POINT_LAYOUT = {
   hind_joint:             { along: -0.58, across: 0.28, size: 0.144 },
   base_joints:            { along: -0.60, across: 0.35, size: 0.156 },
   underside:              { along: -0.20, across: 0.00, size: 0.192 },
+
+  // Apex phase targets. Each phase exposes a different one, so a long fight is a
+  // sequence of different shots rather than the same shot for two minutes.
+  outer_plating:          { along: 0.20, across: -0.58, size: 0.13 },
+  vent_cluster:           { along: -0.35, across: 0.45, size: 0.14 },
+  spire_core:             { along: 0.00, across: 0.00, size: 0.17 },
+  shroud_knot:            { along: -0.50, across: -0.30, size: 0.13 },
+  hollow_eye:             { along: 0.60, across: 0.00, size: 0.15 },
+  rift_seam_a:            { along: 0.50, across: 0.40, size: 0.12 },
+  rift_seam_b:            { along: -0.50, across: 0.40, size: 0.12 },
+  rift_seam_c:            { along: 0.00, across: -0.55, size: 0.12 },
+  phase_dependent:        { along: 0.00, across: 0.00, size: 0.17 },
 };
+
+/*
+ * Which weak point is exposed in each phase. `05-bestiary.md` says Aeonrend's
+ * "weak points move between phases" and Karrahk's phase 1 is an armour break with
+ * the core only exposed at the end; this is that, made concrete.
+ */
+const APEX_PHASE_WEAK_POINTS = {
+  karrahk:       [['outer_plating'], ['vent_cluster'], ['spire_core']],
+  nyxhollow:     [['shroud_knot'], ['hollow_eye']],
+  aeonrend_apex: [['rift_seam_a'], ['rift_seam_b'], ['rift_seam_c'], ['phase_dependent']],
+};
+
+function apexWeakPoints(speciesId, phase, fallback) {
+  const table = APEX_PHASE_WEAK_POINTS[speciesId];
+  if (!table) return fallback;
+  return table[Math.min(phase, table.length) - 1] ?? fallback;
+}
+
+/*
+ * Apexes scale to party size (1-8 in the bible). Solo is the only party this
+ * prototype can field, so the low end has to be a fight rather than a wall.
+ */
+export function apexHpScale(partySize = 1) {
+  return 0.25 + 0.09 * Math.max(1, Math.min(8, partySize));
+}
 
 function layoutFor(name, index, count) {
   if (WEAK_POINT_LAYOUT[name]) return WEAK_POINT_LAYOUT[name];
@@ -88,9 +125,24 @@ export function weakPointPositions(m) {
 
 // ---------------------------------------------------------------- setup
 
-function makeMonster(loadout, index, count, rng) {
+function makeMonster(loadout, index, count, rng, partySize = 1) {
   const sp = loadout.species;
   const radius = SIZE_RADIUS[sp.size] ?? 26;
+  const phases = sp.apex ? (sp.phases ?? 1) : 1;
+  /*
+   * Apexes scale to the party on both sides. Scaling only health left Karrahk
+   * hitting for 165 against a 100 HP Warden — a one-shot, which makes a solo apex
+   * a perfect-dodge exercise rather than a fight.
+   */
+  const scale = sp.apex ? apexHpScale(partySize) : 1;
+  const hp = Math.round(sp.stats.hp * scale);
+  const attack = sp.stats.attack * (sp.apex ? Math.max(0.4, scale) : 1);
+  /*
+   * The Restraint bar scales too. At full party size the bible's numbers are sound
+   * — several crossbows subduing while a harpoon holds it — but a solo Warden was
+   * looking at 300 perfect harpoon shots for Karrahk, roughly 37 minutes.
+   */
+  const required = loadout.required * scale;
   // Spread a pack across the top of the arena rather than stacking it.
   const span = Math.min(ARENA.w - 160, 140 * Math.max(1, count - 1));
   const x = count === 1 ? ARENA.w / 2 : ARENA.w / 2 - span / 2 + (span * index) / (count - 1);
@@ -100,10 +152,17 @@ function makeMonster(loadout, index, count, rng) {
     x: clamp(x + (rng() - 0.5) * 40, radius + 10, ARENA.w - radius - 10),
     y: 60 + radius * 2 + (rng() - 0.5) * 50,
     facing: Math.PI / 2,
-    hp: sp.stats.hp, maxHp: sp.stats.hp,
+    hp, maxHp: hp,
+    attack,
+    required,
     radius,
+    phases,
+    phase: 1,
+    phaseShield: 0,
+    armourScale: 1,
+    phaseBlocked: false,
     speed: sp.stats.speed * MONSTER.speedScale,
-    weakPoints: sp.weak_points,
+    weakPoints: phases > 1 ? apexWeakPoints(sp.id, 1, sp.weak_points) : sp.weak_points,
     state: 'unaware', stateT: 0,
     aware: false,
     restraint: 0,
@@ -123,6 +182,7 @@ export function createFight(loadout, opts = {}) {
   const bonuses = opts.bonuses ?? {};
   const ai = profileFor(loadout.species);
   const packSize = Math.max(1, opts.packSize ?? 1);
+  const partySize = Math.max(1, opts.partySize ?? 1);
 
   const requested = opts.carried ?? { lethal: 24, capture: 12 };
   // No capture chamber means no capture rounds to carry.
@@ -150,7 +210,7 @@ export function createFight(loadout, opts = {}) {
       invuln: 0, radius: PLAYER.radius, aim: -Math.PI / 2, hitFlash: 0,
     },
 
-    monsters: Array.from({ length: packSize }, (_, i) => makeMonster(loadout, i, packSize, rng)),
+    monsters: Array.from({ length: packSize }, (_, i) => makeMonster(loadout, i, packSize, rng, partySize)),
     focusIndex: 0,
 
     /*
@@ -193,6 +253,14 @@ export function createFight(loadout, opts = {}) {
   });
   Object.defineProperty(f, 'anchorBlocked', {
     get() { return f.monsters.some((m) => m.anchorBlocked && !isDone(m)); },
+    enumerable: false,
+  });
+  Object.defineProperty(f, 'phaseBlocked', {
+    get() { return f.monsters.some((m) => m.phaseBlocked && !isDone(m)); },
+    enumerable: false,
+  });
+  Object.defineProperty(f, 'isApex', {
+    get() { return Boolean(loadout.species.apex); },
     enumerable: false,
   });
 
@@ -247,10 +315,10 @@ export function readouts(f, target = f.monster) {
   return {
     wound: woundMultiplier(m.hp, m.maxHp, L.woundExponent),
     statusProduct: statusProduct(L.statusDefs, activeStatuses(m), L.statusCap),
-    required: L.required,
+    required: m.required ?? L.required,
     restraint: m.restraint,
     decay: restraintDecayPerSecond(L.species, m.hp / m.maxHp, L.decayHealthScale) * decayMultiplier(L, m),
-    fleeChance: fleeChancePerSecond(L.species, m.restraint, L.required, L.fleeScale),
+    fleeChance: fleeChancePerSecond(L.species, m.restraint, m.required ?? L.required, L.fleeScale),
     bodyValue: isCapture ? computeRestraint({ ...shared, hitZone: 'body' }) : computeDamage({ ...shared, hitZone: 'body' }),
     weakValue: isCapture ? computeRestraint({ ...shared, hitZone: 'weak_point' }) : computeDamage({ ...shared, hitZone: 'weak_point' }),
     isCapture,
@@ -380,10 +448,11 @@ function zoneAt(p, m, wps) {
 
 function applyLethal(f, m, ammo, hitZone, scale = 1, ambush = false) {
   const L = f.loadout;
+  if (m.phaseShield > 0) return 0;              // invulnerable mid-transition
   const dmg = computeDamage({
     weapon: L.weapon, ammo, species: L.species, sizeDef: L.sizeDef,
     hitZone, hitZones: L.hitZones, effectiveness: L.effectiveness,
-    ambush, ambushCfg: L.ambushCfg,
+    ambush, ambushCfg: L.ambushCfg, armourScale: m.armourScale ?? 1,
   }) * (1 + (f.bonuses.lethal_damage ?? 0)) * scale;
 
   m.hp = Math.max(0, m.hp - dmg);
@@ -393,6 +462,7 @@ function applyLethal(f, m, ammo, hitZone, scale = 1, ambush = false) {
 
 function applyCapture(f, m, ammo, hitZone, scale = 1, ambush = false) {
   const L = f.loadout;
+  if (m.phaseShield > 0) return 0;
   const gain = computeRestraint({
     weapon: L.weapon, ammo, species: L.species, sizeDef: L.sizeDef,
     hitZone, hitZones: L.hitZones, effectiveness: L.effectiveness,
@@ -535,6 +605,27 @@ function nearestEdge(m) {
   return opts.reduce((a, b) => (dist(m, a) < dist(m, b) ? a : b));
 }
 
+/*
+ * Apex phases. Crossing an HP band strips more armour, exposes a different weak
+ * point and resets any hold you had — so a long fight is a sequence of different
+ * problems rather than the same shot repeated.
+ */
+function advancePhase(f, m) {
+  if (m.phases < 2 || m.hp <= 0) return;
+  const want = Math.min(m.phases, 1 + Math.floor((1 - m.hp / m.maxHp) * m.phases));
+  if (want <= m.phase) return;
+
+  m.phase = want;
+  m.phaseShield = 1.2;
+  m.weakPoints = apexWeakPoints(f.loadout.species.id, m.phase, f.loadout.species.weak_points);
+  m.armourScale = Math.max(0.4, 1 - 0.18 * (m.phase - 1));
+  m.restraint = 0;                       // it shrugs off whatever hold you had
+  m.phaseBlocked = false;
+  f.shake = 12;
+  f.bursts.push({ x: m.x, y: m.y, radius: m.radius * 2.4, kind: 'phase', t: 0 });
+  f.floaters.push({ x: m.x, y: m.y - m.radius - 30, text: `PHASE ${m.phase}`, kind: 'phase', t: 0 });
+}
+
 function stepMonster(f, m, dt) {
   const p = f.player;
   const L = f.loadout;
@@ -543,6 +634,13 @@ function stepMonster(f, m, dt) {
   m.stateT += dt;
   m.hitFlash = Math.max(0, m.hitFlash - dt);
 
+  advancePhase(f, m);
+  if (m.phaseShield > 0) {
+    m.phaseShield = Math.max(0, m.phaseShield - dt);
+    m.facing = Math.atan2(p.y - m.y, p.x - m.x);
+    return;
+  }
+
   const slow = hasStatus(m, 'sedated') ? (L.statusDefs.sedated.move_speed_multiplier ?? 0.5) : 1;
   const chilled = hasStatus(m, 'chilled') ? (L.statusDefs.chilled.move_speed_multiplier ?? 0.6) : 1;
   const speed = m.speed * slow * chilled;
@@ -550,10 +648,14 @@ function stepMonster(f, m, dt) {
 
   if (m.hp <= 0) { setState(m, 'dead'); record(f, m, 'culled'); return; }
 
-  if (m.restraint >= L.required && m.state !== 'subdued') {
+  if (m.restraint >= m.required && m.state !== 'subdued') {
+    // An apex cannot be taken until it is broken down to its last phase.
+    if (m.phases > 1 && m.phase < m.phases) {
+      m.restraint = m.required;
+      m.phaseBlocked = true;
     // Colossus and Titan need an Anchor before they can go down at all.
-    if (L.sizeDef.anchor_required && !hasStatus(m, 'anchored')) {
-      m.restraint = L.required;
+    } else if (L.sizeDef.anchor_required && !hasStatus(m, 'anchored')) {
+      m.restraint = m.required;
       m.anchorBlocked = true;
     } else {
       m.anchorBlocked = false;
@@ -642,7 +744,7 @@ function stepMonster(f, m, dt) {
     }
     case 'subdued': {
       if (m.stateT >= L.subdueWindow) {
-        m.restraint = L.required * L.failedSubdue.restraint_retained;
+        m.restraint = m.required * L.failedSubdue.restraint_retained;
         applyStatus(m, L.failedSubdue.applies, Infinity);
         f.stats.failedSubdues += 1;
         setState(m, 'stalk');
@@ -663,7 +765,7 @@ function releaseToken(f, m) {
 
 function hitPlayer(f, m) {
   const enraged = hasStatus(m, 'enraged');
-  const dmg = f.loadout.species.stats.attack
+  const dmg = (m.attack ?? f.loadout.species.stats.attack)
     * (enraged ? (f.loadout.statusDefs.enraged.damage_dealt_multiplier ?? 1.4) : 1)
     * (1 - Math.min(0.5, f.bonuses.damage_resistance ?? 0));
   f.player.hp = Math.max(0, f.player.hp - dmg);
@@ -681,7 +783,7 @@ function stepFlee(f, m, dt) {
   if (hasStatus(m, 'enraged') || hasStatus(m, 'ensnared') || hasStatus(m, 'anchored') || hasStatus(m, 'calmed')) return;
   if (m.hp / m.maxHp >= L.species.stats.flee_threshold) return;
 
-  const perSecond = fleeChancePerSecond(L.species, m.restraint, L.required, L.fleeScale);
+  const perSecond = fleeChancePerSecond(L.species, m.restraint, m.required, L.fleeScale);
   const chance = 1 - Math.pow(1 - clamp(perSecond, 0, 0.999), dt);
   if (f.rng() < chance) { releaseToken(f, m); setState(m, 'flee'); m.fleeT = 0; }
 }

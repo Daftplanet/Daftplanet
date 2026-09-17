@@ -483,3 +483,10 @@ select {
 .pip--culled { background: #4a2725; }
 .pip--gone { background: transparent; border-style: dashed; }
 .pip--subdued { --hp-colour: var(--restraint); }
+
+/* ---- rift events */
+.rift { letter-spacing: 0.04em; }
+.rift[data-state="open"] { color: #b05ad0; font-weight: 700; }
+.rift[data-state="apex"] { color: var(--hp); font-weight: 700; }
+.rift[data-state="pending"] { color: var(--ink-faint); }
+.rift[data-state="locked"] { color: var(--ink-faint); }

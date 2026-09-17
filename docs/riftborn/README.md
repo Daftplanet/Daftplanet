@@ -11,14 +11,20 @@ built on the design bible's real data and formulas.
   Sanctuary, evolution with its four branch conditions, Research I–III, daily
   contracts, weather, and ammunition gated on element materials.
 
-- **Phase 3 (part 1)** — packs. Encounters hold several monsters, which is what the
-  Splitbore's pellet cone, the Lattice Launcher's area snare and the Arcbrand's
-  three-target chain were built for.
+- **Phase 3 (mostly)** — packs, rift events and apexes. Encounters hold several
+  monsters, which is what the Splitbore's pellet cone, the Lattice Launcher's area
+  snare and the Arcbrand's three-target chain were built for. Scheduled rifts give
+  the Rift-element species somewhere to exist, and the three apexes fight in phases
+  that rotate their weak points and strip their armour.
 
 > **Phase 2 exit criterion:** a player has a reason to log in on day 30.
 
-No AR, no geolocation, no rift events, no apexes, no party play. Those are the rest
-of phase 3 and later.
+**Rift events** open once per 1.2 km cell per day, run 75 minutes, and the apex
+arrives for the final 20. They are rank-12 content; the world panel's unlock toggle
+opens them for evaluation, and the clock scrubber is how you reach one without
+waiting. Taking an apex alive needs a Tether Harpoon *and* its last phase.
+
+No AR, no geolocation, no party play.
 
 ## Running it
 

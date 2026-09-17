@@ -31,7 +31,7 @@ grows your collection.
 | [10-phase0-findings.md](10-phase0-findings.md) | What building the fight taught us, and the three maths bugs it caught |
 | [11-phase1-findings.md](11-phase1-findings.md) | The vertical slice: a collision bug that had been distorting phase 0, and what the map taught us |
 | [12-phase2-findings.md](12-phase2-findings.md) | The loop closes: a world that could not host its own bestiary, and evolution against real-world time and weather |
-| [13-phase3-findings.md](13-phase3-findings.md) | Packs: three weapons that finally have something to do, and one that soft-locked the game |
+| [13-phase3-findings.md](13-phase3-findings.md) | Packs, rift events and apexes: three weapons that finally have something to do, one that soft-locked the game, and one line that froze it |
 
 ## Machine-readable data
 
@@ -52,11 +52,11 @@ are all in the JSON so they can be rebalanced in one place.
 
 ## The prototype
 
-Phases 0 through 2 are built at [`docs/riftborn/`](../docs/riftborn/), plus the first
-part of phase 3: the grey-box fight, the vertical slice, the closed loop — all 12
-families, all 8 weapons, the Sanctuary, evolution with its four branch conditions,
-Research I–III, contracts and weather — and now pack spawns, which is what the
-area, chain and scattergun weapons were waiting for. It runs the design's real formulas out of `data/`, and the same
+Phases 0 through 2 are built at [`docs/riftborn/`](../docs/riftborn/), plus most of
+phase 3: the grey-box fight, the vertical slice, the closed loop — all 12 families,
+all 8 weapons, the Sanctuary, evolution with its four branch conditions, Research
+I–III, contracts and weather — and now pack spawns, scheduled rift events and the
+three phased apexes. Party play and Codex sharing are what remain. It runs the design's real formulas out of `data/`, and the same
 fight and world code runs headlessly in a balance sim so tuning claims can be
 checked rather than asserted.
 

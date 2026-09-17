@@ -247,3 +247,139 @@ export function visibleSpawns(px, py, bucket, pool, window, seed = 1, weather = 
 export function buildPool(monsters, families) {
   return monsters.filter((m) => families.includes(m.family) && !m.is_branch_form && !m.apex);
 }
+
+// ---------------------------------------------------------------- rift events
+
+/*
+ * Rift events.
+ *
+ * 09-risks-and-roadmap.md wants these scheduled, announced ahead, anchored to a
+ * landmark, an hour or so long, with apexes in the closing minutes. They are the
+ * only place Rift-element species exist at all — without them Riftspawn and Voidmaw
+ * are in the bestiary and unreachable.
+ *
+ * Scheduling uses the same trick as spawns: derived from (cell, day, seed), so
+ * every Warden sees the same rift open in the same place at the same time with no
+ * server keeping track. One rift per cell per day means there is always one within
+ * walking distance to plan around.
+ */
+export const RIFT_CELL_TILES = 30;                 // ~1.2 km between rifts
+export const RIFT_RADIUS_M = 110;
+export const RIFT_DURATION_MIN = 75;
+export const APEX_WINDOW_MIN = 20;                 // the apex shows up for the finale
+export const RIFT_RANK = 12;
+
+const APEX_IDS = ['karrahk', 'nyxhollow', 'aeonrend_apex'];
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const dayIndex = (date) => Math.floor(date.getTime() / DAY_MS);
+
+/** The rift for one cell on one day, whether or not it is currently open. */
+export function riftForCell(cx, cy, day, seed = 1) {
+  const roll = hash(cx, cy, day, seed + 41);
+  const startHour = 8 + Math.floor(hash(cx, cy, day, seed + 43) * 14);   // 08:00–21:00
+  const startMin = Math.floor(hash(cx, cy, day, seed + 47) * 4) * 15;
+
+  const midnight = day * DAY_MS;
+  const startMs = midnight + startHour * 3600000 + startMin * 60000;
+  const endMs = startMs + RIFT_DURATION_MIN * 60000;
+
+  // Sit it a little off the cell centre so rifts are not on a visible grid.
+  const ox = 0.3 + hash(cx, cy, day, seed + 53) * 0.4;
+  const oy = 0.3 + hash(cx, cy, day, seed + 59) * 0.4;
+
+  return {
+    id: `rift:${cx}:${cy}:${day}`,
+    x: (cx + ox) * RIFT_CELL_TILES * TILE_M,
+    y: (cy + oy) * RIFT_CELL_TILES * TILE_M,
+    startMs,
+    endMs,
+    apexId: APEX_IDS[Math.floor(roll * APEX_IDS.length)],
+    apexFromMs: endMs - APEX_WINDOW_MIN * 60000,
+  };
+}
+
+/** Every rift near a position, today and tomorrow, sorted by distance. */
+export function riftsNear(px, py, date = new Date(), seed = 1, cells = 1) {
+  const cell = RIFT_CELL_TILES * TILE_M;
+  const cx0 = Math.floor(px / cell), cy0 = Math.floor(py / cell);
+  const today = dayIndex(date);
+  const out = [];
+
+  for (let dy = -cells; dy <= cells; dy++) {
+    for (let dx = -cells; dx <= cells; dx++) {
+      for (const day of [today, today + 1]) {
+        const r = riftForCell(cx0 + dx, cy0 + dy, day, seed);
+        r.distance = Math.hypot(r.x - px, r.y - py);
+        r.opensInMs = r.startMs - date.getTime();
+        r.active = date.getTime() >= r.startMs && date.getTime() < r.endMs;
+        r.apexUp = r.active && date.getTime() >= r.apexFromMs;
+        out.push(r);
+      }
+    }
+  }
+  return out.sort((a, b) => a.distance - b.distance);
+}
+
+/** The rift the Warden is currently standing inside, if it is open. */
+export function riftAt(px, py, date = new Date(), seed = 1) {
+  return riftsNear(px, py, date, seed).find((r) => r.active && r.distance <= RIFT_RADIUS_M) ?? null;
+}
+
+/** The next rift worth walking to: open now, or opening soonest. */
+export function nextRift(px, py, date = new Date(), seed = 1) {
+  const near = riftsNear(px, py, date, seed);
+  return near.find((r) => r.active)
+    ?? near.filter((r) => r.opensInMs > 0).sort((a, b) => a.opensInMs - b.opensInMs)[0]
+    ?? null;
+}
+
+/**
+ * Spawns inside an open rift. Dense, Rift-element only, and in the closing minutes
+ * the apex itself at the centre.
+ */
+export function riftSpawns(rift, px, py, pool, apexById, bucket, seed = 1) {
+  const out = [];
+  const riftPool = pool.filter((s) => s.elements.includes('rift'));
+  const reach = Math.ceil(RIFT_RADIUS_M / TILE_M);
+  const ctx = Math.floor(rift.x / TILE_M), cty = Math.floor(rift.y / TILE_M);
+
+  for (let ty = cty - reach; ty <= cty + reach; ty++) {
+    for (let tx = ctx - reach; tx <= ctx + reach; tx++) {
+      const roll = hash(tx, ty, bucket, seed + 61);
+      if (roll > 0.42) continue;                                   // dense by design
+      if (!riftPool.length) continue;
+
+      // Voidmaw is very rare even here; Riftspawn carries the event.
+      const pick = hash(tx, ty, bucket, seed + 67);
+      const chosen = riftPool.length > 1 && pick > 0.82
+        ? riftPool.find((s) => s.rarity === 'very_rare') ?? riftPool[0]
+        : riftPool.find((s) => s.rarity === 'rare') ?? riftPool[0];
+
+      const x = (tx + 0.2 + hash(tx, ty, bucket, seed + 71) * 0.6) * TILE_M;
+      const y = (ty + 0.2 + hash(tx, ty, bucket, seed + 73) * 0.6) * TILE_M;
+      if (Math.hypot(x - rift.x, y - rift.y) > RIFT_RADIUS_M) continue;
+
+      out.push({
+        id: `${rift.id}:${tx}:${ty}:${bucket}`,
+        speciesId: chosen.id,
+        packSize: packSizeFor(chosen, hash(tx, ty, bucket, seed + 79)),
+        x, y, biome: 'rift_event', bucket, inRift: true,
+        distance: Math.hypot(x - px, y - py),
+      });
+    }
+  }
+
+  if (rift.apexUp && apexById[rift.apexId]) {
+    out.push({
+      id: `${rift.id}:apex`,
+      speciesId: rift.apexId,
+      packSize: 1,
+      x: rift.x, y: rift.y,
+      biome: 'rift_event', bucket, inRift: true, isApex: true,
+      distance: Math.hypot(rift.x - px, rift.y - py),
+    });
+  }
+
+  return out.sort((a, b) => a.distance - b.distance);
+}

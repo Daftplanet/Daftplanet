@@ -62,9 +62,10 @@ function damageZoneMultiplier(weapon, hitZone, hitZones) {
   return hitZones[hitZone].damage;
 }
 
-export function computeDamage({ weapon, ammo, species, hitZone, hitZones, effectiveness, ambush, ambushCfg }) {
+export function computeDamage({ weapon, ammo, species, hitZone, hitZones, effectiveness, ambush, ambushCfg, armourScale = 1 }) {
   const pierce = ammo.effect === 'halve_armour_reduction' ? 0.5 : 1;
-  const armour = species.stats.armour_reduction * pierce;
+  // armourScale is the apex armour break: each phase strips more of its plating.
+  const armour = species.stats.armour_reduction * pierce * armourScale;
   return weapon.damage
     * (ammo.damage_multiplier ?? 1)
     * elementMultiplier(effectiveness, ammo.element, species.elements)

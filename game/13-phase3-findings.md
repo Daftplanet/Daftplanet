@@ -120,3 +120,104 @@ Both now drive real input and walk on if a tile is empty.
 4. The attack token means a pack of four is not four times as dangerous as one. That
    is deliberate, but it may make large packs feel like a loot piñata rather than a
    threat. Needs hands on it.
+
+---
+
+# Phase 3, part 2: Rift events and apexes
+
+Two species in the bestiary had nowhere to exist — Riftspawn and Voidmaw spawn only
+in `rift_event`, and rift events did not. Three apexes were written up and
+unbuildable. The Tether Harpoon and the whole anchor gate were built in phase 2 and
+had nothing to point at. All three are now live.
+
+## Rift events
+
+Scheduled from `(cell, day, seed)`, the same trick the spawn table uses: one rift
+per 1.2 km cell per day, opening at a deterministic hour, running 75 minutes, with
+the apex arriving for the last 20. No server, and two Wardens standing in the same
+place would see the same rift open at the same moment.
+
+Inside one, the local spawn table is replaced entirely — Rift-element species only,
+at roughly double the usual density. Outside, the map shows rifts as dashed rings
+with a countdown, so they are something to plan a walk around rather than something
+you stumble into. Gated at Warden rank 12 per `08`.
+
+## Apex phases
+
+Each apex now fights as the bible describes it. Crossing an HP band strips armour,
+rotates the exposed weak point, and briefly shields it mid-transition:
+
+| Apex | Phases | Weak point per phase |
+| --- | --- | --- |
+| Karrahk | 3 | outer plating → vent cluster → spire core |
+| Nyxhollow | 2 | shroud knot → hollow eye |
+| Aeonrend | 4 | three rift seams → the core |
+
+Karrahk's phase 1 is the armour break `05-bestiary.md` describes, and Aeonrend's
+"weak points move between phases" is literal. Armour drops ~18% per phase.
+
+The capture gate matrix behaves exactly as designed:
+
+| | result |
+| --- | --- |
+| early phase, no anchor | refused — break it down further |
+| early phase, anchored | refused — break it down further |
+| final phase, no anchor | refused — needs a Tether Harpoon |
+| **final phase + anchored** | **catalogued** |
+
+## One line of code killed the entire game
+
+The rift rings are drawn with a `Math.sin(t * 3)` pulse, and I inserted that block
+*above* where `t` is declared. Temporal dead zone: it threw on every frame where a
+rift was within 1.4 km.
+
+The damage was out of all proportion to the mistake. The exception escaped the
+`requestAnimationFrame` callback, so **the callback never re-armed and the whole
+game silently froze** — no error visible to the player, just a map that stopped
+responding. Spawns, movement, the clock, everything.
+
+Two fixes. The slip itself, and the structural one: the step and draw phases of the
+frame loop are now wrapped so an exception is logged once and the loop keeps
+running. A single bad frame should degrade a visual, not end the session.
+
+## Apexes were unwinnable in two separate ways
+
+**They one-shot you.** Karrahk hits for 165 against a 100 HP Warden. Apexes scale
+to party size in the bible, and I had scaled only health — so a solo apex was not a
+hard fight but a perfect-dodge exercise with instant death on one mistake. Attack
+now scales alongside health.
+
+**Capture was numerically impossible.** Measured, with a Tether Harpoon landing
+perfect anchored weak-point shots on a wounded target:
+
+| Apex | Restraint required | Perfect shots | Time |
+| --- | --- | --- | --- |
+| Nyxhollow | 8,143 | 80 | ~10 min |
+| Aeonrend | 15,660 | 245 | ~30 min |
+| Karrahk | 19,140 | 300 | **~37 min** |
+
+The root cause is a decision from phase 1. The design carries **two weapons**, and
+the Tether Harpoon's Restraint of 25 is low precisely because its job is anchoring
+while *something else* subdues — a crossbow at 58, or several of them in a party.
+I deferred the two-weapon loadout in phase 1 on the grounds that it "adds input
+complexity without testing anything new". It turns out to be load-bearing for the
+entire apex capture path.
+
+The stopgap is consistent with the rest: the Restraint bar scales with party size
+like health and attack do. Solo Nyxhollow becomes a 3.3-minute boss fight, which is
+right for a Colossus with a party range of 2–6. The two Titans stay long solo, which
+is also right — their party ranges are 4–8 and 6–8 and they are not solo content.
+
+**The real fix is the two-weapon loadout, and it is now the top open item.** Anchor
+with the harpoon, subdue with the crossbow, is what the design has said all along.
+
+## Still open
+
+1. **The two-weapon loadout.** Blocking coherent apex capture, and the reason the
+   Tether Harpoon currently reads as a bad weapon rather than a specialist tool.
+2. **Party play.** Multi-capture and the Titan apexes both point at it, and neither
+   can be finished without netcode.
+3. **Codex sharing and field reports** — the last unbuilt item in phase 3.
+4. Rift events currently ignore the bestiary's own placement rules: Karrahk wants
+   waterside and a storm, Nyxhollow wants midnight. Right now the apex is picked by
+   hash. Honouring those would make each apex feel like it belongs somewhere.
