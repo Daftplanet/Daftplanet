@@ -16,6 +16,7 @@ import { fitCanvas, draw } from './render.js';
 import { createInput } from './input.js';
 import { createProfile, AMMO_COST, RANK_XP, WEAPON_UNLOCK, RESEARCH_COST } from './profile.js';
 import { drawFieldReport, toPng } from './report.js';
+import { buildModel, modelFor, fitModel, spriteFor, clearVoxelCache } from './voxel.js';
 import {
   buildPool, apexForecast, riftForCell, placementFits, inTimeWindow, weatherIs, biomeAt,
   PLACEMENT_VOCABULARY, WEATHER, RIFT_RANK, RIFT_RADIUS_M, TILE_M, visibleSpawns,
@@ -943,7 +944,9 @@ function boot(data) {
 
       return `
         <article class="entry" data-state="${e.state}">
-          <div class="entry__dot" style="--c:${colour}"></div>
+          ${seen
+            ? `<canvas class="entry__model" width="72" height="72" data-model="${sp.id}"></canvas>`
+            : `<div class="entry__dot" style="--c:${colour}"></div>`}
           <div class="entry__body">
             <h3>${seen ? sp.name : '???'} <span class="entry__no">№ ${String(sp.dex).padStart(3, '0')}</span></h3>
             <p class="entry__meta">${seen ? `${sp.elements.join('/')} · ${sp.size} · stage ${sp.stage} · ${title(sp.rarity)}` : 'Not yet sighted'}</p>
@@ -958,6 +961,7 @@ function boot(data) {
     for (const b of document.querySelectorAll('.entry__research')) {
       b.addEventListener('click', () => { profile.research(b.dataset.species); renderCodex(); });
     }
+    paintModels();
     for (const b of document.querySelectorAll('.records__card')) {
       b.addEventListener('click', () => {
         const card = reportFromEntry(speciesById[b.dataset.card]);
@@ -965,6 +969,33 @@ function boot(data) {
       });
     }
   }
+
+  /*
+   * Every model canvas on screen, drawn once and then only when the angle changes.
+   * The Codex is forty entries; redrawing all of them every frame would be forty
+   * isometric scenes a frame for a screen that is mostly not moving.
+   */
+  function paintModels(turns = modelTurns) {
+    for (const c of document.querySelectorAll('[data-model]')) {
+      const sp = speciesById[c.dataset.model];
+      if (!sp) continue;
+      const ctx2 = c.getContext('2d');
+      ctx2.clearRect(0, 0, c.width, c.height);
+      fitModel(ctx2, modelFor(sp), { turns, width: c.width, height: c.height, pad: 0.88 });
+    }
+  }
+
+  let modelTurns = 0.125;
+  let spinning = null;
+  function startSpin() {
+    if (spinning) return;
+    spinning = setInterval(() => {
+      if (view !== 'codex' && view !== 'sanctuary') return;
+      modelTurns = (modelTurns + 0.012) % 1;
+      paintModels();
+    }, 90);
+  }
+  startSpin();
 
   // ---------------------------------------------------------------- sanctuary
   function renderSanctuary() {
@@ -1021,7 +1052,7 @@ function boot(data) {
 
       return `
         <article class="resident">
-          <div class="entry__dot" style="--c:${colour}"></div>
+          <canvas class="entry__model" width="72" height="72" data-model="${sp.id}"></canvas>
           <div class="resident__body">
             <h3>${sp.name} <span class="entry__no">${sp.elements.join('/')} · stage ${sp.stage}</span></h3>
             <div class="resident__study">
@@ -1066,6 +1097,7 @@ function boot(data) {
         </article>`;
     }).join('') : '<p class="empty">No residents. Catalogue something and it will live here.</p>';
 
+    paintModels();
     for (const el of document.querySelectorAll('[data-habitat]')) {
       el.addEventListener('change', () => { profile.setHabitatElement(Number(el.dataset.habitat), el.value || null); renderSanctuary(); });
     }
@@ -1362,6 +1394,7 @@ function boot(data) {
     loadLoadout, applyMods, modUnlocked, fittedMods,
     speciesHeight, rollSpecimen, heightPercentile, createFight, drawFieldReport,
     escortAbility, useEscort, cycleLock, assistPhase, assistMiss, ringSeconds,
+    buildModel, modelFor, fitModel, spriteFor, clearVoxelCache,
     apexForecast, riftForCell, placementFits, inTimeWindow, weatherIs, biomeAt,
     PLACEMENT_VOCABULARY, WEATHER, visibleSpawns,
     locator, tiles, createTileSource, placePatrol, biomeUnderfoot, biomeAtWorld,

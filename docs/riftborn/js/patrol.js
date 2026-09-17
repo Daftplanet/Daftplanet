@@ -19,6 +19,7 @@ import {
 } from './world.js';
 import { lonLatToWorld, groundScale, groundMetres } from './geo.js';
 import { createTileSource, MAP_ZOOM } from './tiles.js';
+import { spriteFor } from './voxel.js';
 
 export const VIEW = { w: 960, h: 640 };
 const PX_PER_M = 1.7;   // wide enough to see more than one neighbourhood at a time
@@ -277,11 +278,29 @@ export function drawPatrol(ctx, p, view, speciesById) {
       ctx.globalAlpha = 1;
     }
 
+    /*
+     * The marker is the monster. A cached voxel sprite costs no more to draw than
+     * the disc it replaces — one per (species, size), reused for every marker —
+     * and it means you can tell what is over there before you walk to it.
+     */
+    const px = Math.round(r * 3.4);
+    const sprite = spriteFor(sp, px);
+
+    // A disc behind it keeps the element colour readable against a real map,
+    // where the ground under a marker is whatever the street happens to be.
+    ctx.save();
+    ctx.globalAlpha = 0.55;
     ctx.fillStyle = colour;
-    ctx.beginPath(); ctx.arc(sx, sy, r, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = inRange ? '#e6e9ed' : 'rgba(0,0,0,0.5)';
-    ctx.lineWidth = inRange ? 2.5 : 1.5;
-    ctx.stroke();
+    ctx.beginPath(); ctx.ellipse(sx, sy + r * 0.55, r * 1.05, r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+
+    ctx.drawImage(sprite, sx - px / 2, sy - px * 0.62, px, px);
+
+    if (inRange) {
+      ctx.strokeStyle = '#e6e9ed';
+      ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.ellipse(sx, sy + r * 0.55, r * 1.15, r * 0.52, 0, 0, Math.PI * 2); ctx.stroke();
+    }
 
     // A pack draws satellite dots so the map shows what you are walking into.
     const pack = s.packSize ?? 1;

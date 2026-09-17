@@ -1,6 +1,6 @@
 # Browser suites
 
-Twelve Playwright suites that drive the real prototype in a real browser: they click
+Thirteen Playwright suites that drive the real prototype in a real browser: they click
 the real buttons, read the real HUD, and fail on any console error. Between them
 they cover every phase that has been built.
 
@@ -18,12 +18,13 @@ they cover every phase that has been built.
 | `aim.mjs` | free aim unchanged, the assisted lock holding through an aim sweep, the ring's tempo and gold band, and that a player who never aims can still resolve a fight |
 | `placement.mjs` | that the engine speaks every placement term the bestiary uses, that no biome is dead ground, that each apex appears only where and when its entry allows, and that the forecast finds it |
 | `map.mjs` | the Web Mercator projection against known figures, tile addressing, biome-by-colour, GPS and drag-to-move, and every way a basemap can fail |
+| `voxel.mjs` | that all 43 species build a solid model with their weak points on it, that the shapes derive from the Codex entry rather than a fresh roll, and that a Titan and a Mote both fit their frame |
 
 ## Running them
 
 ```sh
 npm install playwright        # once, anywhere on your path
-node game/tests/run.mjs       # serves docs/ itself and runs all twelve
+node game/tests/run.mjs       # serves docs/ itself and runs all thirteen
 node game/tests/run.mjs mods rifts
 ```
 

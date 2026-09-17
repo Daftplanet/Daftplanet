@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..', '..', 'docs');
 const SUITES = {
   phase1: 'smoke1.mjs', phase2: 'smoke2.mjs', packs: 'packs.mjs', rifts: 'rifts.mjs',
-  pwa: 'pwa.mjs', twoweapons: 'twoweapons.mjs', mods: 'mods.mjs', codex: 'codex.mjs', escort: 'escort.mjs', aim: 'aim.mjs', placement: 'placement.mjs', map: 'map.mjs',
+  pwa: 'pwa.mjs', twoweapons: 'twoweapons.mjs', mods: 'mods.mjs', codex: 'codex.mjs', escort: 'escort.mjs', aim: 'aim.mjs', placement: 'placement.mjs', map: 'map.mjs', voxel: 'voxel.mjs',
 };
 const TYPES = {
   '.html': 'text/html', '.js': 'text/javascript', '.mjs': 'text/javascript',
