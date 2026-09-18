@@ -838,3 +838,9 @@ select {
   color: #b05ad0;
 }
 .resident[data-touched="true"] { border-color: rgba(176, 90, 208, 0.55); }
+.coat {
+  color: #9aa3ad;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}

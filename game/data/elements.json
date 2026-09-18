@@ -911,5 +911,47 @@
     "$rate_comment": "One spawn in a thousand. MEASURED with TOUCHED=1 through the real spawn generator: about one sighting every 8 patrols, which against PROGRESS=1's seven patrols per evolution is roughly one rare monster per milestone.\n\nThis number was wrong twice before it was right, and both are worth keeping. It started at 1 in 200 with a comment claiming 'about one sighting every 11 patrols' — a figure I had reasoned rather than run. Measured, 1 in 200 is one sighting every TWO patrols, because a patrol walks past around a hundred spawns and nobody divides that in their head correctly.\n\nThen the first sweep reported an identical 45.8% at four different rates, which is the 'identical to the decimal' smell: the sim imports world.js directly and never called setRiftTouchedRate, so it was measuring the module default and not the data at all. The dial was not connected to the thing being measured.\n\nPokemon's 1/4096 is tuned for a game offering far more encounters an hour than a walking game can.",
     "palette_pull": 0.55,
     "$palette_comment": "How far the body colours are dragged toward the Rift ramp. At 1.0 every rift-touched monster is the same violet and the species stops being recognisable, which defeats the point — you should still know what it is. At 0.55 it reads as itself, wrongly coloured."
+  },
+  "biome_coats": {
+    "$comment": "A monster wears the ground it came from. Not a re-typing and not a stat change — Pokemon's regional variants are whole new creatures, which for 43 species across 9 biomes would be 387 of them and a balance problem in every one. This is the cosmetic half of that idea, which is the half that makes your Sanctuary a visible record of where you have walked.\n\nIt had to use a channel the markings were not already using. The marking accent means THE SECOND ELEMENT (see rift_touched and the voxel builder), and overwriting it with a biome colour would have destroyed the type legibility that was the whole point of markings. So a coat settles on the TOP-EXPOSED voxels only — the ones with nothing above them — the way soot, dust, moss or water actually settles on an animal. Element reads off the body, second element off the markings, and where it has been off the top. Three channels, three meanings, no collision.\n\nStrength is deliberately low. At a strong mix every monster in a woodland is green and the biome eats the species, which is the same failure a full palette pull would have been for rift_touched.",
+    "strength": 0.34,
+    "coats": {
+      "urban_core": {
+        "name": "sooted",
+        "colour": "#2f333b"
+      },
+      "industrial": {
+        "name": "rusted",
+        "colour": "#8a5a2b"
+      },
+      "works": {
+        "name": "dusted",
+        "colour": "#b09666"
+      },
+      "transit": {
+        "name": "grimed",
+        "colour": "#3a4048"
+      },
+      "waterside": {
+        "name": "sodden",
+        "colour": "#2f6f96"
+      },
+      "woodland": {
+        "name": "mossed",
+        "colour": "#3f7a42"
+      },
+      "parkland": {
+        "name": "pollened",
+        "colour": "#9fbf6a"
+      },
+      "open_ground": {
+        "name": "sunbaked",
+        "colour": "#b5a765"
+      },
+      "residential": {
+        "name": "weathered",
+        "colour": "#8d7f72"
+      }
+    }
   }
 }

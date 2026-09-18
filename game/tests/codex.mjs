@@ -381,6 +381,55 @@ ok('a rift-touched specimen is still rift-touched in the Codex and the Sanctuary
    + ` · field report carries it: ${kept.card === null ? 'no hook exposed' : kept.card}`
    + ' — all of this was tracked and none of it drawn');
 
+// --- 15. a specimen wears the ground it came from
+/*
+ * The biome variant. Not a re-typing — Pokemon's regional forms are whole new
+ * creatures, and 43 species across 9 biomes would be 387 of them. This is the
+ * cosmetic half, and it had to use a channel the markings were not already
+ * using: the marking accent means the SECOND ELEMENT, so a coat settles on the
+ * top-exposed voxels instead, the way dust actually does.
+ */
+const coats = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const sp = r.data.monsters.monsters.find((m) => m.id === 'cinderfang');
+  const table = r.data.elements.biome_coats;
+  const plain = r.buildModel(sp);
+  const diff = (a, b) => a.voxels.filter((v, i) => v.colour !== b.voxels[i].colour).length;
+
+  const rows = Object.keys(table.coats).map((biome) => {
+    const m = r.buildModel(sp, { biome });
+    return { biome, touched: diff(plain, m), ramp: m.ramp.join() };
+  });
+  // Every biome must look different from every other, or the channel says nothing.
+  const fingerprints = new Set(Object.keys(table.coats).map((biome) => {
+    const m = r.buildModel(sp, { biome });
+    return m.voxels.map((v) => v.colour).join('|');
+  }));
+
+  // It must not eat the species: the body ramp is untouched and the eye stays gold.
+  const moss = r.buildModel(sp, { biome: 'woodland' });
+  const sameRamp = moss.ramp.join() === plain.ramp.join();
+  const weakGold = moss.voxels.filter((v) => v.weak).every((v) => v.colour === '#ffd23f');
+
+  // And it stacks with the rare colourway rather than fighting it.
+  const both = r.buildModel(sp, { biome: 'woodland', riftTouched: true });
+  const rare = r.buildModel(sp, { riftTouched: true });
+  const stacks = diff(rare, both) > 0 && both.ramp.join() === rare.ramp.join();
+
+  return {
+    biomes: rows.length, distinct: fingerprints.size,
+    min: Math.min(...rows.map((x) => x.touched)), max: Math.max(...rows.map((x) => x.touched)),
+    total: plain.voxels.length, sameRamp, weakGold, stacks,
+    strength: table.strength,
+  };
+});
+ok('a specimen wears the ground it came from, without the ground eating the species',
+   coats.biomes === 9 && coats.distinct === 9 && coats.sameRamp && coats.weakGold && coats.stacks
+   && coats.min > 0 && coats.max < coats.total * 0.5,
+   `9 biomes, 9 distinct looks · the coat touches ${coats.min}-${coats.max} of ${coats.total} voxels`
+   + ` (top-exposed only) · body ramp unchanged and the weak point still gold`
+   + ' · stacks with Rift-touched rather than fighting it');
+
 await page.screenshot({ path: process.argv[2] ?? 'codex.png' });
 await browser.close();
 console.log(errors.length ? `\nCONSOLE ERRORS:\n${errors.join('\n')}` : '\nno console errors');

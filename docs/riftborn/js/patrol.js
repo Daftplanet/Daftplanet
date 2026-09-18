@@ -443,7 +443,9 @@ export function drawPatrol(ctx, p, view, speciesById) {
      * and it means you can tell what is over there before you walk to it.
      */
     const px = Math.round(r * 3.4);
-    const sprite = spriteFor(sp, px, 0.125, { riftTouched: !!s.riftTouched });
+    // A wild monster wears the ground it is standing on, which is the same
+    // biome the tile under it is painted with.
+    const sprite = spriteFor(sp, px, 0.125, { riftTouched: !!s.riftTouched, biome: s.biome ?? null });
 
     /*
      * A rare colourway has to be spottable from across the park or it is not an

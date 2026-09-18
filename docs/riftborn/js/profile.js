@@ -375,6 +375,9 @@ export function createProfile(content) {
       if (outcome === 'culled') {
         e.culled += 1;
         // A culled specimen still counts as measured — you had it in front of you.
+        // Where you met it counts too, or a player who only ever culls never sees
+        // a biome coat in their Codex at all.
+        if (detail.biome) e.lastArea = detail.biome;
         this.recordSpecimen(e, detail, 'culled');
         state.stats.culls += 1;
         if (this._rank(e.state) < this._rank('catalogued')) e.state = 'data_lost';
@@ -440,6 +443,7 @@ export function createProfile(content) {
           // each other, and "the biggest one I ever saw was rift-touched" is the
           // sentence the whole feature exists for.
           riftTouched: !!detail.riftTouched,
+          biome: detail.biome ?? null,
         };
       }
     },

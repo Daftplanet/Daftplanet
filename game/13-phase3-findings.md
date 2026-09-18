@@ -2697,3 +2697,78 @@ The rule that catches it is the one the area-round control taught, pointed
 somewhere new — do not test the thing you just wrote, test the thing the player
 gets. For a cosmetic that means following it all the way to every place it is
 drawn, because a cosmetic that is not drawn is not anything at all.
+
+# Phase 4, part 17: a monster wears the ground it came from
+
+Pokémon's regional variants are whole new creatures — re-typed, re-statted,
+sometimes re-evolved. For 43 species across 9 biomes that is 387 of them and a
+balance problem in every one. What is worth taking from the idea is not the
+mechanics but the **feeling**: that where you caught something is visible on it.
+
+So this is the cosmetic half, and it does the job the map has been waiting for.
+Your Sanctuary becomes a record of where you have walked.
+
+## The constraint that decided the design
+
+A marking already means something. Part 14 established that **the marking accent
+is the species' second element**, so a dual type is legible from the model — and
+part 15 stacked the rare colourway on the body ramp. Putting the biome in either
+channel would have bought one piece of information by destroying another.
+
+So a coat needs a channel of its own, and there is an obvious one that nothing
+was using: **the top-exposed voxels** — the ones with nothing directly above
+them. That is where soot, dust, moss and water actually settle, and it means
+three channels now carry three different things without colliding:
+
+| channel | says |
+|---|---|
+| body ramp | the element — and Rift, if it came through changed |
+| markings | the second element |
+| **top faces** | **where it has been** |
+
+Nine coats: sooted, rusted, dusted, grimed, sodden, mossed, pollened, sunbaked,
+weathered. The wild ones wear the tile they are standing on, which ties them to
+the biome skins from part 14 — a mossed monster in a woodland is the same green
+as the canopy around it.
+
+## Strength is the whole tuning, and it is the same lesson twice
+
+At 0.34 the animal keeps its identity: a mossed Cinderfang is still obviously
+Cinderfang, orange with grey banding, wearing green on its back. Turn it up and
+every monster in a woodland is green and the biome eats the species.
+
+That is exactly the failure `rift_touched` would have had at a full palette
+pull, and exactly the failure the underside marking *did* have on Gustling at
+81%. Three features, one rule: **a layer that identifies something must not
+obscure what it is layered on.** It is now written down in three places because
+it caught me three times.
+
+## What the check asks
+
+Not "does the coat function" — that is the mistake part 16 was about. It asks
+whether the coat does its job without doing damage:
+
+```
+PASS  a specimen wears the ground it came from, without the ground eating the species
+      — 9 biomes, 9 distinct looks · the coat touches 43-43 of 170 voxels
+      (top-exposed only) · body ramp unchanged and the weak point still gold
+      · stacks with Rift-touched rather than fighting it
+```
+
+**9 distinct looks out of 9 biomes** is the load-bearing assertion. A channel
+where two biomes render identically is a channel saying nothing, and comparing
+whole-model colour fingerprints catches that where checking a single voxel would
+not.
+
+The last clause matters too. Rift-touched and a biome coat are orthogonal by
+construction — one repaints the body, the other dusts the top — and the check
+proves a rift-touched woodland specimen differs from a rift-touched one while
+keeping the rare ramp intact. Two cosmetics that quietly overwrote each other
+would have been the same bug as the markings, one layer up.
+
+## And a small hole the wiring exposed
+
+`lastArea` was only recorded on a **catalogue**, so a player who culls
+everything would never have seen a coat in their Codex at all. Culling is one of
+the two legitimate paths this whole game is built on; it now records where you
+met the thing as well.

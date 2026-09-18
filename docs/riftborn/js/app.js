@@ -16,7 +16,7 @@ import { fitCanvas, draw } from './render.js';
 import { createInput } from './input.js';
 import { createProfile, AMMO_COST, ITEM_COST, RANK_XP, WEAPON_UNLOCK, RESEARCH_COST } from './profile.js';
 import { drawFieldReport, toPng } from './report.js';
-import { buildModel, modelFor, fitModel, spriteFor, clearVoxelCache, ELEMENT_RAMP } from './voxel.js';
+import { buildModel, modelFor, fitModel, spriteFor, clearVoxelCache, ELEMENT_RAMP, setBiomeCoats, biomeCoat } from './voxel.js';
 import {
   createBattle, makeCombatant, takeTurn, options, catchChance,
   levelOf, wildLevel, activeMon, movesFor, computeMoveDamage, remaining, concealed,
@@ -126,8 +126,10 @@ function boot(data) {
   const pool = buildPool(allSpecies, families);
   const codexSpecies = allSpecies.filter((m) => m.family !== 'apex');
 
-  // The rare-colourway rate is data, like every other tuning number.
+  // The rare-colourway rate and the biome coats are data, like every other
+  // tuning number. Both are set once, from the loaded content.
   setRiftTouchedRate(data.elements.rift_touched?.rate);
+  setBiomeCoats(data.elements.biome_coats);
 
   const profile = createProfile({
     speciesById,
@@ -559,7 +561,9 @@ function boot(data) {
     const wildC = $('wild-model');
     const wc = wildC.getContext('2d');
     wc.clearRect(0, 0, wildC.width, wildC.height);
-    fitModel(wc, modelFor(b.wild.species, { riftTouched: !!battleSpawn?.riftTouched }), {
+    fitModel(wc, modelFor(b.wild.species, {
+      riftTouched: !!battleSpawn?.riftTouched, biome: battleSpawn?.biome ?? null,
+    }), {
       turns: battleTurns, width: wildC.width, height: wildC.height, pad: 0.88,
       alpha: b.wild.fainted ? 0.25 : 1, flash: b.wild.flash,
     });
@@ -571,7 +575,9 @@ function boot(data) {
       mc.clearRect(0, 0, c.width, c.height);
       // Your own monster faces away, which is the convention and also reads as
       // "this one is on your side" without needing a label.
-      fitModel(mc, modelFor(mine.species, { riftTouched: !!mine.resident?.riftTouched }), {
+      fitModel(mc, modelFor(mine.species, {
+        riftTouched: !!mine.resident?.riftTouched, biome: mine.resident?.biome ?? null,
+      }), {
         turns: battleTurns + 0.5, width: c.width, height: c.height, pad: 0.88,
         alpha: mine.fainted ? 0.25 : 1, flash: mine.flash,
       });
@@ -1437,7 +1443,7 @@ function boot(data) {
       return `
         <article class="entry" data-state="${e.state}">
           ${seen
-            ? `<canvas class="entry__model" width="72" height="72" data-model="${sp.id}" data-touched="${!!e.touchedKept}"></canvas>`
+            ? `<canvas class="entry__model" width="72" height="72" data-model="${sp.id}" data-touched="${!!e.touchedKept}" data-biome="${e.lastArea ?? ''}"></canvas>`
             : `<div class="entry__dot" style="--c:${colour}"></div>`}
           <div class="entry__body">
             <h3>${seen ? sp.name : '???'} <span class="entry__no">№ ${String(sp.dex).padStart(3, '0')}</span></h3>
@@ -1480,7 +1486,8 @@ function boot(data) {
       // Without it the Codex and the Sanctuary both drew the ordinary model, so
       // the prize disappeared the moment you won it.
       const riftTouched = c.dataset.touched === 'true';
-      fitModel(ctx2, modelFor(sp, { riftTouched }), { turns, width: c.width, height: c.height, pad: 0.88 });
+      const biome = c.dataset.biome || null;
+      fitModel(ctx2, modelFor(sp, { riftTouched, biome }), { turns, width: c.width, height: c.height, pad: 0.88 });
     }
   }
 
@@ -1567,9 +1574,11 @@ function boot(data) {
 
       return `
         <article class="resident" data-touched="${!!r.riftTouched}">
-          <canvas class="entry__model" width="72" height="72" data-model="${sp.id}" data-touched="${!!r.riftTouched}"></canvas>
+          <canvas class="entry__model" width="72" height="72" data-model="${sp.id}" data-touched="${!!r.riftTouched}" data-biome="${r.biome ?? ''}"></canvas>
           <div class="resident__body">
-            <h3>${sp.name}${r.riftTouched ? ` <span class="touched">${data.elements.rift_touched?.name ?? 'Rift-touched'}</span>` : ''} <span class="entry__no">${sp.elements.join('/')} · stage ${sp.stage}</span></h3>
+            <h3>${sp.name}${r.riftTouched ? ` <span class="touched">${data.elements.rift_touched?.name ?? 'Rift-touched'}</span>` : ''}${
+              biomeCoat(r.biome) ? ` <span class="coat">${biomeCoat(r.biome).name}</span>` : ''
+            } <span class="entry__no">${sp.elements.join('/')} · stage ${sp.stage}</span></h3>
             <div class="resident__study">
               <div class="meter__track meter__track--slim"><div class="meter__fill meter__fill--restraint" style="width:${pct}%"></div></div>
               <span>${Math.floor(r.study)}${nextGate ? ` / ${nextGate}` : ''} Study</span>

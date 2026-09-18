@@ -343,7 +343,40 @@ function applyMarkings(species, voxels, size, ramp, r, { riftTouched = false, pu
   }
 }
 
-export function buildModel(species, { riftTouched = false, pull = 0.55 } = {}) {
+// ---------------------------------------------------------------- biome coats
+
+/*
+ * What settles on an animal that lives somewhere: soot, rust, dust, moss, water.
+ *
+ * The coats table lives in elements.json; the app hands it in at load. It is a
+ * separate channel from the markings ON PURPOSE — markings mean the second
+ * element, so putting the biome there would have traded the type legibility that
+ * was the whole point of having markings for a different piece of information.
+ *
+ * A coat lands only on TOP-EXPOSED voxels, meaning the ones with nothing
+ * directly above them. That is both how dust actually behaves and why the effect
+ * reads at sprite size without swamping the body: the silhouette keeps its
+ * element colour, the upward faces carry where it has been.
+ */
+let COATS = { strength: 0.34, coats: {} };
+export function setBiomeCoats(table) {
+  if (table && table.coats) COATS = table;
+}
+export const biomeCoat = (biome) => COATS.coats?.[biome] ?? null;
+
+function applyCoat(voxels, biome) {
+  const coat = COATS.coats?.[biome];
+  if (!coat) return;
+  const solid = new Set(voxels.map((v) => `${v.x},${v.y},${v.z}`));
+  const k = COATS.strength ?? 0.34;
+  for (const v of voxels) {
+    if (v.weak) continue;                                   // an eye is not dusty
+    if (solid.has(`${v.x},${v.y + 1},${v.z}`)) continue;     // something above it
+    v.colour = mix(v.colour, coat.colour, k);
+  }
+}
+
+export function buildModel(species, { riftTouched = false, pull = 0.55, biome = null } = {}) {
   const plan = PLANS[planFor(species)] ?? PLANS.lump;
   const r = rnd(hashString(species.id));
   const bulk = BULK[species.size] ?? 2;
@@ -415,7 +448,9 @@ export function buildModel(species, { riftTouched = false, pull = 0.55 } = {}) {
     void byKey;
   }
 
-  return { id: species.id, size, voxels, ramp, riftTouched };
+  if (biome) applyCoat(voxels, biome);
+
+  return { id: species.id, size, voxels, ramp, riftTouched, biome: biome ?? null };
 }
 
 // ---------------------------------------------------------------- renderer
@@ -528,13 +563,13 @@ const models = new Map();
 export function modelFor(species, opts = {}) {
   // Keyed on the variant: a rift-touched Cinderfang and an ordinary one are two
   // models, and caching them under one id would show whichever was built first.
-  const key = opts.riftTouched ? `${species.id}!rift` : species.id;
+  const key = `${species.id}${opts.riftTouched ? '!rift' : ''}${opts.biome ? `@${opts.biome}` : ''}`;
   if (!models.has(key)) models.set(key, buildModel(species, opts));
   return models.get(key);
 }
 
 export function spriteFor(species, px = 48, turns = 0.125, opts = {}) {
-  const key = `${species.id}${opts.riftTouched ? '!rift' : ''}:${px}:${turns.toFixed(3)}`;
+  const key = `${species.id}${opts.riftTouched ? '!rift' : ''}${opts.biome ? `@${opts.biome}` : ''}:${px}:${turns.toFixed(3)}`;
   if (sprites.has(key)) return sprites.get(key);
 
   const model = modelFor(species, opts);

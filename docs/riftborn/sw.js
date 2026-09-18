@@ -10,7 +10,7 @@
  * with no way to tell — so it is generated rather than remembered.
  */
 
-const VERSION = '4f307f2bdcf4';
+const VERSION = 'd9f87aaf8eee';
 const CACHE = `riftborn-${VERSION}`;
 
 const SHELL = [
