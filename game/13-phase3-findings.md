@@ -1877,3 +1877,134 @@ wild monster hits back on the same turn, and at 18% the salve does not always
 cover the hit that follows it. That is precisely the design, so "net health rose"
 was asserting the opposite of what the item is for. It reads the recovery off the
 battle log now.
+
+# Phase 4, part 8: the raid bosses were scenery
+
+The bestiary gives every apex a `party_size` — Karrahk wants 4 to 8 Wardens,
+Nyxhollow 2 to 6, Aeonrend 6 to 8. The real-time arena has always read that,
+through `apexHpScale(partySize)`: a solo Warden fights a scaled-down instance.
+
+**The turn battle read none of it.** It fought every apex at full solo numbers,
+and since the turn battle is the game now, that is the version that matters.
+
+## The first measurement pointed at exactly the wrong fix
+
+A party of three at level 40 against each apex:
+
+| apex | apex HP | party HP | win | turns | members lost |
+|---|---|---|---|---|---|
+| Karrahk | 8664 | 665 | **1%** | 5.7 | 2.99 |
+| Nyxhollow | 4631 | 665 | 7% | 8.3 | 2.91 |
+| Aeonrend | 6274 | 665 | **0%** | 6.2 | 3.00 |
+
+Unwinnable. A 13:1 health ratio, the party wiped every time, the apex still at
+39-68%, phases never reached. I went looking for the dial and found it: Karrahk
+hits for **282% of a party member's health** — a guaranteed one-shot, because the
+comparable-damage cap is conditional on the attack ratio and an apex outclasses
+everything. The fix seemed obvious: the endgame is unreachable, so cap what an
+apex can take off a defender in one hit.
+
+That party was Cinderfang, Brinelet and Sporelet. **Three stage-1 starters.**
+
+Nobody brings starters to a raid boss. With four stage-3 parties — the monsters
+you would actually have when a rift opens — the same fight reads:
+
+| apex | win | turns | members lost |
+|---|---|---|---|
+| Karrahk | **92%** | 14 | 1.1 |
+| Nyxhollow | **100%** | 12 | 0.6 |
+| Aeonrend | **85%** | 15 | 1.8 |
+
+The problem was never that apexes are unwinnable. It is that they are **scenery**:
+Karrahk, the 4-to-8-Warden raid boss, loses to three monsters at the cost of one
+third of one of them.
+
+Had I built the damage cap the first measurement asked for, I would have made the
+easiest fights in the game easier, and written a findings section explaining why
+it was necessary.
+
+## One dial does not fit three bosses
+
+| attack | Karrahk | Nyxhollow | Aeonrend |
+|---|---|---|---|
+| x1 | 92% | 100% | 85% |
+| x1.2 | 86% | 100% | **55%** |
+| x1.5 | **60%** | 97% | 24% |
+| x2 | 25% | **59%** | 2% |
+
+Thirty points apart at the same multiplier, and Aeonrend falls off a cliff
+between x1.2 and x1.5 where Nyxhollow barely moves — because Aeonrend switches
+the type chart off, so nothing you bring is super effective and the race tips
+all at once. So `attack_scale` is per apex: **1.5 / 2.0 / 1.2**, each landing near
+55-60% for a full party.
+
+Those numbers are level-independent by construction, and measured so: identical
+at level 30, 40 and 50. Damage is a share of the defender's health, so raising
+both sides cancels. That is the relative-damage rewrite from part 3 paying a
+dividend nobody asked it for — a tuning constant that does not rot.
+
+## Two was easier than three, which is backwards
+
+Turn up short and the apex scales down, so a thin party is a handicap rather
+than a wall. Scaling **both** health and attack by the party's share of three:
+
+| apex | party=1 | party=2 | party=3 |
+|---|---|---|---|
+| Karrahk | 50% | **73%** | 60% |
+| Nyxhollow | 58% | **79%** | 59% |
+| Aeonrend | 34% | **85%** | 55% |
+
+A party of two is the easiest way to fight every apex in the game. That cannot
+stand: it means the correct play is to leave a monster at home, and a full party
+is a mistake.
+
+The reason is that **the bench is worth more than its share of the health pool**.
+A third member is not just 33% more health — it is another free swap, another
+element against the chart, another set of PP. Scaling the apex linearly against
+a resource that grows faster than linearly hands the middle case a free lunch.
+
+Health by share and attack by its **square root** is monotonic:
+
+| apex | party=1 | party=2 | party=3 |
+|---|---|---|---|
+| Karrahk | 38% | 42% | **60%** |
+| Nyxhollow | 36% | 31% | **59%** |
+| Aeonrend | 8% | 30% | **55%** |
+
+Three is the best answer everywhere, one is a real struggle, and turning up alone
+to Aeonrend — designed for six to eight — is 8%. All three now reach their final
+phase, which is the whole point of having built phases.
+
+## And the two systems met, without being introduced
+
+An apex costs 2.1 of 3 members. A patrol runs 1.6 to 2.1 battles. So what happens
+if a rift opens when you are already worn?
+
+| party arrives at | Karrahk | Nyxhollow | Aeonrend |
+|---|---|---|---|
+| 100% | 60% | 59% | 55% |
+| 75% | 33% | 39% | 38% |
+| 50% | 11% | 20% | 8% |
+| 25% | 4% | 3% | 3% |
+
+Nobody designed that curve; it falls out of condition carry-over meeting apex
+scaling. It says something the game had no way to say before: **an apex is not
+something you stumble into at the end of a patrol.** You go home, you mend, you
+come back — or you spend the Deep Salve you have been carrying. It gives the
+Sanctuary a second job and the field kit a reason to exist beyond attrition.
+
+That is left exactly as it is. It is the most interesting thing in this section
+and I did not write it.
+
+## The narrow sample, a sixth time — but caught before it cost anything
+
+Part 7 named the pattern: my first sample is almost always too narrow, and
+narrow in whichever direction makes the result interesting. This is the sixth
+instance and the first one caught **before** any code was written rather than
+after. The tell was the size of the effect: 0% and 1% are not tuning problems,
+and a number that extreme usually means the harness is asking the wrong question
+rather than the design being catastrophically wrong.
+
+Widening cost one command. The fix it would have justified would have cost a
+damage cap in the engine, a test defending it, and a section of this document
+arguing for it — all of it wrong, and all of it plausible.

@@ -293,6 +293,34 @@ export function computeMoveDamage(attacker, defender, move, data, rng = Math.ran
  * Arm one wild combatant: its Restraint requirement is a property of the
  * individual, so every member of a pack gets its own.
  */
+/**
+ * Scale an apex to the party that actually turned up.
+ *
+ * The bestiary gives every apex a `party_size` — Karrahk wants 4 to 8 Wardens —
+ * and the real-time arena has always read it through `apexHpScale`. The turn
+ * battle read nothing at all and fought each one at its full solo numbers,
+ * which measured 85-100% wins for four stage-3 parties. A raid boss you cannot
+ * lose is scenery.
+ *
+ * Health scales with the party's share of the designed three; attack scales
+ * with the square root of it, so a full party is the best call at every apex
+ * without a short one being hopeless. See `apex_encounter` in elements.json for
+ * why both-by-share was wrong.
+ */
+export function scaleApex(data, w, partySize) {
+  const rules = data.elements.apex_encounter;
+  if (!rules || !w.species?.apex) return w;
+  const designed = rules.designed_party ?? 3;
+  const share = Math.max(1, Math.min(designed, partySize || designed)) / designed;
+  const atk = rules.attack_scale?.[w.species.id] ?? 1;
+
+  w.maxHp = Math.max(1, Math.round(w.maxHp * Math.pow(share, rules.short_party_hp_exponent ?? 1)));
+  w.hp = w.maxHp;
+  w.attack *= atk * Math.pow(share, rules.short_party_attack_exponent ?? 0.5);
+  w.apexScaled = { share, attack: atk };
+  return w;
+}
+
 function armWild(data, w) {
   w.wild = true;
   w.required = restraintRequired(
@@ -323,7 +351,13 @@ export function createBattle(opts) {
    * an individual. What makes a pack hard is that YOUR side does not heal
    * between members, so the third one meets whatever the first two left of you.
    */
-  const wilds = (opts.wilds ?? [opts.wild]).filter(Boolean).map((w) => armWild(data, w));
+  /*
+   * Scale before arming: `armWild` reads health to pick the opening phase, so an
+   * apex scaled afterwards would open in the wrong band.
+   */
+  const partySize = (opts.team ?? []).length;
+  const wilds = (opts.wilds ?? [opts.wild]).filter(Boolean)
+    .map((w) => armWild(data, scaleApex(data, w, partySize)));
   for (const c of [...(opts.team ?? []), ...wilds]) stockPP(c);
 
   return {

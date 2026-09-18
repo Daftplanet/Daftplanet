@@ -16,7 +16,7 @@ import { escortAbility } from '../../docs/riftborn/js/sanctuary.js';
 import { createFight, step, weakPointPositions, assistMiss, ARENA } from '../../docs/riftborn/js/game.js';
 import {
   makeCombatant, createBattle, takeTurn, levelOf, wildLevel, computeMoveDamage, catchChance,
-  activeMon, canUse, conditionOf,
+  activeMon, canUse, conditionOf, phaseCount,
 } from '../../docs/riftborn/js/battle.js';
 import { studyFromBattle, STUDY_PER_MINUTE } from '../../docs/riftborn/js/sanctuary.js';
 
@@ -958,4 +958,81 @@ if (process.env.PATROL) {
   }
   console.log('\nA patrol should get LONGER with a kit, not endless. If the bottom row runs away');
   console.log('from the top one, the field kit has cancelled the limit the whole system exists to create.');
+}
+
+/*
+ * ----------------------------------------------------------------- APEX=1
+ *
+ * Is an apex a raid boss, or scenery?
+ *
+ * The bestiary gives each apex a `party_size` — Karrahk wants 4 to 8 Wardens.
+ * The real-time arena has always read that through `apexHpScale`; the turn
+ * battle read nothing and fought every apex at its full solo numbers.
+ *
+ * The first version of this measurement used a party of stage-1 starters and
+ * reported 0-7% wins — an unreachable endgame, and a diagnosis pointing at
+ * exactly the wrong fix. Nobody brings starters to a raid boss. Four stage-3
+ * parties won 85-100%, which is the real problem and the opposite one.
+ *
+ * PARTY_SIZE sweeps what you brought; the scaling lives in elements.json under
+ * `apex_encounter`.
+ */
+if (process.env.APEX) {
+  const byId = Object.fromEntries(data.monsters.monsters.map((m) => [m.id, m]));
+  const apexes = data.monsters.monsters.filter((m) => m.apex && phaseCount(m, data) > 1).map((m) => m.id);
+  // Four stage-3 parties, so the answer is not one team's matchup with the chart.
+  const PARTIES = [
+    ['bramblewarden', 'glaciarch', 'thunderhelm'],
+    ['pyrecrown', 'maelstrix', 'obelisc'],
+    ['vulcarne', 'hoarfell', 'umbrakhan'],
+    ['rotmatron', 'tempestrix', 'aurelian'],
+  ];
+  const N = Number(process.env.RUNS ?? 60);
+  const LEVEL = Number(process.env.LEVEL ?? 40);
+
+  const bestDamage = (b, mine) => {
+    let bi = 0, bd = -1;
+    mine.moves.forEach((mv, i) => {
+      if (!canUse(mine, i)) return;
+      const d = computeMoveDamage(mine, b.wild, mv, data, () => 0.5).damage * (mv.accuracy ?? 1);
+      if (d > bd) { bd = d; bi = i; }
+    });
+    return bi;
+  };
+  const statusFirst = (b, mine) => {
+    const si = mine.moves.findIndex((mv, i) => canUse(mine, i) && (mv.applies || mv.applies_self)
+      && !(mv.applies ? b.wild.statuses[mv.applies] : mine.statuses[mv.applies_self]));
+    return si >= 0 ? si : bestDamage(b, mine);
+  };
+
+  console.log(`\nAPEX ENCOUNTERS — 4 stage-3 parties x ${N} seeds, level ${LEVEL}`);
+  console.log('apex              party=1      party=2      party=3   deepest phase   (win% / turns / members lost)');
+  for (const apexId of apexes) {
+    let deepest = 0;
+    const cells = [1, 2, 3].map((size) => {
+      let win = 0, turns = 0, lost = 0, n = 0;
+      for (const party of PARTIES) {
+        for (let s = 0; s < N; s++) {
+          const rng = mulberry32(s * 7919 + 13);
+          const team = party.slice(0, size).map((p) => makeCombatant(byId[p], LEVEL, data,
+            { resident: { study: 4000 }, specimenRng: rng }));
+          const wild = makeCombatant(byId[apexId], LEVEL, data, { wild: true, specimenRng: rng });
+          const b = createBattle({ data, team, wilds: [wild], rng });
+          let g = 0;
+          while (!b.outcome && g++ < 500) {
+            const m = activeMon(b);
+            if (!m || m.fainted) break;
+            takeTurn(b, { kind: 'move', index: statusFirst(b, m) });
+            if (b.wild.phase > deepest) deepest = b.wild.phase;
+          }
+          if (b.outcome === 'defeated') win++;
+          turns += b.turn; lost += b.team.filter((c) => c.fainted).length; n++;
+        }
+      }
+      return `${((win / n) * 100).toFixed(0)}%/${(turns / n).toFixed(0)}/${(lost / n).toFixed(1)}`.padStart(13);
+    });
+    console.log(`${apexId.padEnd(16)}${cells.join('')}${String(`${deepest} of ${phaseCount(byId[apexId], data)}`).padStart(15)}`);
+  }
+  console.log('\nWanted: a boss you can lose, that a full party is always the best answer to,');
+  console.log('and whose last phase is reachable. 100% at party=3 means scenery.');
 }

@@ -1145,7 +1145,92 @@ ok('the field kit is crafted from element materials and reaches the patrol view'
    `refused at 0 Essence · cost ${fieldkit.spent} Essence and ${fieldkit.mats} verdant`
    + ` · ${fieldkit.rows} party row(s) on patrol offering ${fieldkit.buttons.join(', ') || 'nothing'}`);
 
-// --- 40. phone layout
+// --- 40. an apex is scaled to the party that turned up
+const apexScale = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const karrahk = r.data.monsters.monsters.find((m) => m.id === 'karrahk');
+  const make = () => r.makeCombatant(karrahk, 40, r.data, { wild: true, specimenRng: () => 0.5 });
+  const raw = make();
+  const mate = (n) => Array.from({ length: n }, () => r.makeCombatant(
+    r.data.monsters.monsters.find((m) => m.id === 'bramblewarden'), 40, r.data,
+    { resident: { study: 4000 }, specimenRng: () => 0.5 }));
+  const at = (n) => {
+    const w = make();
+    const b = r.createBattle({ data: r.data, team: mate(n), wilds: [w] });
+    return { hp: b.wild.maxHp, attack: b.wild.attack, phase: b.wild.phase };
+  };
+  const rules = r.data.elements.apex_encounter;
+  return {
+    rawHp: raw.maxHp, rawAttack: raw.attack,
+    one: at(1), three: at(3),
+    mult: rules.attack_scale.karrahk,
+    // A non-apex must be untouched by any of this.
+    wildUnscaled: (() => {
+      const sp = r.data.monsters.monsters.find((m) => m.id === 'brinelet');
+      const w = r.makeCombatant(sp, 40, r.data, { wild: true, specimenRng: () => 0.5 });
+      const before = w.maxHp;
+      const b = r.createBattle({ data: r.data, team: mate(3), wilds: [w] });
+      return b.wild.maxHp === before;
+    })(),
+  };
+});
+ok('an apex is scaled to the party that turned up, and nothing else is',
+   apexScale.three.hp === apexScale.rawHp
+   && Math.abs(apexScale.three.attack - apexScale.rawAttack * apexScale.mult) < 1
+   && apexScale.one.hp < apexScale.three.hp
+   && apexScale.one.attack < apexScale.three.attack
+   && apexScale.one.phase === 1 && apexScale.three.phase === 1
+   && apexScale.wildUnscaled,
+   `party of 3 → ${apexScale.three.hp} HP at x${apexScale.mult} attack · party of 1 → ${apexScale.one.hp} HP`
+   + ` · both still open on phase 1 · a wild Brinelet is untouched`);
+
+// --- 41. the raid boss is one you can actually lose, and reach the end of
+/*
+ * The turn battle read no `party_size` at all and fought every apex at its solo
+ * numbers. Measured, that made them too EASY, not too hard: four stage-3 parties
+ * beat all three 85-100% of the time. A boss you cannot lose is scenery.
+ */
+const apexFight = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const pick = (id) => r.data.monsters.monsters.find((m) => m.id === id);
+  const mul = (a) => () => {
+    a |= 0; a = (a + 0x6D2B79F5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  let win = 0, turns = 0, deepest = 0, n = 0;
+  for (let s = 0; s < 30; s++) {
+    const rng = mul(s * 7919 + 13);
+    const team = ['bramblewarden', 'glaciarch', 'thunderhelm'].map((p) =>
+      r.makeCombatant(pick(p), 40, r.data, { resident: { study: 4000 }, specimenRng: rng }));
+    const b = r.createBattle({ data: r.data, team,
+      wilds: [r.makeCombatant(pick('karrahk'), 40, r.data, { wild: true, specimenRng: rng })], rng });
+    let g = 0;
+    while (!b.outcome && g++ < 400) {
+      const m = r.activeMon(b);
+      if (!m || m.fainted) break;
+      let bi = 0, bd = -1;
+      m.moves.forEach((mv, i) => {
+        const d = r.computeMoveDamage(m, b.wild, mv, r.data, () => 0.5).damage * (mv.accuracy ?? 1);
+        if (d > bd) { bd = d; bi = i; }
+      });
+      r.takeTurnOn(b, { kind: 'move', index: bi });
+      if (b.wild.phase > deepest) deepest = b.wild.phase;
+    }
+    if (b.outcome === 'defeated') win++;
+    turns += b.turn; n++;
+  }
+  return { rate: win / n, turns: turns / n, deepest, phases: r.phaseCount(pick('karrahk'), r.data) };
+});
+ok('an apex is a raid boss you can lose, and its last phase is reachable',
+   apexFight.rate > 0.2 && apexFight.rate < 0.9
+   && apexFight.turns > 6 && apexFight.turns < 40
+   && apexFight.deepest === apexFight.phases,
+   `Karrahk falls ${Math.round(apexFight.rate * 100)}% of the time over ${apexFight.turns.toFixed(0)} turns`
+   + ` · phase ${apexFight.deepest} of ${apexFight.phases} reached — it was 92% before party_size was read`);
+
+// --- 42. phone layout
 await page.setViewportSize({ width: 390, height: 844 });
 await page.evaluate(async () => { await window.battleWith(['brinelet'], 'cinderfang'); });
 await page.waitForTimeout(400);

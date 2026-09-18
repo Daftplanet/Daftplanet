@@ -212,7 +212,7 @@
   },
   "dual_element_rule": "Multiply the attacker's multiplier against each of the defender's elements. A Tide/Gale defender hit by Volt takes 2.0 x 2.0 = 4.0.",
   "escort_ability_rules": {
-    "$comment": "Answers decision 1 in 09-risks-and-roadmap.md: 'Limited \u2014 one resident gives an active ability.' One escort, one charge per encounter, no autonomous action. The escort never attacks on its own; that is the line between a limited companion and a pet sim.",
+    "$comment": "Answers decision 1 in 09-risks-and-roadmap.md: 'Limited — one resident gives an active ability.' One escort, one charge per encounter, no autonomous action. The escort never attacks on its own; that is the line between a limited companion and a pet sim.",
     "charges_per_encounter": 1,
     "stage_scale": [
       1.0,
@@ -274,7 +274,7 @@
     "lumen": {
       "id": "kindle",
       "name": "Kindle",
-      "blurb": "Lights what hides \u2014 including a weak point that has none.",
+      "blurb": "Lights what hides — including a weak point that has none.",
       "effect": "illuminate",
       "seconds": 7
     },
@@ -305,12 +305,12 @@
     "status_turns": 4,
     "comparable_damage_cap": 0.2,
     "outclass_ratio": 2.5,
-    "$cap_comment": "A fight between comparable monsters cannot end in one hit. Four terms in the damage formula each reach about 2x \u2014 move power, the same-element bonus, the type chart, the attack ratio \u2014 and they multiply. Measured over 60 fair matchups (same stage, same size class, different element), 35% of fights ended inside two turns and the average was 3.3, which leaves no room for a status, a swap or anything else the battle offers. The cap is conditional on outclass_ratio rather than universal because a mismatch SHOULD end in one hit: at cap 0.20 fair fights run 6.1 turns, two-turn fights drop to 0%, mirror matches are untouched at 9.7, and Karrahk still one-shots a Glimmerfly.",
+    "$cap_comment": "A fight between comparable monsters cannot end in one hit. Four terms in the damage formula each reach about 2x — move power, the same-element bonus, the type chart, the attack ratio — and they multiply. Measured over 60 fair matchups (same stage, same size class, different element), 35% of fights ended inside two turns and the average was 3.3, which leaves no room for a status, a swap or anything else the battle offers. The cap is conditional on outclass_ratio rather than universal because a mismatch SHOULD end in one hit: at cap 0.20 fair fights run 6.1 turns, two-turn fights drop to 0%, mirror matches are untouched at 9.7, and Karrahk still one-shots a Glimmerfly.",
     "hold_scale": 0.5,
-    "$hold_comment": "How much a speed penalty costs a monster its TURN, not just its place in the order. Speed was read in exactly one line of the engine \u2014 who acts first \u2014 and both sides act every turn regardless, so 'held', 'anchored', 'chilled' and 'sedated' were four status moves that did essentially nothing. A slowed monster now loses its turn with probability (1 - speed factor) * hold_scale: held is 40%, anchored 45%, sedated 25%, chilled 20%. That is the paralysis model, and it is what makes a status move worth the turn it costs.",
+    "$hold_comment": "How much a speed penalty costs a monster its TURN, not just its place in the order. Speed was read in exactly one line of the engine — who acts first — and both sides act every turn regardless, so 'held', 'anchored', 'chilled' and 'sedated' were four status moves that did essentially nothing. A slowed monster now loses its turn with probability (1 - speed factor) * hold_scale: held is 40%, anchored 45%, sedated 25%, chilled 20%. That is the paralysis model, and it is what makes a status move worth the turn it costs.",
     "hp_regen_per_minute": 0.03,
     "mend_essence_per_tier": 10,
-    "$condition_comment": "A monster carries its wounds and its spent PP out of a battle and into the next one. Before this every fight started everyone at full, so a patrol was a series of unrelated battles: fainting cost nothing past the turn it happened on, there was no reason to rotate the party, and no reason ever to go home. Measured over 40 fair matchups, winning one fight costs 75% of the winner's health and 6 of its 13 PP \u2014 so a party of three sustains about four battles, which is a patrol. Recovery is 3% of the bar per minute (about half an hour from empty), or pay Essence to mend now. The price is one cull per heal at the same tier, which is the point: culling pays to keep the monsters you catalogued in the field, and the game's two halves finally need each other."
+    "$condition_comment": "A monster carries its wounds and its spent PP out of a battle and into the next one. Before this every fight started everyone at full, so a patrol was a series of unrelated battles: fainting cost nothing past the turn it happened on, there was no reason to rotate the party, and no reason ever to go home. Measured over 40 fair matchups, winning one fight costs 75% of the winner's health and 6 of its 13 PP — so a party of three sustains about four battles, which is a patrol. Recovery is 3% of the bar per minute (about half an hour from empty), or pay Essence to mend now. The price is one cull per heal at the same tier, which is the point: culling pays to keep the monsters you catalogued in the field, and the game's two halves finally need each other."
   },
   "element_moves": {
     "ember": [
@@ -601,7 +601,7 @@
       "accuracy": 1.0,
       "priority": 0,
       "element": null,
-      "$comment": "Every monster knows it. Untyped, so it is never resisted and never boosted \u2014 and it has no PP, so it is what you are left with when everything else is spent. That is the whole point of it.",
+      "$comment": "Every monster knows it. Untyped, so it is never resisted and never boosted — and it has no PP, so it is what you are left with when everything else is spent. That is the whole point of it.",
       "pp": null
     }
   ],
@@ -618,18 +618,18 @@
     }
   ],
   "apex_phase_rules": {
-    "$comment": "Apex phases, shared by both combat modes. A phase is an HP band: phase = 1 + floor((1 - hp/maxHp) * phases), which is what the real-time arena already did. The point of a phase, in the bestiary's words, is that a long fight should be a sequence of different problems rather than the same shot repeated \u2014 so each one changes what the apex does, what it is wearing, and whether it can be taken at all.",
+    "$comment": "Apex phases, shared by both combat modes. A phase is an HP band: phase = 1 + floor((1 - hp/maxHp) * phases), which is what the real-time arena already did. The point of a phase, in the bestiary's words, is that a long fight should be a sequence of different problems rather than the same shot repeated — so each one changes what the apex does, what it is wearing, and whether it can be taken at all.",
     "transition_ends_turn": true,
     "transition_clears_statuses": true,
     "$transition_comment": "The arena gives the apex 1.2 seconds of invulnerability while it re-forms, and wipes the Restraint you had built. The turn-based reading of that is: the turn a band breaks, the apex takes no further damage and does not act, and every status on it is shrugged off. Both rules exist to stop a burst carrying you through two phases at once, which is the one thing that would make phases decorative.",
     "one_band_per_turn": true,
-    "$band_comment": "A break advances ONE phase, even if the hit crossed two health bands. Measured before this rule, a Verdant party took Karrahk from phase 1 to phase 3 in a single hit and the whole of phase 2 never happened \u2014 the phases were a caption on a health bar. Guaranteeing one band per turn makes them content rather than probability.",
+    "$band_comment": "A break advances ONE phase, even if the hit crossed two health bands. Measured before this rule, a Verdant party took Karrahk from phase 1 to phase 3 in a single hit and the whole of phase 2 never happened — the phases were a caption on a health bar. Guaranteeing one band per turn makes them content rather than probability.",
     "damage_fraction_band": [
       0.06,
       0.16
     ],
-    "$damage_comment": "The share of an apex's health any single move may take. Relative damage means the type chart multiplies a FRACTION of health, so a quadruple weakness with same-element bonus came to 0.9 of the bar in one hit while a resisted move came to 0.03 \u2014 measured, 4 hits to kill Karrahk with the right element against 38 with the wrong one. Both ends ruin a designed fight: one skips the phases, the other is a slog. The band keeps the chart pointing the right way (about 2.4x for bringing the counter) without letting it decide whether the fight happens at all. It applies to apexes only \u2014 Karrahk one-shotting a Glimmerfly is correct and stays.",
-    "$catch_comment": "An apex's capture chance is DESIGNED per phase rather than derived. The Restraint maths is built for a monster you could plausibly carry home; a Titan with 1100 base Restraint is not that, and the derived chance against Karrahk is 0.04% \u2014 indistinguishable from the 2% floor, so every phase read the same and the phase gate did nothing. catch_chance below is the chance at the ideal moment: badly wounded, sedated, heavy dart. The actual roll scales down from there by the ratio of your Restraint value to that ideal, so softening and sedating still matter and no new constants are invented."
+    "$damage_comment": "The share of an apex's health any single move may take. Relative damage means the type chart multiplies a FRACTION of health, so a quadruple weakness with same-element bonus came to 0.9 of the bar in one hit while a resisted move came to 0.03 — measured, 4 hits to kill Karrahk with the right element against 38 with the wrong one. Both ends ruin a designed fight: one skips the phases, the other is a slog. The band keeps the chart pointing the right way (about 2.4x for bringing the counter) without letting it decide whether the fight happens at all. It applies to apexes only — Karrahk one-shotting a Glimmerfly is correct and stays.",
+    "$catch_comment": "An apex's capture chance is DESIGNED per phase rather than derived. The Restraint maths is built for a monster you could plausibly carry home; a Titan with 1100 base Restraint is not that, and the derived chance against Karrahk is 0.04% — indistinguishable from the 2% floor, so every phase read the same and the phase gate did nothing. catch_chance below is the chance at the ideal moment: badly wounded, sedated, heavy dart. The actual roll scales down from there by the ratio of your Restraint value to that ideal, so softening and sedating still matter and no new constants are invented."
   },
   "apex_phases": {
     "$comment": "One entry per phase, in order. weak_points and armour_scale are read by the real-time arena too, so the two modes cannot drift apart. catch_scale, moves, flat_effectiveness and conceal are the turn-based battle's.",
@@ -668,7 +668,7 @@
         ],
         "armour_scale": 0.72,
         "catch_chance": 0.0,
-        "blurb": "The plating splits and the water comes with it. The ground is gone \u2014 everything is slower now.",
+        "blurb": "The plating splits and the water comes with it. The ground is gone — everything is slower now.",
         "moves": [
           {
             "id": "undertow_crush",
@@ -784,7 +784,7 @@
         "armour_scale": 1.0,
         "catch_chance": 0.0,
         "flat_effectiveness": true,
-        "blurb": "A seam opens. Whatever you brought, it does not care \u2014 nothing is strong or weak against this.",
+        "blurb": "A seam opens. Whatever you brought, it does not care — nothing is strong or weak against this.",
         "moves": [
           {
             "id": "seam_split",
@@ -891,5 +891,17 @@
       }
     ]
   },
-  "$moves_comment": "Four moves each: a quick one, a heavy one, something that is not damage, and Strike. PP is PER BATTLE and deliberately tight \u2014 three heavies in a fight that now runs six turns \u2014 so the menu is a sequencing decision rather than a button you hold. Before this, every element had exactly two damage moves and 'pick the biggest number' matched a type-chart-aware policy on 83% of turns."
+  "$moves_comment": "Four moves each: a quick one, a heavy one, something that is not damage, and Strike. PP is PER BATTLE and deliberately tight — three heavies in a fight that now runs six turns — so the menu is a sequencing decision rather than a button you hold. Before this, every element had exactly two damage moves and 'pick the biggest number' matched a type-chart-aware policy on 83% of turns.",
+  "apex_encounter": {
+    "$comment": "An apex is a raid boss, and the bestiary says so: party_size is [4,8] for Karrahk, [2,6] for Nyxhollow, [6,8] for Aeonrend. The real-time arena has always read that through apexHpScale(partySize) — a solo Warden fights a scaled-down instance. The turn battle read nothing, and fought every apex at its full solo numbers.\n\nMeasured, that made them too EASY rather than too hard, which is the opposite of what it looks like: four stage-3 parties beat all three apexes 85-100% of the time, Karrahk costing a third of one monster. (A party of stage-1 starters loses 99% of the time, but nobody brings starters to a raid boss — measuring that first was a narrow sample, and it pointed at exactly the wrong fix.)\n\nattack_scale is per apex because one global dial cannot serve all three: at the same multiplier the three sit 30 points apart, and Aeonrend — which switches the type chart off, so nothing you bring is super effective — falls off a cliff where Nyxhollow barely moves. The values below put each at roughly 55-60% for a full party, which is a boss you can lose. They are level-independent by construction: damage is a share of the defender's health, so raising both sides cancels, and the same numbers measure the same at level 30, 40 and 50.",
+    "designed_party": 3,
+    "attack_scale": {
+      "karrahk": 1.5,
+      "nyxhollow": 2.0,
+      "aeonrend_apex": 1.2
+    },
+    "short_party_hp_exponent": 1.0,
+    "short_party_attack_exponent": 0.5,
+    "$short_party_comment": "Turn up with fewer than three and the apex is scaled down, so a short party is a handicap rather than a wall — but it must stay a handicap, or there is no reason to bring a full party. Scaling health and attack BOTH by the party share got that backwards: a party of two measured EASIER (73-85%) than a party of three (55-60%), because the bench is worth more than its share of the health pool — every extra member is also a free swap. Health by share and attack by its square root is monotonic: three is the best call at every apex, one is a real struggle, and turning up alone to Aeonrend — designed for six to eight — is 8%, which is correct."
+  }
 }
