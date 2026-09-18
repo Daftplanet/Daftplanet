@@ -1947,6 +1947,11 @@ function boot(data) {
   let studyClock = 0;
 
   function frame(now) {
+    // The loop's own heartbeat. A check cannot ask requestAnimationFrame whether
+    // the game is still running — rAF answers for the browser, not for this
+    // loop, and will happily keep calling a probe long after `frame` has stopped
+    // re-arming itself. This counter is the only honest answer.
+    frame.count = (frame.count ?? 0) + 1;
     let elapsed = (now - last) / 1000;
     last = now;
     if (elapsed > 0.25) elapsed = 0.25;
@@ -1984,8 +1989,16 @@ function boot(data) {
      * The whole body is guarded now and the loop re-arms in a finally, so the
      * question "is every line covered" has one answer instead of one per block.
      */
-    studyClock += elapsed;
-    if (studyClock > 5) { studyClock = 0; if (profile.tickStudy()) profile.save(); }
+    try {
+      studyClock += elapsed;
+      if (studyClock > 5) { studyClock = 0; if (profile.tickStudy()) profile.save(); }
+    } catch (err) {
+      frame.seen = frame.seen ?? new Set();
+      if (!frame.seen.has(`study:${err.message}`)) {
+        frame.seen.add(`study:${err.message}`);
+        console.error('[riftborn] study tick error', err);
+      }
+    }
 
     try {
       if (view === 'patrol') {
@@ -2011,8 +2024,12 @@ function boot(data) {
         frame.seen.add(`frame:${err.message}`);
         console.error('[riftborn] frame error', err);
       }
+    } finally {
+      // In a finally, so that nothing added above this line can ever stop the
+      // loop re-arming. Every previous version of this bug was a line that was
+      // not inside the guard somebody thought it was inside.
+      requestAnimationFrame(frame);
     }
-    requestAnimationFrame(frame);
   }
 
   /* Test/console helper: evaluate a resident's evolution blockers, optionally at a
@@ -2029,6 +2046,7 @@ function boot(data) {
     profile, patrol, speciesById, data,
     get view() { return view; },
     get fight() { return fight; },
+    get frames() { return frame.count ?? 0; },
     show, startFight, startBattle, renderSanctuary, renderContracts, renderParty,
     /*
      * Regenerate the spawns around the Warden, synchronously. The browser suites

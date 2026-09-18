@@ -13,9 +13,15 @@ const errors = [];
  * its exact text — and only that text, so a real rendering failure still fails
  * the run.
  */
-const DELIBERATE = 'deliberate HUD failure';
-page.on('console', (m) => { if (m.type() === 'error' && !m.text().includes(DELIBERATE)) errors.push(m.text()); });
-page.on('pageerror', (e) => { if (!e.message.includes(DELIBERATE)) errors.push(`pageerror: ${e.message}`); });
+/*
+ * Two checks below break the game on purpose and demand it survives. The errors
+ * they provoke are the point, so they are not console noise — everything else
+ * still is.
+ */
+const DELIBERATE = ['deliberate HUD failure', 'deliberate study-tick failure'];
+const onPurpose = (text) => DELIBERATE.some((d) => text.includes(d));
+page.on('console', (m) => { if (m.type() === 'error' && !onPurpose(m.text())) errors.push(m.text()); });
+page.on('pageerror', (e) => { if (!onPurpose(e.message)) errors.push(`pageerror: ${e.message}`); });
 page.on('requestfailed', (r) => errors.push(`requestfailed: ${r.url()} ${r.failure()?.errorText}`));
 
 /*
@@ -384,6 +390,52 @@ ok('a finished fight shows its result even when the HUD cannot draw',
    stranded.note ? stranded.note
      : `HUD throwing every frame · outcome "${stranded.outcome}" · card reads "${stranded.verdict}"`
        + ' — the result card used to be the last line of the renderer that just died');
+
+/*
+ * The other half of the same bug, found the hard way.
+ *
+ * The result card was moved out of the HUD renderer and the class of failure
+ * declared closed. It was not: five lines sat BETWEEN the loop's two try blocks
+ * — the periodic study tick — where a throw escaped `frame` entirely and the
+ * requestAnimationFrame at the bottom was never reached. The app froze, with the
+ * fight's outcome already set and no card, which is the identical symptom one
+ * layer further out. It fires every five seconds, so it surfaced as a check that
+ * went red once in a full run and would not reproduce.
+ *
+ * This is slow on purpose — it has to wait for a tick that only comes every five
+ * seconds. A freeze of the entire app is worth five seconds of a ninety-second
+ * suite.
+ */
+const frozen = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  r.show('patrol');
+  const before = r.patrol.x;
+
+  const real = r.profile.tickStudy.bind(r.profile);
+  r.profile.tickStudy = () => { throw new Error('deliberate study-tick failure'); };
+
+  // Long enough for studyClock to pass its five-second gate at least once.
+  await new Promise((d) => setTimeout(d, 5400));
+
+  /*
+   * Ask the GAME's loop whether it is still running, not the browser's.
+   *
+   * The first version of this check polled requestAnimationFrame from the test
+   * and asserted it fired — which it does regardless, because rAF belongs to the
+   * page and not to this loop. It passed against the broken code, which is the
+   * only reason I found out: a guard that cannot fail is decoration.
+   */
+  const at = r.frames;
+  await new Promise((d) => setTimeout(d, 400));
+  const after = r.frames;
+
+  r.profile.tickStudy = real;
+  return { alive: after > at, at, after, before };
+});
+ok('a throwing study tick does not freeze the whole game',
+   frozen.alive === true,
+   `tickStudy threw for a full tick interval · the game's own loop ran ${frozen.after - frozen.at} more frames`
+   + ' — it used to sit outside both guards, so this froze the app mid-fight with no result card');
 
 await browser.close();
 console.log(errors.length ? `\nCONSOLE ERRORS:\n${errors.join('\n')}` : '\nno console errors');
