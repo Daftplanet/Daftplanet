@@ -2772,3 +2772,69 @@ would have been the same bug as the markings, one layer up.
 everything would never have seen a coat in their Codex at all. Culling is one of
 the two legitimate paths this whole game is built on; it now records where you
 met the thing as well.
+
+# Phase 4, part 18: the wild monster stopped keeping its own arithmetic
+
+The last obviously-dumb actor in the game was the thing you fight. It picked its
+move by scoring `power x effectiveness x accuracy` — which is a second copy of
+the damage calculation, and it had drifted from the real one in two ways that
+both mattered.
+
+It did not know about the **same-element bonus**, so a move worth 1.5x looked
+identical to one that was not. And it did not know about the
+**comparable-damage cap**, so it would spend its three-PP heavy move for damage
+the cap had already clamped to exactly what the eight-PP quick move does — and
+then have nothing left later.
+
+That is the same shape of bug this document has already recorded twice: two
+formulas for one thing, one of them quietly obsolete. `computeMoveDamage` is
+exported, so the fix is to ask the engine. A fixed mid-roll rng gives the
+expected, crit-free damage a move would really do, through the same arithmetic
+that will resolve it. As a free consequence the wild now understands Aeonrend
+turning the type chart off, which the proxy could not see.
+
+Two things it could not do before and now can: **take the kill** when a move
+would finish the defender, and **not waste a status** on a target that is about
+to die — the old flat score of 45 would happily out-rank the move that ends the
+fight.
+
+## What it cost, which is the part worth writing down
+
+A smarter opponent is a harder game, and the numbers moved. Re-running the
+diagnostics that never mentioned the wild AI — the rule this document already
+names — found one table badly broken and three intact.
+
+`MOVES=1` fell about three points across the board and kept its shape: status
+first 52.5% -> 49.6%, best damage 45.3% -> 41.9%, biggest power 41.5% -> 36.9%,
+random 35.2% -> 32.1%. The spread is 17.5 points against 17.3 before, so the
+FIGHT menu is exactly as much of a decision as it was; the whole curve just sits
+lower. That is the correct direction for a better opponent.
+
+`PATROL=1` holds: 1.9 battles bare and 3.1 with a full kit at 40% won, inside
+the documented 1.6-2.1 and 33-44%. `PROGRESS=1` holds: 25.9 battles and 4.4
+hours to the first evolution, against a documented 26.0 and 4.4.
+
+**`APEX=1` broke, and it broke because those constants were fitted to the old
+opponent.** At a full party Karrahk fell from 60% to 45% and Aeonrend from 55%
+to 29% — a raid boss nobody can beat is as bad as scenery. Nyxhollow did not
+move at all, which is the tell that this was about damage output rather than
+anything structural.
+
+Re-fitted by sweeping rather than guessing, two points per apex and interpolate:
+
+| apex | attack_scale was | now | party=1 | party=2 | party=3 |
+|---|---|---|---|---|---|
+| Karrahk | 1.5 | **1.4** | 42% | 48% | 65% |
+| Nyxhollow | 2.0 | **2.0** | 40% | 33% | 59% |
+| Aeonrend | 1.2 | **1.0** | 1% | 23% | 53% |
+
+All three still reach their final phase, and three monsters is still the best
+answer. Nyxhollow's dip at party=2 is unchanged from before this work and sits
+inside the noise floor for 240 runs, so it is not read as a finding.
+
+The lesson is not new, which is why it is worth recording again: **the tuning
+constants in this game are fitted to the opponent, so improving the opponent
+invalidates them.** Nothing went red. Fourteen browser suites passed throughout,
+because "is this fight winnable at the rate it was designed for" is not a
+question a browser suite asks. Only the diagnostic that was built to ask it
+noticed, and only because it got re-run.

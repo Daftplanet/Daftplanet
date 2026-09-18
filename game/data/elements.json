@@ -895,11 +895,7 @@
   "apex_encounter": {
     "$comment": "An apex is a raid boss, and the bestiary says so: party_size is [4,8] for Karrahk, [2,6] for Nyxhollow, [6,8] for Aeonrend. The real-time arena has always read that through apexHpScale(partySize) — a solo Warden fights a scaled-down instance. The turn battle read nothing, and fought every apex at its full solo numbers.\n\nMeasured, that made them too EASY rather than too hard, which is the opposite of what it looks like: four stage-3 parties beat all three apexes 85-100% of the time, Karrahk costing a third of one monster. (A party of stage-1 starters loses 99% of the time, but nobody brings starters to a raid boss — measuring that first was a narrow sample, and it pointed at exactly the wrong fix.)\n\nattack_scale is per apex because one global dial cannot serve all three: at the same multiplier the three sit 30 points apart, and Aeonrend — which switches the type chart off, so nothing you bring is super effective — falls off a cliff where Nyxhollow barely moves. The values below put each at roughly 55-60% for a full party, which is a boss you can lose. They are level-independent by construction: damage is a share of the defender's health, so raising both sides cancels, and the same numbers measure the same at level 30, 40 and 50.",
     "designed_party": 3,
-    "attack_scale": {
-      "karrahk": 1.5,
-      "nyxhollow": 2.0,
-      "aeonrend_apex": 1.2
-    },
+    "attack_scale": { "karrahk": 1.4, "nyxhollow": 2.0, "aeonrend_apex": 1.0 },
     "short_party_hp_exponent": 1.0,
     "short_party_attack_exponent": 0.5,
     "$short_party_comment": "Turn up with fewer than three and the apex is scaled down, so a short party is a handicap rather than a wall — but it must stay a handicap, or there is no reason to bring a full party. Scaling health and attack BOTH by the party share got that backwards: a party of two measured EASIER (73-85%) than a party of three (55-60%), because the bench is worth more than its share of the health pool — every extra member is also a free swap. Health by share and attack by its square root is monotonic: three is the best call at every apex, one is a real struggle, and turning up alone to Aeonrend — designed for six to eight — is 8%, which is correct."

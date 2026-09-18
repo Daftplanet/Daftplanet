@@ -805,27 +805,63 @@ function chooseWildMove(b) {
   return b.wildChoice;
 }
 
+/**
+ * What the wild monster does with its turn.
+ *
+ * It used to score moves with its own formula — power x effectiveness x
+ * accuracy — which is a second copy of the damage calculation and drifted from
+ * the real one in two ways that both mattered. It did not know about the
+ * same-element bonus, so a 1.5x move looked identical to one that was not; and
+ * it did not know about the comparable-damage cap, so it happily spent its
+ * three-PP heavy move for damage the cap had already clamped to exactly what
+ * the eight-PP quick move does. This project has found the same shape of bug
+ * three times now: two formulas for one thing, and one of them quietly obsolete.
+ *
+ * So it asks the engine. `computeMoveDamage` with a fixed mid-roll rng gives the
+ * expected, crit-free damage a move would really do, through the same arithmetic
+ * that will resolve it — chart, bonus, attack ratio, armour, cap and all. As a
+ * free consequence it now understands Aeonrend turning the type chart off,
+ * which the old proxy could not see.
+ */
 function wildMove(b) {
   const w = b.wild;
-  // The wild monster favours whatever hurts the current defender most, with a
-  // little noise so it is not perfectly predictable.
-  const defender = b.wardenOnly ? { species: { elements: [] }, armour: 0 } : activeMon(b);
-  const scored = w.moves.map((m, i) => {
-    if (!canUse(w, i)) return { m, i, score: -1 };
-    const eff = elementMultiplier(b.data.elements.effectiveness, m.element, defender.species?.elements ?? []);
-    /*
-     * A status move is worth something, but only once — a second Coldshock on an
-     * already-chilled target is a wasted turn, and an AI that cannot see that
-     * would spend the whole fight reapplying it.
-     */
-    let score = m.power * eff * (m.accuracy ?? 1);
+  const defender = b.wardenOnly ? null : activeMon(b);
+  const targetHp = defender ? defender.hp : b.warden.hp;
+
+  // A fixed 0.5 is below the crit chance and mid-way through the damage roll,
+  // so this is the expected case rather than a lucky or unlucky one.
+  const expected = (m) => {
+    if (!m.power) return 0;
+    if (!defender) return Math.max(1, Math.round((m.power / 50) * (w.attack / 30) * 12));
+    return computeMoveDamage(w, defender, m, b.data, () => 0.5).damage;
+  };
+
+  const usable = w.moves.map((m, i) => ({ m, i })).filter(({ i }) => canUse(w, i));
+  if (!usable.length) return { ...(b.data.elements.universal_moves?.[0] ?? w.moves[0]) };
+
+  const hit = new Map(usable.map(({ m, i }) => [i, expected(m) * (m.accuracy ?? 1)]));
+  const best = Math.max(0, ...hit.values());
+
+  const scored = usable.map(({ m, i }) => {
+    let score = hit.get(i);
     if (m.applies || m.applies_self) {
-      const already = m.applies ? defender.statuses?.[m.applies] : w.statuses?.[m.applies_self];
-      score = already ? 0 : 45 * (m.accuracy ?? 1);
+      /*
+       * A status is worth about as much as a good hit, and worth nothing twice —
+       * a second Coldshock on an already-chilled target is a wasted turn. It is
+       * also worth nothing on a target that is about to die, which the old
+       * scoring could not see: a flat 45 would happily out-rank the move that
+       * would have finished the fight.
+       */
+      const already = m.applies ? defender?.statuses?.[m.applies] : w.statuses?.[m.applies_self];
+      const pointless = already || (m.applies && best >= targetHp);
+      score = pointless ? 0 : best * 0.9 * (m.accuracy ?? 1);
+    } else if (expected(m) >= targetHp) {
+      // Take the kill. This is the whole of the planning it does, and it is the
+      // difference between a monster that fights and one that takes turns.
+      score *= 4;
     }
     return { m, i, score: score * (0.8 + b.rng() * 0.4) };
-  }).filter((x) => x.score >= 0);
-  if (!scored.length) return { ...(b.data.elements.universal_moves?.[0] ?? w.moves[0]) };
+  });
   return scored.sort((x, y) => y.score - x.score)[0].m;
 }
 
