@@ -61,6 +61,69 @@ some of that. Rules:
   in this genre and it is not load-bearing for anything in this design.
 - Retain raw location history for the minimum the gameplay requires, then coarsen.
 
+### Automation, and a client you do not control
+
+Nothing in this section is hypothetical. `PokeGOAPI-Java` is a public Java library
+with several hundred commits that speaks Pokémon GO's client protocol directly —
+authentication, player profile, inventory, nearby monsters, encounters, catching,
+stop interaction — and its own README warns that using it may violate the terms of
+service and get accounts banned. It exists because a location game's protocol is
+worth reverse-engineering, and it was not the only one.
+
+The lesson is not "add obfuscation". It is that **the client is an untrusted input
+device**, and the design above is already half-built on that assumption — it just
+has not been written down as a threat model.
+
+What the client can lie about, and what has to be checked somewhere it cannot
+reach:
+
+| The client says | Without a server check | What the server has to own |
+| --- | --- | --- |
+| Where the Warden is | Teleporting between cities, farming every biome from a chair | Displacement over elapsed time **between calls and across sessions**, not just instantaneous speed |
+| That an encounter happened | Captures invented wholesale | Encounters issued server-side, bound to (player, spawn, time bucket), **single-use and expiring** |
+| Where the shot landed | Every shot a weak point, every capture clean | Hit zone, wound multiplier and status stack are capture-roll **inputs**, so they resolve with the roll |
+| What it spent | Infinite darts | Inventory deltas reconcile against rounds fired |
+| What happened while offline | An afternoon of captures that never occurred | Bound how much offline play reconciles, and require the encounter token |
+
+Four things worth saying plainly, because each one is a place this design is
+already exposed:
+
+- **The speed lockout is a safety feature, not an anti-cheat.** The 25 km/h rule
+  in *Player safety* exists so nobody plays while driving, and it lives in the
+  client where it can do that job. It stops an honest phone. It stops nothing
+  else, and it should never be counted twice.
+
+- **Spawn determinism cuts both ways.** Seeding spawns from
+  `(tile_id, time_bucket, global_seed)` is what makes a park feel populated
+  without a persistent world sim, and it is a good idea. It also means anyone
+  holding the global seed can enumerate every spawn in the world ahead of time —
+  which is exactly how the third-party live maps for this genre worked, and they
+  did more damage to the games they targeted than bots did. **The seed never
+  reaches the client.** Serve the tiles near the player, derived server-side.
+
+- **Offline tolerance is the soft spot, and it is worth the cost anyway.**
+  *Technical notes* commits to fights completing offline and reconciling on
+  reconnect, because rural coverage is bad and that is not the player's fault.
+  But it means accepting the result of a fight the server did not watch. Bound
+  it: a ceiling on what reconciles, the encounter token required, and a stream of
+  offline-only captures treated as a signal rather than a shrug.
+
+- **Rate limits are for the boring case.** Encounters per hour, captures per day,
+  distance per day. They will not catch anyone clever. They make the
+  unsophisticated version — the one that actually gets written, in volume —
+  unprofitable, which is most of the problem.
+
+**What not to do:** spend the budget on client attestation and obfuscation. It is
+an arms race against people with more time than the team has, it ships nothing a
+player can see, and it fails open. The lever is the one *Technical notes* already
+names — server-authoritative spawns and captures — and this section is the list of
+what "authoritative" has to include.
+
+None of this is buildable yet: there is no server, and party play and Codex
+sharing are the features that will need one. It is written now because the two
+choices that matter here, **where the spawn seed lives** and **what an encounter
+token is**, are cheap today and a migration later.
+
 ### Design risks
 
 | Risk | Signal to watch | Lever |
@@ -144,12 +207,17 @@ Enough to not paint ourselves into a corner:
 
 - **Server-authoritative spawns and captures.** Spawn tables, Restraint resolution
   and tagging all resolve server-side. A client-authoritative capture in a
-  collection game is farmed within a week.
+  collection game is farmed within a week. *"Authoritative" has a specific list
+  behind it — see "Automation, and a client you do not control" above.*
 - **Spawn determinism.** Seed spawns from `(tile_id, time_bucket, global_seed)` so
   every player in a park sees the same monsters without a persistent world sim.
+  *The global seed stays server-side: anyone holding it can enumerate every spawn
+  in the world, which is how this genre's scraper maps were built.*
 - **Data-driven from day one.** Everything in `data/*.json` loads at runtime and is
   hot-swappable. Balance changes must not need a client release.
 - **Offline tolerance.** Fights complete offline and reconcile on reconnect, with
   server-side validation. Rural coverage is bad and that is not the player's fault.
+  *It is also the softest surface in the design, and worth the cost anyway — the
+  bounds it needs are listed above.*
 - **Battery.** GPS at reduced cadence when stationary, AR camera only on demand. A
   game that eats 40% of a battery in 30 minutes does not get played on the way home.
