@@ -139,8 +139,12 @@ for (const name of wanted) {
   console.log(`\n=== ${name} ===`);
   const started = Date.now();
   const code = await new Promise((done) => {
+    // Run from the tests directory so a suite's screenshot lands beside it,
+    // where .gitignore expects it, rather than in whatever directory you
+    // happened to type the command in.
     const child = spawn(process.execPath, [new URL(file, import.meta.url).pathname],
-                        { stdio: 'inherit', env: { ...process.env, RIFTBORN_URL: base } });
+                        { stdio: 'inherit', cwd: fileURLToPath(new URL('.', import.meta.url)),
+                          env: { ...process.env, RIFTBORN_URL: base } });
     child.on('exit', done);
   });
   const seconds = (Date.now() - started) / 1000;

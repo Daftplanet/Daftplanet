@@ -319,7 +319,14 @@ const skins = await page.evaluate(() => {
     for (let i = 0; i < px.length; i += 4) seen.add(`${px[i]},${px[i + 1]},${px[i + 2]}`);
     return { id: k, colours: seen.size };
   });
-  // The same tile twice must be identical; a different tile must not be.
+  /*
+   * The same tile twice must be identical. "A neighbour must differ" is NOT a
+   * safe assertion any more: tiles are baked into a small set of variants and
+   * picked by hash, so any two given tiles have a one-in-thirty-two chance of
+   * landing on the same one. Asserting on one pair would fail about three runs
+   * in a hundred, for no reason. The real property is that a run of tiles shows
+   * plenty of different arrangements.
+   */
   const shot = (tx, ty) => {
     const c = document.createElement('canvas');
     c.width = 68; c.height = 68;
@@ -327,20 +334,60 @@ const skins = await page.evaluate(() => {
     r.drawTileSkin(g, 'woodland', tx, ty, 0, 0, 68);
     return g.getImageData(0, 0, 68, 68).data.join(',');
   };
+  const spread = new Set(Array.from({ length: 64 }, (_, i) => shot(i, 9))).size;
   return {
     biomes: ids.length, props: props.size, tones: tones.size,
     flat: painted.filter((x) => x.colours < 3).map((x) => x.id),
     minColours: Math.min(...painted.map((x) => x.colours)),
     stable: shot(4, 9) === shot(4, 9),
-    differs: shot(4, 9) !== shot(5, 9),
+    spread,
   };
 });
 ok('every biome paints a patterned ground that is stable for its tile',
    skins.flat.length === 0 && skins.biomes === 9 && skins.props >= 7
-   && skins.minColours >= 3 && skins.stable && skins.differs,
+   && skins.minColours >= 3 && skins.stable && skins.spread >= 8,
    `${skins.biomes} biomes · ${skins.props} distinct prop silhouettes · ${skins.tones} ground tones`
    + ` · thinnest tile still paints ${skins.minColours} colours`
-   + ' · the same tile redraws identically and its neighbour does not — each was one flat hex before');
+   + ` · the same tile redraws identically, and 64 tiles show ${skins.spread} different arrangements`
+   + ' — each biome was one flat hex before');
+
+/*
+ * The ground has to be cheap as well as pretty.
+ *
+ * Woodland at four trees a tile measured 2.93ms for a screenful of 150 against
+ * 0.14ms for a flat fill — 17% of a 16.7ms frame on a desktop CPU, and a phone
+ * is several times slower. Baking the variants took it to 0.60ms. Guard the
+ * ratio rather than a millisecond count, because the millisecond count belongs
+ * to whatever machine happens to be running this.
+ */
+const TILE_COUNT = 150;
+const cost = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const c = document.createElement('canvas');
+  c.width = 400; c.height = 400;
+  const g = c.getContext('2d');
+  const TILES = 150, PX = 68;
+  // Same work either way: one woodland tile, 150 times. propsOnly skips the
+  // ground fill and paints the scatter live, which is the expensive half and
+  // the path a real basemap underneath still takes.
+  const run = (opts) => {
+    for (let i = 0; i < TILES; i++) r.drawTileSkin(g, 'woodland', i, 3, 0, 0, PX, opts);
+  };
+  const time = (opts) => {
+    run(opts); run(opts);                       // warm the cache and the JIT
+    const t = performance.now();
+    for (let pass = 0; pass < 5; pass++) run(opts);
+    return (performance.now() - t) / 5;
+  };
+  const live = time({ propsOnly: true });
+  const baked = time({});
+  return { live: +live.toFixed(2), baked: +baked.toFixed(2) };
+});
+ok('a screenful of patterned ground is a blit, not six hundred arcs',
+   cost.baked * 2 < cost.live,
+   `${TILE_COUNT} tiles of woodland: ${cost.baked}ms baked against ${cost.live}ms painting the props live`
+   + ` — ${(cost.live / Math.max(cost.baked, 0.01)).toFixed(1)}x, and the live path is doing less`
+   + ' (no ground fill). Unbaked, this was 17% of a frame on a desktop.');
 
 // --- 11. phone layout
 await page.setViewportSize({ width: 390, height: 844 });

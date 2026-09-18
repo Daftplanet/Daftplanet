@@ -2024,7 +2024,7 @@ function boot(data) {
      * without the waiting.
      */
     refreshSpawns: () => stepPatrol(patrol, 0, { moveX: 0, moveY: 0 }),
-    drawTileSkin, BIOMES, reportFromEntry,
+    drawTileSkin, drawPatrol, BIOMES, reportFromEntry,
     get battle() { return battle; },
     takeTurn: (a) => takeTurn(battle, a), battleOptions: () => options(battle),
     // For driving a battle the app does not own — a harness building its own.
