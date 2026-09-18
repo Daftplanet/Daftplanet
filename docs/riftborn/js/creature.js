@@ -581,6 +581,340 @@ const ART = {
     eye(ctx, 40, 44, 5, { look: 0.3, angry: true, glow: '#f0d8fa' });
     eye(ctx, 62, 46, 5, { look: 0.3, angry: true, glow: '#f0d8fa' });
   },
+
+  /* ---------------------------------------------------------- stage two
+   *
+   * An evolution has to read as the same animal grown up, or the Codex looks
+   * like a list of strangers. Each of these keeps one thing from its stage 1 and
+   * changes the rest: Magmaw keeps Slagmite's cracked crust, Rimeclaw keeps
+   * Frostnib's ice spikes but wears them down its back, Nightmaw is Shadelet's
+   * ragged edge with something opened in the middle of it.
+   *
+   * The other half of an evolution is that it must be obvious at a glance which
+   * one is the grown one. Stage 1s are round and top-heavy; stage 2s get a
+   * length, a stance, and a working end — a maw, a claw, a coil.
+   */
+
+  /* Magmaw — Slag, stage 2. The crust, stretched, and now with something open
+   * in the front of it. The seams run the length of the body so the heat reads
+   * as being inside rather than painted on. */
+  magmaw(ctx, p) {
+    for (const lx of [32, 56, 76]) {
+      form(ctx, curve(ctx, [[lx - 6, 64], [lx + 6, 64], [lx + 7, 84], [lx - 7, 84]]), p,
+           { fill: mix(p.accent, p.line, 0.25), shade: 0.3, line: 2.2 });
+    }
+    const body = curve(ctx, [[20, 54], [36, 36], [66, 34], [88, 48], [84, 68], [50, 74], [24, 68]]);
+    form(ctx, body, p, { fill: p.accent, shade: 0.5, lit: p.accentDark });
+    ctx.save();
+    body(); ctx.clip();
+    ctx.lineCap = 'round';
+    for (const seam of [[[28, 52], [50, 46], [74, 50]], [[34, 66], [58, 62], [80, 62]]]) {
+      for (const [w, col] of [[7, p.line], [3.2, p.light]]) {
+        ctx.beginPath(); ctx.moveTo(seam[0][0], seam[0][1]);
+        for (let i = 1; i < seam.length; i++) ctx.lineTo(seam[i][0], seam[i][1]);
+        ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke();
+      }
+    }
+    ctx.restore();
+    // the maw, which is the weak point and the whole silhouette
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(22, 48); ctx.lineTo(6, 40); ctx.lineTo(8, 62); ctx.lineTo(24, 62);
+    ctx.closePath();
+    ctx.fillStyle = p.light; ctx.fill();
+    ctx.strokeStyle = p.line; ctx.lineWidth = 2.4; ctx.stroke();
+    ctx.restore();
+    weakSpot(ctx, 15, 51, 4, p);
+    eye(ctx, 34, 46, 5, { look: -0.5, angry: true });
+  },
+
+  /* Tidecoil — Brine, stage 2. The bell has become a hood over a coiled body,
+   * and the four drifting tendrils have become one working siphon. */
+  tidecoil(ctx, p) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(52, 56);
+    ctx.bezierCurveTo(78, 60, 84, 84, 58, 86);
+    ctx.bezierCurveTo(36, 88, 30, 72, 44, 70);
+    ctx.strokeStyle = p.line; ctx.lineWidth = 15; ctx.lineCap = 'round'; ctx.stroke();
+    ctx.strokeStyle = p.base; ctx.lineWidth = 10.5; ctx.stroke();
+    ctx.restore();
+    const hood = curve(ctx, [[22, 46], [26, 24], [50, 12], [76, 24], [80, 46], [50, 58]]);
+    form(ctx, hood, p, { shade: 0.45, lit: p.light });
+    // The siphon, growing OUT of the hood rather than hovering beside it: it
+    // starts inside the hood's own outline and tapers away from it.
+    form(ctx, curve(ctx, [[30, 44], [8, 40], [4, 54], [28, 56]]), p,
+         { fill: p.light, shade: 0.3, line: 2.2 });
+    weakSpot(ctx, 12, 47, 3.6, p);
+    // an eye cluster rather than a pair: three, uneven
+    eye(ctx, 38, 36, 5.4, { look: -0.3 });
+    eye(ctx, 54, 34, 4.6, { look: -0.3 });
+    eye(ctx, 64, 42, 3.8, { look: -0.3 });
+  },
+
+  /* Rimeclaw — Rime, stage 2. Frostnib's tufts, moved: a ridge of ice down the
+   * back, and the sac traded for a pair of foreclaws it actually uses. */
+  rimeclaw(ctx, p) {
+    for (const lx of [64, 78]) {
+      form(ctx, curve(ctx, [[lx - 6, 64], [lx + 6, 64], [lx + 6, 84], [lx - 6, 84]]), p,
+           { fill: p.dark, shade: 0.3, line: 2.2 });
+    }
+    form(ctx, curve(ctx, [[26, 56], [44, 42], [72, 44], [86, 58], [70, 72], [36, 70]]), p,
+         { shade: 0.5, lit: p.light });
+    // the ridge — the tufts a Frostnib wore on its head
+    ctx.save();
+    ctx.fillStyle = p.accent; ctx.strokeStyle = p.line; ctx.lineWidth = 2;
+    for (const [tx, h] of [[44, 14], [56, 19], [68, 13]]) {
+      ctx.beginPath();
+      ctx.moveTo(tx - 6, 44); ctx.lineTo(tx, 44 - h); ctx.lineTo(tx + 6, 44);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+    form(ctx, curve(ctx, [[14, 40], [30, 28], [42, 38], [34, 52], [18, 52]]), p,
+         { shade: 0.45, lit: p.light });
+    // foreclaws
+    ctx.save();
+    ctx.fillStyle = mix(p.accent, '#ffffff', 0.4); ctx.strokeStyle = p.line; ctx.lineWidth = 2;
+    for (const cx of [26, 38]) {
+      ctx.beginPath();
+      ctx.moveTo(cx - 4, 62); ctx.lineTo(cx + 2, 86); ctx.lineTo(cx + 7, 62);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+    weakSpot(ctx, 30, 50, 3.4, p);
+    eye(ctx, 26, 38, 5.2, { look: -0.5, angry: true });
+  },
+
+  /* Thornhide — Thorn, stage 2. Sporelet's cap has become a back, and the
+   * spore freckles have hardened into thorns. It walks now. */
+  thornhide(ctx, p) {
+    for (const lx of [32, 50, 70]) {
+      form(ctx, curve(ctx, [[lx - 6, 64], [lx + 6, 64], [lx + 6, 86], [lx - 6, 86]]), p,
+           { fill: p.dark, shade: 0.3, line: 2.2 });
+    }
+    const back = curve(ctx, [[18, 58], [28, 38], [56, 32], [82, 44], [84, 64], [50, 72], [22, 70]]);
+    form(ctx, back, p, { shade: 0.5, lit: p.light });
+    ctx.save();
+    ctx.fillStyle = mix(p.light, p.line, 0.2); ctx.strokeStyle = p.line; ctx.lineWidth = 1.8;
+    for (const [tx, ty, h] of [[34, 40, 13], [48, 34, 17], [62, 34, 15], [75, 42, 11]]) {
+      ctx.beginPath();
+      ctx.moveTo(tx - 5, ty); ctx.lineTo(tx + 1, ty - h); ctx.lineTo(tx + 5, ty);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+    form(ctx, oval(ctx, 18, 60, 14, 12), p, { shade: 0.4, lit: p.light });
+    weakSpot(ctx, 48, 72, 3.6, p);      // root bundle, underneath
+    eye(ctx, 13, 58, 4.8, { look: -0.4 });
+    eye(ctx, 25, 58, 4.2, { look: -0.4 });
+  },
+
+  /* Blightcap — Myco, stage 2. Mycelid's droop, grown heavy: the cap is a
+   * hanging canopy and the gills underneath are the thing you aim at. */
+  blightcap(ctx, p) {
+    form(ctx, curve(ctx, [[38, 52], [62, 52], [68, 88], [34, 88]]), p,
+         { fill: p.light, shade: 0.42 });
+    ctx.save();
+    ctx.strokeStyle = p.accent; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    for (let i = 0; i < 11; i++) {
+      const gx = 18 + i * 6.4;
+      ctx.beginPath(); ctx.moveTo(gx, 42); ctx.lineTo(gx + (gx - 50) * 0.1, 58); ctx.stroke();
+    }
+    ctx.restore();
+    weakSpot(ctx, 50, 54, 4.4, p);
+    const cap = curve(ctx, [[14, 46], [16, 24], [50, 8], [84, 24], [86, 46], [66, 38], [50, 42], [34, 38]]);
+    form(ctx, cap, p, { shade: 0.5, lit: p.light });
+    ctx.save();
+    cap(); ctx.clip();
+    ctx.fillStyle = p.accent;
+    for (const [sx, sy, sr] of [[32, 26, 7], [58, 20, 8.5], [72, 32, 6]]) {
+      ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+    eye(ctx, 43, 68, 5, { look: 0.1, angry: true });
+    eye(ctx, 59, 68, 5, { look: 0.1, angry: true });
+  },
+
+  /* Cragback — Crag, stage 2. Pebblit with legs and a shell, and one plate on
+   * the shoulder that has already been broken once. */
+  cragback(ctx, p) {
+    for (const lx of [30, 48, 68]) {
+      form(ctx, curve(ctx, [[lx - 7, 66], [lx + 7, 66], [lx + 7, 86], [lx - 7, 86]]), p,
+           { fill: p.dark, shade: 0.3, line: 2.2 });
+    }
+    const shell = curve(ctx, [[16, 62], [24, 36], [52, 26], [80, 38], [88, 62], [50, 74], [20, 72]]);
+    form(ctx, shell, p, { shade: 0.5, lit: p.light });
+    ctx.save();
+    shell(); ctx.clip();
+    ctx.strokeStyle = mix(p.base, p.line, 0.5); ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(30, 36); ctx.lineTo(46, 52); ctx.lineTo(88, 50);
+    ctx.moveTo(46, 52); ctx.lineTo(44, 74);
+    ctx.stroke();
+    // the cracked plate, in the accent so the weak point has a shape
+    ctx.fillStyle = p.accent;
+    ctx.beginPath(); ctx.moveTo(56, 30); ctx.lineTo(80, 42); ctx.lineTo(60, 50); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = p.line; ctx.lineWidth = 2.6;
+    ctx.beginPath(); ctx.moveTo(62, 32); ctx.lineTo(68, 48); ctx.stroke();
+    ctx.restore();
+    weakSpot(ctx, 68, 40, 4, p);
+    form(ctx, oval(ctx, 18, 62, 13, 11), p, { shade: 0.4, lit: p.light });
+    eye(ctx, 13, 60, 4.6, { look: -0.4 });
+    eye(ctx, 24, 60, 4, { look: -0.4 });
+  },
+
+  /* Zephyrax — Gale, stage 2. The puff has found a direction: a keel, swept
+   * wings, and everything trailing backwards from the leading edge. */
+  zephyrax(ctx, p) {
+    // Wings swept back from the shoulder, long and narrow, drawn before the
+    // body so the body sits in front of them.
+    for (const [tipY, rot] of [[18, -0.75], [74, 0.7]]) {
+      form(ctx, curve(ctx, [[44, 46], [70, tipY], [92, tipY + (tipY < 50 ? 10 : -10)], [62, 52]]), p,
+           { fill: mix(p.light, '#ffffff', 0.25), shade: 0.22, line: 2.2 });
+    }
+    form(ctx, curve(ctx, [[10, 46], [30, 38], [58, 40], [76, 48], [56, 58], [28, 56]]), p,
+         { shade: 0.45, lit: p.light });
+    // the keel, underneath, which is the weak point and the reason it reads fast
+    form(ctx, curve(ctx, [[30, 54], [56, 54], [48, 72], [36, 68]]), p,
+         { fill: p.accent, shade: 0.3, line: 2.2 });
+    weakSpot(ctx, 43, 60, 3.6, p);
+    ctx.save();
+    ctx.strokeStyle = p.accent; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    for (const ty of [42, 50, 58]) {
+      ctx.beginPath(); ctx.moveTo(76, ty); ctx.quadraticCurveTo(86, ty - 4, 94, ty + 2); ctx.stroke();
+    }
+    ctx.restore();
+    eye(ctx, 20, 45, 5.4, { look: -0.5 });
+  },
+
+  /* Voltfang — Volt, stage 2. Sparkmite's core, now carried inside something
+   * with a jaw. The coil around the jaw is where the charge is kept. */
+  voltfang(ctx, p) {
+    for (const lx of [36, 58, 74]) {
+      form(ctx, curve(ctx, [[lx - 5, 64], [lx + 5, 64], [lx + 6, 84], [lx - 6, 84]]), p,
+           { fill: p.dark, shade: 0.3, line: 2.2 });
+    }
+    form(ctx, curve(ctx, [[28, 56], [46, 42], [74, 44], [86, 58], [70, 70], [38, 70]]), p,
+         { shade: 0.5, lit: p.light });
+    // the core showing through the flank
+    ctx.save();
+    const glow = ctx.createRadialGradient(58, 56, 1, 58, 56, 14);
+    glow.addColorStop(0, 'rgba(255,246,190,0.9)');
+    glow.addColorStop(1, 'rgba(255,246,190,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(58, 56, 14, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    weakSpot(ctx, 58, 56, 4.6, p);
+    // A neck, so the head belongs to the body instead of hovering near it.
+    form(ctx, curve(ctx, [[26, 48], [42, 44], [44, 62], [28, 64]]), p,
+         { shade: 0.4, line: 2.2 });
+    form(ctx, curve(ctx, [[8, 44], [22, 30], [40, 36], [42, 56], [22, 62], [10, 58]]), p,
+         { shade: 0.45, lit: p.light });
+    // The coil is a band around the jaw, not a pair of rings on the face.
+    ctx.save();
+    ctx.strokeStyle = p.accent; ctx.lineWidth = 3.4; ctx.lineCap = 'round';
+    for (const off of [0, 5]) {
+      ctx.beginPath();
+      ctx.moveTo(12 + off, 56); ctx.quadraticCurveTo(22 + off, 48, 34 + off, 52);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.fillStyle = '#f7f2df'; ctx.strokeStyle = p.line; ctx.lineWidth = 1.6;
+    for (const fx of [13, 21]) {
+      ctx.beginPath(); ctx.moveTo(fx, 58); ctx.lineTo(fx + 3, 68); ctx.lineTo(fx + 6, 58);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+    eye(ctx, 22, 40, 5, { look: -0.5, angry: true });
+  },
+
+  /* Nightmaw — Gloom, stage 2. Shadelet's ragged edge with something opened in
+   * the middle of it. The maw is drawn as a hole rather than as teeth, which is
+   * worse, and the interior is what the bestiary says you aim at. */
+  nightmaw(ctx, p) {
+    const blob = curve(ctx, [
+      [20, 56], [24, 30], [50, 16], [78, 30], [82, 58],
+      [72, 74], [64, 62], [50, 82], [36, 62], [28, 76],
+    ]);
+    form(ctx, blob, p, { shade: 0.5, lit: p.light });
+    ctx.save();
+    blob(); ctx.clip();
+    ctx.fillStyle = mix(p.base, p.line, 0.6);
+    ctx.beginPath(); ctx.ellipse(64, 62, 28, 24, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // the maw
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(50, 58, 18, 13, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#100c17'; ctx.fill();
+    ctx.strokeStyle = p.line; ctx.lineWidth = 2.4; ctx.stroke();
+    ctx.clip();
+    ctx.fillStyle = p.accent;
+    for (let i = 0; i < 5; i++) {
+      const tx = 34 + i * 8;
+      ctx.beginPath(); ctx.moveTo(tx, 46); ctx.lineTo(tx + 4, 56); ctx.lineTo(tx + 8, 46); ctx.closePath(); ctx.fill();
+      ctx.beginPath(); ctx.moveTo(tx, 70); ctx.lineTo(tx + 4, 60); ctx.lineTo(tx + 8, 70); ctx.closePath(); ctx.fill();
+    }
+    ctx.restore();
+    weakSpot(ctx, 50, 58, 4, p);
+    eye(ctx, 36, 36, 6, { look: 0.2, angry: true, glow: '#e9defb' });
+    eye(ctx, 64, 36, 6, { look: -0.2, angry: true, glow: '#e9defb' });
+  },
+
+  /* Solafaun — Lumen, stage 2. Light with legs. The antlers carry it rather
+   * than the body, and the flank mark is the weak point the bestiary names. */
+  solafaun(ctx, p) {
+    for (const lx of [34, 46, 64, 76]) {
+      form(ctx, curve(ctx, [[lx - 4, 60], [lx + 4, 60], [lx + 4, 86], [lx - 4, 86]]), p,
+           { fill: p.dark, shade: 0.3, line: 2 });
+    }
+    form(ctx, curve(ctx, [[28, 52], [46, 40], [72, 42], [84, 54], [68, 66], [36, 64]]), p,
+         { shade: 0.45, lit: p.light });
+    ctx.save();
+    ctx.fillStyle = p.accent; ctx.globalAlpha = 0.85;
+    ctx.beginPath(); ctx.ellipse(56, 54, 9, 7, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    weakSpot(ctx, 56, 54, 3.6, p);
+    form(ctx, oval(ctx, 22, 40, 14, 12), p, { shade: 0.4, lit: p.light });
+    // antlers, branching, the tallest thing on it
+    ctx.save();
+    ctx.strokeStyle = mix(p.light, '#ffffff', 0.35); ctx.lineWidth = 3.2; ctx.lineCap = 'round';
+    for (const [bx, dir] of [[16, -1], [28, 1]]) {
+      ctx.beginPath();
+      ctx.moveTo(bx, 30); ctx.lineTo(bx + dir * 5, 14);
+      ctx.moveTo(bx + dir * 2, 23); ctx.lineTo(bx + dir * 11, 18);
+      ctx.moveTo(bx + dir * 4, 17); ctx.lineTo(bx + dir * 10, 8);
+      ctx.stroke();
+    }
+    ctx.restore();
+    eye(ctx, 16, 40, 4.8, { look: -0.4 });
+  },
+
+  /* Voidmaw — Rift, stage 2. Riftspawn's shard, opened. The ring is the animal
+   * and the hole in it is the part that does the work. */
+  voidmaw(ctx, p) {
+    ctx.save();
+    ctx.strokeStyle = p.light; ctx.lineWidth = 2.4; ctx.lineCap = 'round'; ctx.globalAlpha = 0.7;
+    for (const [ax, ay, bx, by] of [[14, 24, 4, 12], [86, 26, 96, 14], [16, 76, 6, 88], [84, 78, 94, 90]]) {
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    }
+    ctx.restore();
+    const ring = () => {
+      ctx.beginPath();
+      ctx.moveTo(50, 8); ctx.lineTo(84, 30); ctx.lineTo(88, 66);
+      ctx.lineTo(50, 92); ctx.lineTo(12, 66); ctx.lineTo(16, 30);
+      ctx.closePath();
+    };
+    form(ctx, ring, p, { shade: 0.5, lit: p.light });
+    // the hole, with the inner ring around it
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(50, 50, 20, 22, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#140a1c'; ctx.fill();
+    ctx.strokeStyle = mix(p.light, '#ffffff', 0.4); ctx.lineWidth = 3.4; ctx.stroke();
+    ctx.restore();
+    weakSpot(ctx, 50, 32, 4, p);
+    eye(ctx, 34, 30, 4.6, { look: 0.3, angry: true, glow: '#f0d8fa' });
+    eye(ctx, 67, 32, 4.6, { look: -0.3, angry: true, glow: '#f0d8fa' });
+  },
 };
 
 /** Whether this species has been drawn yet, or still falls back to the model. */
