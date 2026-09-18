@@ -436,6 +436,10 @@ export function createProfile(content) {
           percentile: detail.percentile ?? 0,
           at: Date.now(),
           outcome,
+          // Carried so the field report can say so: the card is what people show
+          // each other, and "the biggest one I ever saw was rift-touched" is the
+          // sentence the whole feature exists for.
+          riftTouched: !!detail.riftTouched,
         };
       }
     },

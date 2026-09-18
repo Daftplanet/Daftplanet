@@ -337,6 +337,50 @@ ok('the card fits a 390px phone with no horizontal overflow',
    overflow === 0 && fits.w > 200 && fits.w <= fits.vw && fits.h <= fits.vh,
    `${overflow}px overflow · card ${fits.w}×${fits.h} in ${fits.vw}×${fits.vh}`);
 
+// --- 14. a rare specimen stays rare after you have won it
+/*
+ * The flag was tracked before it was ever drawn: the Codex counted rift-touched
+ * sightings and the Sanctuary rendered the ordinary model, so the prize
+ * disappeared the moment you caught it. This walks the whole path — record a
+ * catch, then look at every surface that should still know.
+ */
+const kept = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const sp = r.data.monsters.monsters.find((m) => m.id === 'cinderfang');
+  r.profile.state.residents = [];
+  r.profile.state.codex = {};
+
+  // One seen and lost, one seen and kept — the Codex tells those apart.
+  r.profile.recordOutcome(sp, 'escaped', { riftTouched: true });
+  r.profile.recordOutcome(sp, 'catalogued', {
+    riftTouched: true, heightM: 1.4, percentile: 0.9, biome: 'woodland', clean: true, hpFraction: 0.9,
+  });
+  r.profile.admit(sp, { riftTouched: true, heightM: 1.4, percentile: 0.9, biome: 'woodland' });
+  r.profile.save();
+
+  const e = r.profile.entry(sp.id);
+  r.renderSanctuary();
+  r.show('codex');
+  const canvases = [...document.querySelectorAll('[data-model]')]
+    .filter((c) => c.dataset.model === 'cinderfang');
+  return {
+    seen: e.touchedSeen, keptN: e.touchedKept,
+    onLargest: !!e.largest?.riftTouched,
+    resident: !!r.profile.state.residents[0]?.riftTouched,
+    // Every surface that draws this species must be asking for the rare model.
+    canvases: canvases.length,
+    marked: canvases.filter((c) => c.dataset.touched === 'true').length,
+    card: (() => { const rep = r.reportFromEntry?.(sp); return rep ? !!rep.riftTouched : null; })(),
+  };
+});
+ok('a rift-touched specimen is still rift-touched in the Codex and the Sanctuary',
+   kept.seen === 2 && kept.keptN === 1 && kept.onLargest && kept.resident
+   && kept.canvases > 0 && kept.marked === kept.canvases,
+   `${kept.seen} seen and ${kept.keptN} kept, counted separately · the specimen record remembers`
+   + ` · ${kept.marked}/${kept.canvases} drawn surfaces ask for the rare model`
+   + ` · field report carries it: ${kept.card === null ? 'no hook exposed' : kept.card}`
+   + ' — all of this was tracked and none of it drawn');
+
 await page.screenshot({ path: process.argv[2] ?? 'codex.png' });
 await browser.close();
 console.log(errors.length ? `\nCONSOLE ERRORS:\n${errors.join('\n')}` : '\nno console errors');

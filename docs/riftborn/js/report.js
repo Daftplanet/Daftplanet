@@ -134,7 +134,12 @@ export function drawFieldReport(canvas, report) {
   canvas.height = H;
   const ctx = canvas.getContext('2d');
   const sp = report.species;
-  const tint = ELEMENT_TINT[sp.elements[0]] ?? '#c2622f';
+  /*
+   * A rift-touched specimen takes Rift's colour on its card, because the card is
+   * the thing people show each other and that is the whole reward. The silhouette
+   * and the chips both read from this one value.
+   */
+  const tint = report.riftTouched ? '#b05ad0' : (ELEMENT_TINT[sp.elements[0]] ?? '#c2622f');
   const taken = report.outcome === 'catalogued';
 
   ctx.fillStyle = '#0e1013';
@@ -187,6 +192,7 @@ export function drawFieldReport(canvas, report) {
   let cx = 72;
   cx += chip(ctx, cx, 748, `${report.heightM.toFixed(2)} m`, tint);
   cx += chip(ctx, cx, 748, `${ordinal(Math.round(report.percentile * 100))} pct`, tint);
+  if (report.riftTouched) cx += chip(ctx, cx, 748, 'RIFT-TOUCHED', '#dfa0f0');
   if (taken) chip(ctx, cx, 748, `${Math.round(report.hpFraction * 100)}% HP left`, '#69d2e7');
 
   // ---- detail panel

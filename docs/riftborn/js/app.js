@@ -571,7 +571,7 @@ function boot(data) {
       mc.clearRect(0, 0, c.width, c.height);
       // Your own monster faces away, which is the convention and also reads as
       // "this one is on your side" without needing a label.
-      fitModel(mc, modelFor(mine.species), {
+      fitModel(mc, modelFor(mine.species, { riftTouched: !!mine.resident?.riftTouched }), {
         turns: battleTurns + 0.5, width: c.width, height: c.height, pad: 0.88,
         alpha: mine.fainted ? 0.25 : 1, flash: mine.flash,
       });
@@ -1377,6 +1377,7 @@ function boot(data) {
       percentile: e.largest.percentile,
       hpFraction: e.bestHp ?? 0,
       biome: e.lastArea ?? null,
+      riftTouched: !!e.largest.riftTouched,
       at: e.largest.at,
       note: `Your largest of ${e.specimens?.count ?? 1}. Catalogued ${e.catalogued}, culled ${e.culled}.`,
     };
@@ -1436,12 +1437,15 @@ function boot(data) {
       return `
         <article class="entry" data-state="${e.state}">
           ${seen
-            ? `<canvas class="entry__model" width="72" height="72" data-model="${sp.id}"></canvas>`
+            ? `<canvas class="entry__model" width="72" height="72" data-model="${sp.id}" data-touched="${!!e.touchedKept}"></canvas>`
             : `<div class="entry__dot" style="--c:${colour}"></div>`}
           <div class="entry__body">
             <h3>${seen ? sp.name : '???'} <span class="entry__no">№ ${String(sp.dex).padStart(3, '0')}</span></h3>
             <p class="entry__meta">${seen ? `${sp.elements.join('/')} · ${sp.size} · stage ${sp.stage} · ${title(sp.rarity)}` : 'Not yet sighted'}</p>
             <p class="entry__state">${STATE_LABEL[e.state]}${e.catalogued ? ` · ${e.catalogued} catalogued` : ''}${e.culled ? ` · ${e.culled} culled` : ''}${known ? ` · Research ${e.research}/3` : ''}</p>
+            ${e.touchedSeen ? `<p class="entry__touched">${data.elements.rift_touched?.name ?? 'Rift-touched'}: ${
+              e.touchedKept ? `${e.touchedKept} kept` : `${e.touchedSeen} seen, none kept`
+            }${e.touchedKept && e.touchedSeen > e.touchedKept ? ` · ${e.touchedSeen - e.touchedKept} got away` : ''}</p>` : ''}
             ${lines.join('')}
           </div>
           ${profile.canResearch(sp.id)
@@ -1472,7 +1476,11 @@ function boot(data) {
       if (!sp) continue;
       const ctx2 = c.getContext('2d');
       ctx2.clearRect(0, 0, c.width, c.height);
-      fitModel(ctx2, modelFor(sp), { turns, width: c.width, height: c.height, pad: 0.88 });
+      // `data-touched` is what makes a rare specimen stay rare once it is yours.
+      // Without it the Codex and the Sanctuary both drew the ordinary model, so
+      // the prize disappeared the moment you won it.
+      const riftTouched = c.dataset.touched === 'true';
+      fitModel(ctx2, modelFor(sp, { riftTouched }), { turns, width: c.width, height: c.height, pad: 0.88 });
     }
   }
 
@@ -1558,10 +1566,10 @@ function boot(data) {
       const pct = nextGate ? Math.min(100, (r.study / nextGate) * 100) : 100;
 
       return `
-        <article class="resident">
-          <canvas class="entry__model" width="72" height="72" data-model="${sp.id}"></canvas>
+        <article class="resident" data-touched="${!!r.riftTouched}">
+          <canvas class="entry__model" width="72" height="72" data-model="${sp.id}" data-touched="${!!r.riftTouched}"></canvas>
           <div class="resident__body">
-            <h3>${sp.name} <span class="entry__no">${sp.elements.join('/')} · stage ${sp.stage}</span></h3>
+            <h3>${sp.name}${r.riftTouched ? ` <span class="touched">${data.elements.rift_touched?.name ?? 'Rift-touched'}</span>` : ''} <span class="entry__no">${sp.elements.join('/')} · stage ${sp.stage}</span></h3>
             <div class="resident__study">
               <div class="meter__track meter__track--slim"><div class="meter__fill meter__fill--restraint" style="width:${pct}%"></div></div>
               <span>${Math.floor(r.study)}${nextGate ? ` / ${nextGate}` : ''} Study</span>
@@ -2007,7 +2015,7 @@ function boot(data) {
      * without the waiting.
      */
     refreshSpawns: () => stepPatrol(patrol, 0, { moveX: 0, moveY: 0 }),
-    drawTileSkin, BIOMES,
+    drawTileSkin, BIOMES, reportFromEntry,
     get battle() { return battle; },
     takeTurn: (a) => takeTurn(battle, a), battleOptions: () => options(battle),
     // For driving a battle the app does not own — a harness building its own.

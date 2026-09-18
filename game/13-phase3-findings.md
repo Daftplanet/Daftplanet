@@ -2633,3 +2633,67 @@ identical to the decimal, rates identical to the decimal — and all three times
 meant the harness was not measuring what it claimed. It has gone from something I
 noticed after the fact to the first thing I check, and it caught this one before
 the number reached the data file rather than after.
+
+# Phase 4, part 16: a prize that vanished when you won it
+
+Part 15 shipped the rare colourway and I wrote it up as done. It was not.
+
+The flag was **tracked everywhere and drawn almost nowhere**. `touchedSeen` and
+`touchedKept` went into the Codex entry and nothing rendered them. A rift-touched
+monster you actually caught appeared in the Sanctuary as the ordinary model, in
+the battle screen as the ordinary model, and on its field report in its ordinary
+element colour.
+
+So the version that shipped was: a violet halo on the map, a name on the engage
+card, a recoloured monster for the length of one fight — and then the prize
+disappeared the moment you won it. The one state a collectible must survive is
+being collected.
+
+That is a worse failure than a wrong number, because nothing was wrong. Every
+line I wrote did what it said. The feature was incomplete in the specific way
+that is hardest to notice from the inside: **I tested the part I had just
+built.** The check I wrote asked whether `buildModel` produces different colours
+for a variant, and it does, and it passed, and the answer was irrelevant to
+whether a player would ever see them.
+
+## What it took to actually finish it
+
+Five surfaces, all of which already existed and none of which had been asked:
+
+- `paintModels` drew every Codex and Sanctuary canvas from the species id alone,
+  so it now reads a `data-touched` flag off the canvas.
+- The Sanctuary card names it and tints its border.
+- The Codex entry reports **both** counts, and says `3 seen, none kept` when
+  that is the truth — which is the version of the story most players will have.
+- The battle screen draws your own monster from its resident record, so a rare
+  one you raised stays rare when you send it out.
+- The field report takes Rift's colour and carries a `RIFT-TOUCHED` chip,
+  because the card is the artefact people show each other and that is the entire
+  point of a cosmetic.
+
+## The check that would have caught it
+
+The new one does not ask whether the model builder works. It records a catch and
+then **walks every surface that draws that species**, asserting all of them are
+asking for the rare model:
+
+```
+PASS  a rift-touched specimen is still rift-touched in the Codex and the Sanctuary
+      — 2 seen and 1 kept, counted separately · the specimen record remembers
+      · 3/3 drawn surfaces ask for the rare model · field report carries it: true
+```
+
+`3/3` is the assertion that matters, and it is written as a ratio on purpose: a
+sixth surface added later that forgets the flag makes it 3/4 and fails. A check
+naming three specific canvases would have passed forever.
+
+## The pattern this one belongs to
+
+This document has a long list of measurements that were too narrow. This is the
+same disease in a different organ: **a test whose scope was the change rather
+than the feature.** I had just written `buildModel`, so I checked `buildModel`.
+
+The rule that catches it is the one the area-round control taught, pointed
+somewhere new — do not test the thing you just wrote, test the thing the player
+gets. For a cosmetic that means following it all the way to every place it is
+drawn, because a cosmetic that is not drawn is not anything at all.

@@ -823,3 +823,18 @@ select {
 .partyrow button { padding: 2px 8px; font-size: 11px; }
 .partyrow[data-down="true"] b { color: var(--warn, #c4694a); }
 .partyrow__none { color: var(--ink-dim); font-size: 11px; }
+
+/* The rare colourway, once it is yours. Violet because that is Rift's colour
+   everywhere else in the game — the ring on the map, the element itself. */
+.touched {
+  color: #dfa0f0;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.entry__touched {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: #b05ad0;
+}
+.resident[data-touched="true"] { border-color: rgba(176, 90, 208, 0.55); }
