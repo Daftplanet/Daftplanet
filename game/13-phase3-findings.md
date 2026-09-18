@@ -2395,3 +2395,79 @@ Two things saved it, and neither was care:
 The lesson is small and practical: an edit applied by matching a line of code can
 land in the wrong function when two functions share a line, and nothing will say
 so. Assert the match count, or match on something unique to the target.
+
+# Phase 4, part 13: the roadmap's last solo item was already half-built
+
+The phase 3 roadmap lists four things. Three are done or need netcode: rift
+events and the apexes are built, party play and Codex sharing need a server. The
+fourth is **multi-capture (snare + partner tag)**, still marked unbuilt.
+
+Half of it did not need a partner, and half of that was already written.
+
+`snare_grenade` has carried `aoe_radius_m: 6.0` since phase 2. The arena honours
+it — `splashIfNeeded` catches every monster inside the radius, and a check named
+"one area snare catches the cluster" defends it. **The turn battle read none of
+it.** Its catch branch touched `b.wild` and nothing else, so `aoe_radius_m`
+appears nowhere in `battle.js` and a 16-Essence grenade was an ordinary
+single-target round in the mode that became the game.
+
+That is the third time on this branch: a feature built for the arena, correct
+there, silently dropped when the turn battle took over. The apexes' `party_size`
+was the second. Anything the arena reads and `battle.js` does not is worth
+checking.
+
+## A pack is a queue, so "nearby" means "still waiting"
+
+You face a pack one at a time, so the translation is direct: an area round rolls
+to catch the one in front as normal, and **everyone still queued steps up
+already ensnared**. It costs the turn like any other round. That makes it a setup
+round rather than a capture round, which is what firing a grenade into a cluster
+ought to buy.
+
+## The measurement, and the control I nearly left out
+
+The obvious comparison is "open with a snare grenade" against "just fight", and
+it says the grenade is worth +0.39 captures on a pack of three. That number is
+wrong — or rather, it measures the wrong thing.
+
+Run at a pack of **one**, where there is no queue to splash, opening with the
+grenade *still* moved captures from 0.73 to 0.99. The opening round is strong by
+itself, and that comparison was crediting the area effect with all of it.
+
+`net_shell` applies the same `ensnared` at a similar multiplier and has no
+`aoe_radius_m`. It is the control, so the gap between those two rows is the area
+effect and nothing else:
+
+| pack | fight it out | net shell first | snare grenade first |
+|---|---|---|---|
+| 1 | 0.72 caught · 0.10 escaped | 0.98 · 0.01 | **0.98 · 0.01** |
+| 3 | 2.23 · 0.29 | 2.51 · 0.16 | **2.62 · 0.03** |
+| 4 | 2.85 · 0.40 | 3.13 · 0.22 | **3.46 · 0.04** |
+
+Three things worth reading off it:
+
+- **At a pack of one the two rounds are identical to the decimal**, which is the
+  correctness check. No queue, no splash, no difference — and this time
+  "identical to the decimal" is the result the design predicts rather than the
+  smell of a rigged harness.
+- **The effect scales with the pack**: nothing at one, +0.11 captures at three,
+  +0.33 at four. A round that matters more the more targets there are is the
+  shape an area weapon should have.
+- **Its real job is stopping escapes.** 0.22 down to 0.04 at a pack of four,
+  because `ensnared` carries `prevents_flee` and now carries it for the whole
+  queue. The Lattice Launcher's identity is not "catch more" — it is **nothing
+  gets away**, which is a better identity than the one the numbers were
+  originally going to give it.
+
+## And the same trap, one turn after documenting it
+
+Part 12 ended by noting that a result too clean is a smell. This was the
+opposite: a result that was *interesting enough to publish* and would have been
+wrong, not because the harness was broken but because it had no control. The
+grenade genuinely helps; the question was how much of that is the area effect,
+and without `net_shell` in the table the honest answer is "unknown".
+
+The rule that catches this one is narrower than the earlier ones and worth
+stating on its own: **when measuring what a feature adds, the comparison has to
+differ only in that feature.** Two rounds that share a status and differ in one
+data field are a real control. A round against no round is not.

@@ -671,6 +671,38 @@ function restraintValue(b, ammo, { hp, statuses }) {
     / sizeDef.size_resistance;
 }
 
+/**
+ * An area round reaches the ones still waiting.
+ *
+ * `aoe_radius_m` has been on the Snare Grenade since phase 2 and the arena has
+ * always honoured it — `splashIfNeeded` in game.js catches every monster inside
+ * six metres, and a check called "one area snare catches the cluster" defends
+ * it. The turn battle read none of it: the catch branch touched `b.wild` and
+ * nothing else, so the Lattice Launcher's whole identity, and the multi-capture
+ * item the phase 3 roadmap still lists as unbuilt, quietly did nothing in the
+ * mode that is now the game.
+ *
+ * A pack is a queue here rather than a crowd, so "everything nearby" becomes
+ * "everything still queued". That makes an area round a SETUP round: it costs
+ * the turn like any other, it rolls to catch the one in front as usual, and the
+ * two behind step up already ensnared. Which is what firing a grenade into a
+ * cluster ought to buy you.
+ */
+function splashQueue(b, ammo) {
+  if (!ammo.aoe_radius_m || !ammo.applies) return;
+  const turns = b.rules.status_turns ?? 4;
+  let caught = 0;
+  for (let i = b.index + 1; i < b.wilds.length; i++) {
+    const other = b.wilds[i];
+    if (!other || other.fainted) continue;
+    applyStatus(other, ammo.applies, turns);
+    caught += 1;
+  }
+  if (caught) {
+    say(b, `The burst catches ${caught} more — ${ammo.applies}.`, 'good');
+  }
+}
+
 export function catchChance(b, ammo) {
   const wild = b.wild;
   const value = restraintValue(b, ammo, {
@@ -888,6 +920,7 @@ export function takeTurn(b, action) {
     b.lastCatch = chance;
     b.spent[ammo.id] = (b.spent[ammo.id] ?? 0) + 1;
     say(b, `You fire a ${ammo.name}.`, 'info');
+    splashQueue(b, ammo);
     if (b.rng() < chance) {
       b.caughtWith = ammo.id;
       say(b, `${b.wild.species.name} is caught!`, 'good');

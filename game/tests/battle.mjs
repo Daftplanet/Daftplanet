@@ -1230,7 +1230,44 @@ ok('an apex is a raid boss you can lose, and its last phase is reachable',
    `Karrahk falls ${Math.round(apexFight.rate * 100)}% of the time over ${apexFight.turns.toFixed(0)} turns`
    + ` · phase ${apexFight.deepest} of ${apexFight.phases} reached — it was 92% before party_size was read`);
 
-// --- 42. phone layout
+// --- 42. an area round reaches the pack members still queued
+/*
+ * `aoe_radius_m` has been on the Snare Grenade since phase 2 and the arena has
+ * always honoured it. The turn battle read none of it — the catch branch touched
+ * the active wild and nothing else — so the Lattice Launcher's identity, and the
+ * multi-capture item the roadmap still lists as unbuilt, did nothing in the mode
+ * that is now the game.
+ */
+const splash = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  const fire = async (ammoId) => {
+    const b = await window.battleWith(['bramblewarden'], 'sparkmite', { packSize: 3 });
+    r.profile.state.ammo.snare_grenade = 10;
+    r.profile.state.ammo.net_shell = 10;
+    const before = b.wilds.map((w) => Object.keys(w.statuses).length);
+    const log = r.takeTurn({ kind: 'catch', ammoId });
+    return {
+      queuedEnsnared: b.wilds.slice(1).filter((w) => w.statuses.ensnared).length,
+      queued: b.wilds.length - 1,
+      before: before.slice(1).reduce((a, n) => a + n, 0),
+      said: log.some((l) => /burst catches/.test(l.text)),
+    };
+  };
+  const area = await fire('snare_grenade');
+  const single = await fire('net_shell');   // same status, no aoe_radius_m
+  const aoe = r.data.ammo.capture.find((a) => a.id === 'snare_grenade').aoe_radius_m;
+  const noAoe = r.data.ammo.capture.find((a) => a.id === 'net_shell').aoe_radius_m ?? null;
+  return { area, single, aoe, noAoe };
+});
+ok('an area round reaches the pack members still queued, and a single-target one does not',
+   splash.area.before === 0 && splash.area.queuedEnsnared === splash.area.queued
+   && splash.area.said && splash.single.queuedEnsnared === 0 && !splash.single.said
+   && splash.aoe > 0 && splash.noAoe === null,
+   `Snare Grenade (${splash.aoe}m) ensnared ${splash.area.queuedEnsnared}/${splash.area.queued} still waiting`
+   + ` · Net Shell, same status and no radius, reached ${splash.single.queuedEnsnared}`
+   + ' — the turn battle read no aoe_radius_m at all before this');
+
+// --- 43. phone layout
 await page.setViewportSize({ width: 390, height: 844 });
 await page.evaluate(async () => { await window.battleWith(['brinelet'], 'cinderfang'); });
 await page.waitForTimeout(400);

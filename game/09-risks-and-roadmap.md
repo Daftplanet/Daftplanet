@@ -120,7 +120,11 @@ Findings in [13-phase3-findings.md](13-phase3-findings.md).
 
 - Rift events, the 3 apexes, party play. *Rift events and all three apexes are
   built and solo-playable; party play needs netcode and is untouched.*
-- Multi-capture (snare + partner tag).
+- Multi-capture (snare + partner tag). *The snare half is built and does not
+  need a partner: `aoe_radius_m` was honoured by the arena and ignored by the
+  turn battle, so an area round now ensnares every pack member still queued.
+  Measured against a no-radius control in [13](13-phase3-findings.md) — it
+  scales with pack size and cuts escapes to a fifth. Partner tag needs netcode.*
 - Codex sharing, field reports, local leaderboards. *Field reports and the whole
   Your Records layer are built; profiles and leaderboards need a server.*
 - *Also built, ahead of the plan: the two-weapon loadout, the full weapon-mod

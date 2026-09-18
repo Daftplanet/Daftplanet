@@ -1296,3 +1296,93 @@ if (process.env.PROGRESS) {
   console.log('\nsanctuary.js claims active play beats idling about five to one. If the passive');
   console.log('share is near half, the patrol limit repealed that without anyone noticing.');
 }
+
+/*
+ * ------------------------------------------------------------- SNARE=1
+ *
+ * Does an area round earn its turn against a pack?
+ *
+ * `aoe_radius_m` sat on the Snare Grenade since phase 2, honoured by the arena
+ * and ignored by the turn battle, so multi-capture — the phase 3 roadmap item —
+ * did nothing in the mode that became the game. A pack is a queue here, so the
+ * area round now ensnares everyone still waiting.
+ *
+ * The question is whether that is worth the turn it costs. A setup round that
+ * buys nothing is a trap; one that hands you the whole pack makes the Lattice
+ * Launcher the only weapon worth carrying. Both are failures.
+ */
+if (process.env.SNARE) {
+  const byId = Object.fromEntries(data.monsters.monsters.map((m) => [m.id, m]));
+  const N = Number(process.env.RUNS ?? 300);
+  const PACK = Number(process.env.PACK ?? 3);
+  const wildIds = data.monsters.monsters
+    .filter((m) => !m.apex && m.stage === 1).map((m) => m.id);
+  const grenade = data.ammo.capture.find((a) => a.id === 'snare_grenade');
+  const dart = data.ammo.capture.find((a) => a.id === 'tranq_dart');
+  /*
+   * The control, and the whole reason this table has three rows.
+   *
+   * Comparing "snare grenade first" against "fight it out" measures the opening
+   * ROUND as well as the splash, and the round is strong on its own — at a pack
+   * of one, where there is no queue to splash, it still moved captures from 0.73
+   * to 0.99. Net Shell applies the same `ensnared` at a similar multiplier and
+   * has no `aoe_radius_m`, so the gap between the bottom two rows is the area
+   * effect and nothing else.
+   */
+  const net = data.ammo.capture.find((a) => a.id === 'net_shell');
+
+  const bestDamage = (b, mine) => {
+    let bi = 0, bd = -1;
+    mine.moves.forEach((mv, i) => {
+      if (!canUse(mine, i)) return;
+      const d = computeMoveDamage(mine, b.wild, mv, data, () => 0.5).damage * (mv.accuracy ?? 1);
+      if (d > bd) { bd = d; bi = i; }
+    });
+    return bi;
+  };
+
+  // openWith: fire this round on turn one, then play normally and dart when soft.
+  const run = (seed, openWith) => {
+    const rng = mulberry32(seed);
+    const wildSp = byId[wildIds[Math.floor(rng() * wildIds.length)]];
+    const team = ['bramblewarden'].map((p) => makeCombatant(byId[p], 20, data,
+      { resident: { study: 900 }, specimenRng: rng }));
+    const wilds = Array.from({ length: PACK }, () =>
+      makeCombatant(wildSp, 12, data, { wild: true, specimenRng: rng }));
+    const b = createBattle({ data, team, wilds, rng });
+    let g = 0, opened = false, rounds = 0;
+    while (!b.outcome && g++ < 300) {
+      const m = activeMon(b);
+      if (!m || m.fainted) break;
+      if (openWith && !opened) {
+        opened = true; rounds += 1;
+        takeTurn(b, { kind: 'catch', ammoId: openWith.id });
+        continue;
+      }
+      // Dart it once it is soft enough to be worth a round.
+      if (b.wild.hp / b.wild.maxHp < 0.5 && catchChance(b, dart).chance > 0.25) {
+        rounds += 1;
+        takeTurn(b, { kind: 'catch', ammoId: dart.id });
+        continue;
+      }
+      takeTurn(b, { kind: 'move', index: bestDamage(b, m) });
+    }
+    const caught = b.results.filter((r) => r.outcome === 'caught').length;
+    const escaped = b.results.filter((r) => r.outcome === 'escaped').length;
+    return { caught, escaped, turns: b.turn, rounds, resolved: b.results.length };
+  };
+
+  console.log(`\nAREA ROUNDS AGAINST A PACK — pack of ${PACK}, ${N} seeds each`);
+  console.log('opening              caught   escaped   turns   rounds spent');
+  for (const [name, round] of [['fight it out      ', null], ['net shell first    ', net], ['snare grenade first', grenade]]) {
+    let caught = 0, escaped = 0, turns = 0, rounds = 0;
+    for (let s = 0; s < N; s++) {
+      const r = run(s * 7919 + 13, round);
+      caught += r.caught; escaped += r.escaped; turns += r.turns; rounds += r.rounds;
+    }
+    console.log(`${name}  ${(caught / N).toFixed(2).padStart(7)} ${(escaped / N).toFixed(2).padStart(9)} `
+      + `${(turns / N).toFixed(1).padStart(7)} ${(rounds / N).toFixed(2).padStart(14)}`);
+  }
+  console.log('\nThe bottom two rows differ only in `aoe_radius_m`, so their gap IS the area');
+  console.log('effect. Against the top row both rows also carry the opening round itself.');
+}
