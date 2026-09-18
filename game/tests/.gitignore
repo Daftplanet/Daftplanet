@@ -1,3 +1,11 @@
 node_modules/
 *.png
-package-lock.json
+
+# The lockfile IS committed, deliberately. It used to be ignored, which was fine
+# while the suites only ever ran on somebody's laptop — and invisible until CI
+# tried to check out a file that had never been in the repository.
+#
+# It earns its place beyond that: these suites exist to catch regressions in the
+# game, so a Playwright that silently moves a minor version and changes
+# behaviour makes them fail for reasons that are not the code's. That is the
+# same rule the fake tile server exists to honour.

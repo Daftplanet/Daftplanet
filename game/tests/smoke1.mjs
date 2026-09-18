@@ -239,7 +239,22 @@ ok('returns to patrol', (await page.evaluate(() => window.__riftborn.view)) === 
 // --- 6b. withdrawing leaves the spawn standing
 const wd = await page.evaluate(async () => {
   const r = window.__riftborn;
-  const s = r.patrol.spawns[0];
+  /*
+   * Walk until there is something to withdraw FROM.
+   *
+   * This took the first spawn in the list and assumed one was standing there,
+   * which is only usually true: spawns come from (tile, time bucket, weather,
+   * seed), so an empty patch is the world working correctly. The check was
+   * passing on luck, and reported `null` on the runs where the luck ran out —
+   * which says nothing about withdrawing and everything about where the Warden
+   * happened to be. Same loop the fight setup above already uses.
+   */
+  const unresolved = () => r.patrol.spawns.find((sp) => !r.profile.isResolved(sp.id));
+  for (let i = 0; i < 40 && !unresolved(); i++) {
+    r.patrol.x += 90; r.patrol.y += 40;
+    r.refreshSpawns?.();
+  }
+  const s = unresolved();
   if (!s) return null;
   r.teleportTo(s); r.startFight(s);
   await new Promise((res) => setTimeout(res, 200));
@@ -248,12 +263,19 @@ const wd = await page.evaluate(async () => {
   await new Promise((res) => setTimeout(res, 200));
   return { inFight, back: r.view === 'patrol', stillThere: !r.profile.isResolved(s.id) };
 });
-ok('withdraw from an unaware monster keeps the spawn', wd && wd.inFight && wd.back && wd.stillThere, JSON.stringify(wd));
+ok('withdraw from an unaware monster keeps the spawn', wd && wd.inFight && wd.back && wd.stillThere,
+   wd ? JSON.stringify(wd) : 'no unresolved spawn within 40 steps — that is a world bug, not a withdraw bug');
 
 // --- 6c. withdrawing after it has seen you costs the spawn
 const wd2 = await page.evaluate(async () => {
   const r = window.__riftborn;
-  const s = r.patrol.spawns.find((sp) => !r.profile.isResolved(sp.id));
+  // Same precondition as above, and the same reason for it.
+  const unresolved = () => r.patrol.spawns.find((sp) => !r.profile.isResolved(sp.id));
+  for (let i = 0; i < 40 && !unresolved(); i++) {
+    r.patrol.x += 90; r.patrol.y += 40;
+    r.refreshSpawns?.();
+  }
+  const s = unresolved();
   if (!s) return null;
   r.teleportTo(s); r.startFight(s);
   await new Promise((res) => setTimeout(res, 200));
@@ -262,7 +284,8 @@ const wd2 = await page.evaluate(async () => {
   await new Promise((res) => setTimeout(res, 200));
   return { back: r.view === 'patrol', consumed: r.profile.isResolved(s.id) };
 });
-ok('withdraw after being seen costs the spawn', wd2 && wd2.back && wd2.consumed, JSON.stringify(wd2));
+ok('withdraw after being seen costs the spawn', wd2 && wd2.back && wd2.consumed,
+   wd2 ? JSON.stringify(wd2) : 'no unresolved spawn within 40 steps — that is a world bug, not a withdraw bug');
 
 // --- 6d. the prototype weapon unlock affordance
 const unlocked = await page.evaluate(() => {
