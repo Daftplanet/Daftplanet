@@ -443,7 +443,30 @@ export function drawPatrol(ctx, p, view, speciesById) {
      * and it means you can tell what is over there before you walk to it.
      */
     const px = Math.round(r * 3.4);
-    const sprite = spriteFor(sp, px);
+    const sprite = spriteFor(sp, px, 0.125, { riftTouched: !!s.riftTouched });
+
+    /*
+     * A rare colourway has to be spottable from across the park or it is not an
+     * event, it is a surprise you get after walking. So a rift-touched spawn
+     * wears a violet halo that pulses out of step with the rare-species ring —
+     * you can see there is something odd over there before you can see what.
+     */
+    if (s.riftTouched) {
+      ctx.save();
+      ctx.strokeStyle = '#b05ad0';
+      ctx.globalAlpha = 0.45 + 0.35 * Math.sin(t * 2.2 + 1);
+      ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.arc(sx, sy, r + 11 + Math.sin(t * 2.2) * 2.5, 0, Math.PI * 2); ctx.stroke();
+      ctx.globalAlpha = 0.9;
+      ctx.fillStyle = '#dfa0f0';
+      for (let i = 0; i < 3; i++) {
+        const a = t * 1.3 + (i / 3) * Math.PI * 2;
+        ctx.beginPath();
+        ctx.arc(sx + Math.cos(a) * (r + 13), sy + Math.sin(a) * (r + 13) * 0.6, 1.8, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
 
     // A disc behind it keeps the element colour readable against a real map,
     // where the ground under a marker is whatever the street happens to be.

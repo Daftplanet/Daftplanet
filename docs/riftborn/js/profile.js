@@ -345,7 +345,7 @@ export function createProfile(content) {
 
     // ---------------------------------------------------------- Codex
     entry(id) {
-      return state.codex[id] ?? { state: 'unknown', catalogued: 0, culled: 0, research: 0, seen: 0 };
+      return state.codex[id] ?? { state: 'unknown', catalogued: 0, culled: 0, research: 0, seen: 0, touchedSeen: 0, touchedKept: 0 };
     },
     _rank(s) { return ['unknown', 'sighted', 'encountered', 'data_lost', 'catalogued', 'researched'].indexOf(s); },
 
@@ -360,6 +360,17 @@ export function createProfile(content) {
       const e = { ...this.entry(species.id) };
       const tier = species.tier;
       state.stats.encounters += 1;
+
+      /*
+       * The Codex remembers meeting one and remembers keeping one, separately.
+       * Those are different stories — walking past a rift-touched monster you
+       * could not hold onto is the one every collector tells — and a single
+       * "seen it" flag would lose the better half of it.
+       */
+      if (detail.riftTouched) {
+        e.touchedSeen = (e.touchedSeen ?? 0) + 1;
+        if (outcome === 'catalogued') e.touchedKept = (e.touchedKept ?? 0) + 1;
+      }
 
       if (outcome === 'culled') {
         e.culled += 1;
@@ -596,6 +607,9 @@ export function createProfile(content) {
         heightM: detail.heightM ?? null,
         percentile: detail.percentile ?? null,
         biome: detail.biome ?? null,
+        // The rare colourway travels with the specimen: it is a property of the
+        // animal you caught, not of the encounter you caught it in.
+        riftTouched: !!detail.riftTouched,
         habitat: null,
         /*
          * Condition, carried between battles. `hp` is a fraction of its own bar;

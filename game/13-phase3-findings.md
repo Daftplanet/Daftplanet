@@ -2558,3 +2558,78 @@ One number found a real bug rather than confirming a claim. Gustling measured
 "the bottom third" of a three-voxel-tall model rounds up to two of its three
 layers. Counted in whole layers instead it is 33%. A fraction works on a tall
 animal and swallows a short one.
+
+# Phase 4, part 15: the rare one
+
+Part 14 gave every species a skin. This gives a few of them the wrong one.
+
+A rare colourway is the oldest idea in this genre and it works for a reason that
+is easy to state and easy to break: **it is cosmetic**. The moment a rare skin
+carries a stat it stops being a prize and becomes something you are obliged to
+farm. So a rift-touched specimen has identical geometry, identical markings and
+identical numbers — it is the same animal wearing a palette no ordinary species
+can.
+
+It fits the fiction rather than being bolted to it. Monsters come through rifts;
+once in a while one comes through **changed**, its colours pulled partway toward
+Rift. Partway matters: at a full pull every rare monster is the same violet and
+you can no longer tell what you are looking at, which is the opposite of the
+point. At 0.55 it reads as itself, wrongly coloured.
+
+And it is rolled from `(tile, time bucket, world seed)` like everything else
+about a spawn, which means **it is the same for everybody**. Two Wardens standing
+in the same park see the same rift-touched monster. A shiny nobody else can
+witness is a screenshot; one your friend can walk to is an event. That falls out
+of the shared-spawn decision made in phase 1 and cost nothing to honour.
+
+## The rate was wrong twice, in two different ways
+
+**First, I wrote the answer before running it.** The rate went in at 1 in 200
+with a comment claiming "about one sighting every 11 patrols". That figure was
+reasoned, not measured, and it is the failure this document has now named seven
+times. Measured through the real spawn generator, 1 in 200 is one sighting every
+**two** patrols — because a patrol walks past around a hundred spawns, and nobody
+divides that correctly in their head.
+
+**Then the dial was not connected.** Sweeping 0.005, 0.002, 0.001 and 0.0005
+returned `45.8%` every time. Four rates, one answer — the same "identical to the
+decimal" smell as the policy comparison in part 12, and the same kind of cause:
+the app sets the rate from data at load, but a headless tool imports `world.js`
+directly and gets the module default. The sweep was measuring a constant.
+
+Connected, it responds:
+
+| rate | one sighting every |
+|---|---|
+| 1 in 200 | 2 patrols |
+| 1 in 1000 | **9 patrols** |
+| 1 in 1700 | 15 patrols |
+
+**1 in 1000.** Against `PROGRESS=1`'s seven patrols per evolution that is roughly
+one rare monster per milestone — a story every week or two rather than a number
+nobody will ever hit. Pokémon's 1/4096 is tuned for a game offering far more
+encounters an hour than a walking game can.
+
+## What it touches, and one thing it deliberately does not
+
+The flag travels from the spawn through the fight into the record, so the Codex
+keeps **two** counts: `touchedSeen` and `touchedKept`. Those are different
+stories, and walking past a rift-touched monster you could not hold onto is the
+one every collector tells. A single "seen it" flag would have thrown away the
+better half.
+
+The map marks it before you commit — a violet halo pulsing out of step with the
+rare-species ring, so you can see something is odd over there before you can see
+what. A rare colourway you only discover after walking to it is not an event, it
+is a surprise.
+
+What it does not touch is any number in the fight. That is the discipline, and it
+is worth writing down precisely because it will be tempting later.
+
+## The smell is now doing real work
+
+Three times on this branch a measurement has come back *too clean* — policies
+identical to the decimal, rates identical to the decimal — and all three times it
+meant the harness was not measuring what it claimed. It has gone from something I
+noticed after the fact to the first thing I check, and it caught this one before
+the number reached the data file rather than after.

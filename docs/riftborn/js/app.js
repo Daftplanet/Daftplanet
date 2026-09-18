@@ -25,6 +25,7 @@ import {
 import {
   buildPool, apexForecast, riftForCell, placementFits, inTimeWindow, weatherIs, biomeAt,
   PLACEMENT_VOCABULARY, WEATHER, RIFT_RANK, RIFT_RADIUS_M, TILE_M, visibleSpawns, BIOMES,
+  setRiftTouchedRate,
 } from './world.js';
 import { blockers, escortAbility, studyFromBattle, studyAsMinutes } from './sanctuary.js';
 import {
@@ -124,6 +125,9 @@ function boot(data) {
   const families = [...new Set(allSpecies.map((m) => m.family))].filter((f) => f !== 'apex');
   const pool = buildPool(allSpecies, families);
   const codexSpecies = allSpecies.filter((m) => m.family !== 'apex');
+
+  // The rare-colourway rate is data, like every other tuning number.
+  setRiftTouchedRate(data.elements.rift_touched?.rate);
 
   const profile = createProfile({
     speciesById,
@@ -318,7 +322,10 @@ function boot(data) {
       const sp = speciesById[near.speciesId];
       const e = profile.entry(sp.id);
       const pack = near.packSize ?? 1;
-      $('engage-name').textContent = pack > 1 ? `${sp.name} ×${pack}` : sp.name;
+      const touched = !!near.riftTouched;
+      $('engage-name').textContent = (pack > 1 ? `${sp.name} ×${pack}` : sp.name)
+        + (touched ? ` · ${data.elements.rift_touched?.name ?? 'Rift-touched'}` : '');
+      $('engage-name').dataset.touched = String(touched);
       $('engage-meta').textContent = sp.apex
         ? `APEX · ${sp.elements.join('/')} · ${sp.phases} phases · needs a Tether Harpoon to take alive`
         : `${sp.elements.join('/')} · ${sp.size} · ${title(sp.rarity)} · ${STATE_LABEL[e.state]}`;
@@ -458,7 +465,8 @@ function boot(data) {
     battleMenu = 'root';
     battleBusy = false;
 
-    $('battle-where').textContent = `${title(fightBiome)} · ${WEATHER[patrol.weather]?.name ?? ''}`;
+    $('battle-where').textContent = `${title(fightBiome)} · ${WEATHER[patrol.weather]?.name ?? ''}`
+      + (battleSpawn?.riftTouched ? ` · ${data.elements.rift_touched?.name ?? 'Rift-touched'}` : '');
     $('battle-log').innerHTML = `<p data-kind="info">${packSize > 1
       ? `A pack of ${packSize} ${sp.name} blocks your way. They come at you one at a time.`
       : `A wild ${sp.name} blocks your way.`}</p>`;
@@ -551,7 +559,7 @@ function boot(data) {
     const wildC = $('wild-model');
     const wc = wildC.getContext('2d');
     wc.clearRect(0, 0, wildC.width, wildC.height);
-    fitModel(wc, modelFor(b.wild.species), {
+    fitModel(wc, modelFor(b.wild.species, { riftTouched: !!battleSpawn?.riftTouched }), {
       turns: battleTurns, width: wildC.width, height: wildC.height, pad: 0.88,
       alpha: b.wild.fainted ? 0.25 : 1, flash: b.wild.flash,
     });
@@ -739,6 +747,9 @@ function boot(data) {
       // Per result rather than per battle: packs are one species today, and
       // reading it off the member costs nothing and stops being a trap later.
       const rsp = speciesById[r.speciesId] ?? sp;
+      // The rare colourway belongs to the spawn, so every member of it wears it
+      // and every ending records it — including the ones that got away.
+      const riftTouched = !!battleSpawn?.riftTouched;
       profile.recordOutcome(rsp, kind, kind === 'catalogued' ? {
         clean: r.clean,
         hpFraction: r.hpFraction,
@@ -746,8 +757,8 @@ function boot(data) {
         methodAmmo: r.caughtWith,
         weaponId: profile.slots[0]?.weaponId ?? null,
         heightM: r.heightM, percentile: r.percentile,
-        biome,
-      } : kind === 'culled' ? { biome } : {});
+        biome, riftTouched,
+      } : kind === 'culled' ? { biome, riftTouched } : { riftTouched });
     }
 
     /*
@@ -900,6 +911,7 @@ function boot(data) {
         hpFraction: r.hpFraction,
         method: `${fight.loadout.weapon.name} · ${fight.loadout.ammo.capture?.name ?? 'no capture round'}`,
         methodAmmo: active?.captureId ?? null,
+        riftTouched: !!fightSpawn?.riftTouched,
         weaponId: active?.weaponId ?? null,
         heightM: r.heightM,
         percentile: r.percentile,

@@ -14,6 +14,7 @@ import { dirname, join } from 'node:path';
 import { loadLoadout } from '../../docs/riftborn/js/rules.js';
 import { escortAbility } from '../../docs/riftborn/js/sanctuary.js';
 import { createFight, step, weakPointPositions, assistMiss, ARENA } from '../../docs/riftborn/js/game.js';
+import { visibleSpawns, buildPool, TILE_M, setRiftTouchedRate } from '../../docs/riftborn/js/world.js';
 import {
   makeCombatant, createBattle, takeTurn, levelOf, wildLevel, computeMoveDamage, catchChance,
   activeMon, canUse, conditionOf, phaseCount,
@@ -1385,4 +1386,63 @@ if (process.env.SNARE) {
   }
   console.log('\nThe bottom two rows differ only in `aoe_radius_m`, so their gap IS the area');
   console.log('effect. Against the top row both rows also carry the opening round itself.');
+}
+
+/*
+ * -------------------------------------------------------------- TOUCHED=1
+ *
+ * How often does a Warden actually meet a rift-touched monster?
+ *
+ * The rate in elements.json is a per-spawn probability, which is not a number
+ * anybody experiences. What a player feels is "how many patrols before I see
+ * one", and that depends on how many spawns a patrol walks past — so it has to
+ * be measured through the real spawn generator rather than divided in your head.
+ *
+ * Pokemon's 1/4096 is tuned for a game that offers far more encounters an hour
+ * than a walking game can. The target here is a story every week or two, not a
+ * number nobody will ever hit.
+ */
+if (process.env.TOUCHED) {
+  const pool = buildPool(data.monsters.monsters, [...new Set(data.monsters.monsters.map((m) => m.family))]);
+  const rate = data.elements.rift_touched?.rate ?? 0;
+  /*
+   * The app sets this from the data at load; a headless tool importing world.js
+   * directly gets the module default instead. Without this line the sweep below
+   * reported an IDENTICAL 45.8% at 0.005, 0.002, 0.001 and 0.0005 — four rates,
+   * one answer, which is the same smell as a policy comparison scoring the same
+   * for every policy. The dial was not connected to the thing being measured.
+   */
+  setRiftTouchedRate(rate);
+  const N = Number(process.env.RUNS ?? 400);
+  const STEPS = Number(process.env.STEPS ?? 40);   // tiles walked in one patrol
+
+  let spawns = 0, touched = 0, patrolsWithOne = 0;
+  for (let p = 0; p < N; p++) {
+    const seed = p * 7919 + 13;
+    const bucket = 1000 + p;
+    let anyHere = false;
+    // Walk a line of tiles, taking what is visible at each step, and count each
+    // distinct spawn once — the same monster seen from two tiles is one monster.
+    const seen = new Set();
+    for (let i = 0; i < STEPS; i++) {
+      const x = i * TILE_M * 1.5, y = (i % 7) * TILE_M;
+      for (const s of visibleSpawns(x, y, bucket, pool, 'day', seed, 'overcast')) {
+        if (seen.has(s.id)) continue;
+        seen.add(s.id);
+        spawns += 1;
+        if (s.riftTouched) { touched += 1; anyHere = true; }
+      }
+    }
+    if (anyHere) patrolsWithOne += 1;
+  }
+
+  const perSpawn = touched / Math.max(1, spawns);
+  const perPatrol = spawns / N;
+  console.log(`\nRIFT-TOUCHED — ${N} patrols of ${STEPS} tiles, through the real spawn generator`);
+  console.log(`configured rate     ${(rate * 100).toFixed(2)}% per spawn  (1 in ${Math.round(1 / rate)})`);
+  console.log(`measured rate       ${(perSpawn * 100).toFixed(2)}% per spawn  (${touched} of ${spawns})`);
+  console.log(`spawns per patrol   ${perPatrol.toFixed(1)}`);
+  console.log(`patrols with one    ${((patrolsWithOne / N) * 100).toFixed(1)}%  — about one sighting every ${(N / Math.max(1, patrolsWithOne)).toFixed(0)} patrols`);
+  console.log('\nA patrol is about 2 battles (PATROL=1) and an evolution about 7 patrols (PROGRESS=1),');
+  console.log('so divide accordingly before believing any of this is rare enough or too rare.');
 }

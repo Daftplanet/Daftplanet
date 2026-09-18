@@ -281,9 +281,13 @@ function markingFor(species) {
  * Repaint some of the body in the accent. Runs before weak points, which
  * overwrite whatever they land on — an eye outranks a stripe.
  */
-function applyMarkings(species, voxels, size, ramp, r) {
+function applyMarkings(species, voxels, size, ramp, r, { riftTouched = false, pull = 0.55 } = {}) {
   const kind = markingFor(species);
-  const accent = accentFor(species, ramp);
+  // The accent shifts with the body, or a rift-touched monster keeps ordinary
+  // markings on changed skin and the two halves stop looking like one animal.
+  const accent = riftTouched
+    ? mix(accentFor(species, ramp), ELEMENT_RAMP.rift[2], pull)
+    : accentFor(species, ramp);
   const deep = mix(accent, '#000000', 0.35);
 
   for (const v of voxels) {
@@ -339,11 +343,20 @@ function applyMarkings(species, voxels, size, ramp, r) {
   }
 }
 
-export function buildModel(species) {
+export function buildModel(species, { riftTouched = false, pull = 0.55 } = {}) {
   const plan = PLANS[planFor(species)] ?? PLANS.lump;
   const r = rnd(hashString(species.id));
   const bulk = BULK[species.size] ?? 2;
-  const ramp = rampFor(species.elements ?? ['stone']);
+  /*
+   * A rift-touched specimen wears the one palette no ordinary species can: its
+   * own colours dragged partway toward Rift. Partway is the point — pulled all
+   * the way, every rare monster is the same violet and you can no longer tell
+   * what you are looking at, which is the opposite of what a rare skin is for.
+   */
+  const base = rampFor(species.elements ?? ['stone']);
+  const ramp = riftTouched
+    ? base.map((c, i) => mix(c, ELEMENT_RAMP.rift[i], pull))
+    : base;
 
   const raw = [];
   plan(raw, r, bulk);
@@ -377,7 +390,7 @@ export function buildModel(species) {
     voxels.push({ x, y, z, colour: ramp[Math.max(0, Math.min(3, v.band))], weak: false });
   }
 
-  applyMarkings(species, voxels, size, ramp, r);
+  applyMarkings(species, voxels, size, ramp, r, { riftTouched, pull });
 
   // Weak points last, so they overwrite whatever body voxel was there.
   const byKey = new Map(voxels.map((v) => [`${v.x},${v.y},${v.z}`, v]));
@@ -402,7 +415,7 @@ export function buildModel(species) {
     void byKey;
   }
 
-  return { id: species.id, size, voxels, ramp };
+  return { id: species.id, size, voxels, ramp, riftTouched };
 }
 
 // ---------------------------------------------------------------- renderer
@@ -512,16 +525,19 @@ export function drawModel(ctx, model, { x = 0, y = 0, scale = 4, turns = 0, alph
 const sprites = new Map();
 const models = new Map();
 
-export function modelFor(species) {
-  if (!models.has(species.id)) models.set(species.id, buildModel(species));
-  return models.get(species.id);
+export function modelFor(species, opts = {}) {
+  // Keyed on the variant: a rift-touched Cinderfang and an ordinary one are two
+  // models, and caching them under one id would show whichever was built first.
+  const key = opts.riftTouched ? `${species.id}!rift` : species.id;
+  if (!models.has(key)) models.set(key, buildModel(species, opts));
+  return models.get(key);
 }
 
-export function spriteFor(species, px = 48, turns = 0.125) {
-  const key = `${species.id}:${px}:${turns.toFixed(3)}`;
+export function spriteFor(species, px = 48, turns = 0.125, opts = {}) {
+  const key = `${species.id}${opts.riftTouched ? '!rift' : ''}:${px}:${turns.toFixed(3)}`;
   if (sprites.has(key)) return sprites.get(key);
 
-  const model = modelFor(species);
+  const model = modelFor(species, opts);
   const canvas = document.createElement('canvas');
   canvas.width = px;
   canvas.height = px;

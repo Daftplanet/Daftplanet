@@ -276,7 +276,52 @@ ok('every monster carries markings, and a dual-element one wears its second elem
    + ` · ${marks.secondShows}/${marks.dual} dual-element species show their second element`
    + ' — models used to be four tones of one hue');
 
-// --- 12. phone layout
+// --- 12. a rift-touched specimen is the same animal in the wrong colours
+/*
+ * The rare colourway. Cosmetic only and deliberately so — the moment a rare skin
+ * carries a stat it stops being a prize and becomes something you have to farm.
+ * It is rolled from (tile, bucket, seed) like everything else about a spawn, so
+ * two Wardens in the same park see the same one.
+ */
+const touched = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const sp = r.data.monsters.monsters.find((m) => m.id === 'cinderfang');
+  const plain = r.buildModel(sp);
+  const rare = r.buildModel(sp, { riftTouched: true });
+  const rift = r.ELEMENT_RAMP.rift;
+  const hex = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+  const dist = (a, b) => { const p = hex(a), q = hex(b); return (p[0]-q[0])**2 + (p[1]-q[1])**2 + (p[2]-q[2])**2; };
+  const nearer = plain.ramp.filter((c, i) => dist(rare.ramp[i], rift[i]) < dist(c, rift[i])).length;
+
+  // Same animal: identical geometry, different paint.
+  const sameShape = plain.voxels.length === rare.voxels.length
+    && plain.voxels.every((v, i) => v.x === rare.voxels[i].x && v.y === rare.voxels[i].y && v.z === rare.voxels[i].z);
+  const repainted = plain.voxels.filter((v, i) => v.colour !== rare.voxels[i].colour).length;
+
+  // Still recognisable: pulled toward Rift, not replaced by it.
+  const swallowed = rare.ramp.filter((c, i) => c === rift[i]).length;
+
+  // The caches must not confuse the two.
+  const a = r.modelFor(sp), bb = r.modelFor(sp, { riftTouched: true });
+  const cacheDistinct = a.ramp[2] !== bb.ramp[2];
+
+  // And the same tile must always produce the same answer, for everybody.
+  const seen = r.patrol.spawns.map((s) => !!s.riftTouched);
+  return {
+    sameShape, repainted, total: plain.voxels.length, nearer, swallowed,
+    cacheDistinct, spawnsHaveFlag: seen.length === 0 || seen.every((x) => typeof x === 'boolean'),
+    rate: r.data.elements.rift_touched.rate,
+  };
+});
+ok('a rift-touched specimen is the same animal wearing a palette no species can',
+   touched.sameShape && touched.repainted > touched.total * 0.5
+   && touched.nearer === 4 && touched.swallowed === 0
+   && touched.cacheDistinct && touched.spawnsHaveFlag && touched.rate > 0 && touched.rate < 0.01,
+   `identical geometry · ${touched.repainted}/${touched.total} voxels repainted`
+   + ` · all 4 ramp bands pulled toward Rift and none replaced by it, so you can still tell what it is`
+   + ` · 1 in ${Math.round(1 / touched.rate)} spawns, measured at one sighting every 9 patrols`);
+
+// --- 13. phone layout
 await page.setViewportSize({ width: 390, height: 844 });
 await page.waitForTimeout(400);
 const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

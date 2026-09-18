@@ -31,6 +31,15 @@ export const BUCKET_MS = 15 * 60 * 1000;
  *
  * The rates are unchanged. This is entirely presentation.
  */
+/*
+ * How often a wild spawn comes through rift-touched. Set from elements.json at
+ * load; the default matches the data so the headless tools and any test that
+ * never calls setRiftTouchedRate still see the shipped rate.
+ */
+let riftTouchedRate = 0.005;
+export function setRiftTouchedRate(r) { riftTouchedRate = Number.isFinite(r) ? r : riftTouchedRate; }
+export const riftTouchedChance = () => riftTouchedRate;
+
 export const BIOMES = {
   urban_core:  { name: 'Urban Core',  colour: '#414a5e', rate: 0.20,
     skin: { ground: ['#3a4256', '#414a5e', '#4a5468'], prop: 'rooftops', density: 1.8, ink: '#2a3040', lit: '#6f7c95' } },
@@ -279,6 +288,16 @@ export function spawnsInTile(tx, ty, bucket, pool, biome, window, seed = 1, weat
   return [{
     id: `${tx}:${ty}:${bucket}`,
     speciesId: chosen.id,
+    /*
+     * The rare colourway, rolled from the same (tile, bucket, seed) as everything
+     * else about this spawn — so it is the same for everybody. Two Wardens in the
+     * same park see the same rift-touched monster, which is what turns a shiny
+     * from a screenshot into somewhere to walk to.
+     *
+     * The rate lives in elements.json; the salt is its own so adding it did not
+     * move any existing spawn by a metre.
+     */
+    riftTouched: hash(tx, ty, bucket, seed + 29) < riftTouchedRate,
     packSize: packSizeFor(chosen, hash(tx, ty, bucket, seed + 23)),
     x: (tx + ox) * TILE_M,
     y: (ty + oy) * TILE_M,
