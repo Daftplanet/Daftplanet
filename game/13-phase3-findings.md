@@ -1197,6 +1197,11 @@ Then `STUDY=1 node game/tools/balance_sim.mjs` played real battles through
 | stage 1 → 2 (400) | 29.8 | 96% | 5.6 | 13 | 0.2 h |
 | stage 2 → 3 (1600) | 31.0 | 76% | 9.0 | 52 | 0.9 h |
 
+> **Re-measured in part 10.** These stand, but only after fixing the bot that
+> produced them: it picked purely on damage, which stopped being competent play
+> once the wild AI got status moves. Unfixed it reported tier 2 at 57 battles and
+> 26% won. Fixed: 29.8 at 97%, and 33.3 at 70%.
+
 Thirty battles, not seventeen. Dividing a threshold by a nominal per-battle
 figure ignores that **the reward shrinks as the monster you are raising outgrows
 what you are fighting**, so the last stretch to a threshold is far slower than
@@ -2088,3 +2093,126 @@ paragraph.
 The honest status: the specific 2026-09-17 failure remains unexplained, the
 mechanism that could produce it is gone, and there is now a check that fails if
 anyone reintroduces it.
+
+# Phase 4, part 10: a diagnostic that decayed, and a claim that went stale
+
+Parts 6 and 7 gave a patrol a cost and a field answer. Neither asked what they
+did to the number the whole Study rework was built around. Re-running the old
+diagnostics after changing things they never mentioned turned up two separate
+failures — and the worse one was in the measuring instrument.
+
+## First: `STUDY=1` had been wrong by fifty points for four commits
+
+Run today, it reported the second evolution at **56.9 battles and a 26% win
+rate**. The documented figure, in this file and in `sanctuary.js`, is 31.0
+battles at 76%. A collapse that size in the game would be a catastrophe.
+
+Bisected, it appears exactly at `792dd60` — "four moves, PP, and a cap that
+knows a mismatch":
+
+| commit | stage 2 → 3 |
+|---|---|
+| `3d63b47` apex phases | 30.9 battles · 77% · 52 Study/battle |
+| `792dd60` moves, PP, cap | **57.0 battles · 26% · 28** |
+
+My first theory was PP: the bot picks the biggest number every turn, so it would
+spend the heavy move's 3 PP and fall back to Strike for the rest of a nine-turn
+fight. Plausible, cheap to test, and **wrong** — adding a `canUse` check moved
+the number not at all.
+
+The real cause is worse. That same commit gave the engine's **wild AI** status
+moves, and status moves cost a monster its turn. The STUDY bot picks purely on
+damage, and a status move has power 0, so it never picks one. It was being
+outplayed by the monsters it was farming.
+
+Switching it to status-first — the policy `MOVES=1` measured as strongest, at
+52.5% against 45.3% — restores it:
+
+```
+stage 1 -> 2  (400 Study)   29.8 battles  97% won   (documented: 29.8, 96%)
+stage 2 -> 3  (1600 Study)  33.3 battles  70% won   (documented: 31.0, 76%)
+```
+
+**The game never regressed. The instrument did.** And the detail that makes this
+worth a section: `MOVES=1`, which measures precisely the fact `STUDY=1` needed to
+know, was added *in the same commit that broke it*. Both diagnostics sat in the
+same file, one of them proving the other's bot obsolete, for four commits.
+
+A stale number is visible if you re-read it. A stale diagnostic keeps running,
+keeps printing a plausible table, and lies in units you trust.
+
+## Then: the claim the patrol limit quietly repealed
+
+`STUDY=1` measures battles-to-evolve with **every fight starting fresh**. True
+when written; false since condition started carrying across a patrol. A party
+runs about two battles, and the recovery that follows is the *passive* channel
+running at full rate.
+
+`PROGRESS=1` plays the real loop — fight until the party is spent, go home, wait
+out the regen clock, go again:
+
+| tier | battles | patrols | game hours | battle / passive |
+|---|---|---|---|---|
+| stage 1 → 2 | 26.0 | 7.4 | 4.4h | **51% / 49%** |
+| stage 2 → 3 | 38.3 | 15.0 | 8.3h | 77% / 23% |
+
+**Half of a player's first evolution still comes from time passing** — the thing
+the rework existed to stop being the whole story. `sanctuary.js` says "active
+play beats idling by roughly five to one". That is a per-minute ratio and it is
+still exactly right; it simply says nothing about how many minutes of each the
+game hands you, and the game now hands you far more idle than fighting.
+
+Two checks before believing it, because it is the kind of result interesting
+enough to be wrong:
+
+- **It does not rest on my invented constant.** How recovered a party has to be
+  before going out again is a modelling assumption. Swept from 0.5 to 0.95 the
+  split stays 51-52% — flat, because total recovery time is set by how much
+  health was lost, not by how the waiting is sliced.
+- **The first version flattered the active channel**, counting a battle's
+  minutes but crediting nobody with passive Study for them. Time passes in a
+  fight too. Correcting it moved tier 1 from 57/43 to 50/50, against my own
+  result.
+- And the first version had **the same bot flaw as `STUDY=1`** — best-damage
+  only. Fixing that moved it to 51/49, so the headline survives its own
+  correction.
+
+## The fix that was measured and rejected
+
+The obvious repair is thematic and precisely targeted: **a hurt monster studies
+at `hp` of the usual rate.** It bites only in the window the patrol limit
+creates, leaves a fit monster idling overnight alone, and makes paying Essence to
+mend more attractive.
+
+It works, and the price is not worth paying:
+
+| | as shipped | hurt monsters study less |
+|---|---|---|
+| stage 1 → 2 | 26.0 battles · 4.4h · 51/49 | **44.5 battles · 7.5h** · 73/27 |
+| stage 2 → 3 | 38.3 battles · 8.3h · 77/23 | 47.8 battles · 10.1h · 89/11 |
+
+It buys the ratio by nearly doubling the first evolution, in a game where that
+milestone is most of what decides whether somebody plays a second week.
+**Changing the balance to defend a sentence in a comment is backwards.** The
+comment was wrong; the game was not.
+
+The shape is already right without it: the passive share falls from 49% to 23%
+between the tiers on its own, because battle Study scales with wild level while
+idling is flat. The game moves toward active play as it goes, and does not charge
+a new player for the privilege. `sanctuary.js` now carries both numbers and this
+rejected alternative with its measured cost.
+
+## What this adds to the pattern
+
+Parts 7 and 8 named the narrow first sample. This is a different failure and, for
+a project whose method is measurement, a more dangerous one.
+
+Every measurement is true of the system that existed when it was taken. Add a
+feature and you can invalidate a number nobody edited, in a file nobody opened —
+and invalidate the *tool* that would have caught it, in the same commit, without
+either going red. Nothing in fourteen browser suites noticed, because nothing was
+broken: the game worked, the diagnostic ran, the table printed.
+
+The only defence found so far is the one that worked here: **after adding a
+system, re-run the diagnostics that never mentioned it.** Both failures in this
+section were found that way and neither would have surfaced otherwise.

@@ -547,12 +547,32 @@ if (process.env.STUDY) {
         continue;
       }
       // Best expected damage, which is what a competent player converges on.
-      let best = 0, bestI = 0;
+      /*
+       * Only ever pick a move it can still USE. This bot predates PP: it picked
+       * the biggest number every turn, which meant spending the heavy move's 3
+       * PP and then spending the remaining six turns of a nine-turn fight on
+       * Strike. It reported the tier 2 evolution at 57 battles and a 26% win
+       * rate, against 31 and 77% — a fifty-point collapse that was entirely the
+       * harness playing badly, and that read exactly like a balance regression.
+       */
+      let best = 0, bestI = mine.moves.findIndex((m, i) => canUse(mine, i));
+      if (bestI < 0) bestI = 0;
       mine.moves.forEach((m, i) => {
+        if (!canUse(mine, i)) return;
         const d = computeMoveDamage(mine, w, m, data, () => 0.5).damage * (m.accuracy ?? 1);
         if (d > best) { best = d; bestI = i; }
       });
-      takeTurn(b, { kind: 'move', index: bestI });
+      /*
+       * Land a status first when one is available and not already on. MOVES=1
+       * measured this as the strongest policy (52.5% against 45.3% for best
+       * damage), and the engine's own wild AI has used it since status moves
+       * existed. A bot that never touches them is not "a competent player" — it
+       * is being outplayed by the monster it is farming, which is what made this
+       * diagnostic report a fifty-point collapse at tier 2.
+       */
+      const si = mine.moves.findIndex((mv, i) => canUse(mine, i) && (mv.applies || mv.applies_self)
+        && !(mv.applies ? w.statuses[mv.applies] : mine.statuses[mv.applies_self]));
+      takeTurn(b, { kind: 'move', index: si >= 0 ? si : bestI });
     }
     if (!b.outcome) b.outcome = 'escaped';
     return b;
@@ -1035,4 +1055,161 @@ if (process.env.APEX) {
   }
   console.log('\nWanted: a boss you can lose, that a full party is always the best answer to,');
   console.log('and whose last phase is reachable. 100% at party=3 means scenery.');
+}
+
+/*
+ * ------------------------------------------------------------- PROGRESS=1
+ *
+ * How long is an evolution, in the game people will actually play?
+ *
+ * STUDY=1 measures battles-to-evolve with every fight starting fresh. That was
+ * true when it was written and is not any more: condition carries across a
+ * patrol, so a party runs about two battles and then somebody is down and the
+ * patrol is over. The battles are the same; what changed is that you cannot
+ * have them back to back.
+ *
+ * That matters more than it sounds, because the downtime is not idle. Passive
+ * Study accrues at 1/minute whether a monster is fit or flat on its back, so
+ * forced recovery is also the passive channel running. The claim in
+ * sanctuary.js is that "active play beats idling by roughly five to one" — this
+ * measures whether the patrol limit quietly repealed it.
+ */
+if (process.env.PROGRESS) {
+  const byId = Object.fromEntries(data.monsters.monsters.map((m) => [m.id, m]));
+  const N = Number(process.env.RUNS ?? 120);
+  const REGEN = data.elements.battle_rules.hp_regen_per_minute ?? 0.03;
+  /*
+   * Two modelling assumptions, not game rules, so they are named here rather
+   * than smuggled into elements.json:
+   *
+   *   READY    how recovered a party has to be before you walk out again. The
+   *            passive share below is flat at 42-45% for anything from 0.5 to
+   *            0.95, because total recovery time is set by how much health you
+   *            lost, not by how you slice the waiting. Swept, not assumed.
+   *   MINUTES  how long a battle takes to play. Only moves the "game hours"
+   *            column; it cannot move the split, because both channels are
+   *            credited for it.
+   */
+  const READY = Number(process.env.READY ?? 0.8);
+  const MINUTES_PER_BATTLE = Number(process.env.BATTLE_MINUTES ?? 2.5);
+  /*
+   * CONDSTUDY tries a candidate rule before it exists in the game: a hurt
+   * monster studies less, at `hp` of the usual rate. It targets exactly the
+   * window the patrol limit creates and leaves a fit monster idling in a
+   * habitat overnight untouched.
+   */
+  const CONDSTUDY = Boolean(process.env.CONDSTUDY);
+  const passiveScale = (r) => (CONDSTUDY ? Math.max(0, Math.min(1, r.hp ?? 1)) : 1);
+
+  const bestDamage = (b, mine) => {
+    let bi = 0, bd = -1;
+    mine.moves.forEach((mv, i) => {
+      if (!canUse(mine, i)) return;
+      const d = computeMoveDamage(mine, b.wild, mv, data, () => 0.5).damage * (mv.accuracy ?? 1);
+      if (d > bd) { bd = d; bi = i; }
+    });
+    return bi;
+  };
+  /*
+   * Status first, then damage — the policy MOVES=1 measured as strongest and the
+   * one the engine's own wild AI plays. The first version of this diagnostic
+   * used best-damage alone and was therefore being outplayed by the monsters it
+   * was farming, exactly as STUDY=1 had been since status moves landed.
+   */
+  const statusFirst = (b, mine) => {
+    const si = mine.moves.findIndex((mv, i) => canUse(mine, i) && (mv.applies || mv.applies_self)
+      && !(mv.applies ? b.wild.statuses[mv.applies] : mine.statuses[mv.applies_self]));
+    return si >= 0 ? si : bestDamage(b, mine);
+  };
+
+  /** One life, from zero Study to an evolution threshold, played as patrols. */
+  function raise(partyIds, wildPool, rank, threshold, seed0) {
+    const rng = mulberry32(seed0);
+    const party = partyIds.map(() => ({ hp: 1, pp: null, study: 0 }));
+    const lead = party[0];
+    let battles = 0, patrols = 0, minutes = 0, fromBattle = 0, fromPassive = 0, guard = 0;
+
+    while (lead.study < threshold && guard++ < 4000) {
+      const fit = party.map((r, i) => [r, i]).filter(([r]) => r.hp > 0);
+      if (!fit.length) break;
+      // --- a battle
+      const team = fit.map(([r, i]) => {
+        const sp = byId[partyIds[i]];
+        return makeCombatant(sp, levelOf({ study: r.study }, sp), data,
+          { resident: { study: r.study, hp: r.hp, pp: r.pp }, specimenRng: rng });
+      });
+      const wildSp = wildPool[Math.floor(rng() * wildPool.length)];
+      const wild = makeCombatant(wildSp, wildLevel(wildSp, rank), data, { wild: true, specimenRng: rng });
+      const b = createBattle({ data, team, wilds: [wild], rng });
+      let g = 0;
+      while (!b.outcome && g++ < 200) {
+        const m = activeMon(b);
+        if (!m || m.fainted) break;
+        takeTurn(b, { kind: 'move', index: statusFirst(b, m) });
+      }
+      if (!b.outcome) b.outcome = 'escaped';
+      battles += 1;
+      // Time passes during a fight too, so the passive channel is credited for
+      // it. Leaving it out flattered the active share.
+      minutes += MINUTES_PER_BATTLE;
+      for (const r of party) {
+        const rate = STUDY_PER_MINUTE * passiveScale(r);
+        r.study += rate * MINUTES_PER_BATTLE;
+        if (r === lead) fromPassive += rate * MINUTES_PER_BATTLE;
+      }
+
+      // Study for whoever was on the field, and the condition they leave in.
+      fit.forEach(([r], k) => {
+        const c = team[k];
+        if (c.participated) {
+          const gained = studyFromBattle(b.wild.level, c.level, b.outcome);
+          r.study += gained;
+          if (k === 0) fromBattle += gained;
+        }
+        const cond = conditionOf(c);
+        r.hp = cond.hp; r.pp = cond.pp;
+      });
+
+      // --- is the patrol over?
+      if (party.every((r) => r.hp <= 0) || party.filter((r) => r.hp > 0).length === 0
+          || party.every((r) => r.hp < 0.25)) {
+        patrols += 1;
+        // Go home and wait until the party is worth taking out again.
+        const worst = Math.min(...party.map((r) => Math.max(0, r.hp)));
+        const wait = Math.max(0, (READY - worst) / REGEN);
+        minutes += wait;
+        for (const r of party) {
+          const before = Math.max(0, r.hp);
+          r.hp = Math.min(1, r.hp + REGEN * wait);
+          r.pp = null;
+          // Credit the average condition across the wait rather than either end.
+          const mid = { hp: (before + r.hp) / 2 };
+          const gained = STUDY_PER_MINUTE * passiveScale(mid) * wait;
+          r.study += gained;
+          if (r === lead) fromPassive += gained;
+        }
+      }
+    }
+    return { battles, patrols, minutes, fromBattle, fromPassive };
+  }
+
+  const TIERS = [
+    { label: 'stage 1 -> 2  (400 Study)', party: ['sootpup', 'pebblit', 'brinelet'], rank: 3, need: 400 },
+    { label: 'stage 2 -> 3  (1600 Study)', party: ['cinderfang', 'voltfang', 'tidecaller'], rank: 10, need: 1600 },
+  ];
+  console.log(`\nEVOLUTION AS PLAYED — patrols, not back-to-back battles · ${N} traces per tier`);
+  console.log('tier                         battles  patrols   game hours   Study: battle / passive');
+  for (const t of TIERS) {
+    const pool = t.party.map((id) => byId[id]).filter(Boolean);
+    const runs = Array.from({ length: N }, (_, i) =>
+      raise(t.party.filter((id) => byId[id]), pool, t.rank, t.need, i * 104729 + 7));
+    const avg = (f) => runs.reduce((a, r) => a + f(r), 0) / runs.length;
+    const fb = avg((r) => r.fromBattle), fp = avg((r) => r.fromPassive);
+    console.log(`${t.label.padEnd(28)} ${avg((r) => r.battles).toFixed(1).padStart(7)} `
+      + `${avg((r) => r.patrols).toFixed(1).padStart(8)} `
+      + `${(avg((r) => r.minutes) / 60).toFixed(1).padStart(12)} `
+      + `${`${((fb / (fb + fp)) * 100).toFixed(0)}% / ${((fp / (fb + fp)) * 100).toFixed(0)}%`.padStart(24)}`);
+  }
+  console.log('\nsanctuary.js claims active play beats idling about five to one. If the passive');
+  console.log('share is near half, the patrol limit repealed that without anyone noticing.');
 }

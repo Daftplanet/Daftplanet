@@ -35,8 +35,14 @@ export const FEED_STUDY = 40;
  * level do the work lands, measured over 120 accumulation traces per tier with
  * STUDY=1 in balance_sim:
  *
- *     stage 1 -> 2 (400 Study):   29.8 battles, 96% won, 5.6 turns each
- *     stage 2 -> 3 (1600 Study):  31.0 battles, 76% won, 9.0 turns each
+ *     stage 1 -> 2 (400 Study):   29.8 battles, 97% won, 5.2 turns each
+ *     stage 2 -> 3 (1600 Study):  33.3 battles, 70% won, 7.8 turns each
+ *
+ * (Re-measured after STUDY=1's bot was fixed. It had picked purely on damage,
+ * which stopped being competent play the moment the wild AI got status moves —
+ * it was reporting tier 2 at 57 battles and 26% won, a fifty-point collapse that
+ * was entirely the harness being outplayed by the monsters it was farming. See
+ * part 10 of 13-phase3-findings.md.)
  *
  * Thirty battles, not the seventeen this comment claimed before anyone ran it.
  * The arithmetic was not wrong so much as naive: dividing a threshold by a
@@ -46,8 +52,30 @@ export const FEED_STUDY = 40;
  *
  * Against the passive channel, one battle is worth about 13 minutes of habitat
  * time at tier 1 and 52 at tier 2, while taking two or three minutes to play.
- * Active play beats idling by roughly five to one, and idling still earns its
- * keep overnight — which is the balance the Sanctuary was always meant to have.
+ * Per minute spent, active play beats idling by roughly five to one.
+ *
+ * That ratio is still true and it is no longer the whole story, because it says
+ * nothing about how many minutes of each you actually get. Condition now carries
+ * across a patrol, so a party runs about two battles and then has to go home and
+ * recover — and recovering is the passive channel running. Measured end to end
+ * with PROGRESS=1, which plays patrols rather than back-to-back battles:
+ *
+ *     stage 1 -> 2:  26.0 battles over 7 patrols,  4.4h  — 51% battle / 49% passive
+ *     stage 2 -> 3:  38.3 battles over 15 patrols, 8.3h  — 77% battle / 23% passive
+ *
+ * So half of a player's FIRST evolution still comes from time passing. That is
+ * not what the paragraph above implies, and it is worth knowing before anyone
+ * quotes the five-to-one figure as though it described the game.
+ *
+ * It is left alone deliberately. The obvious fix — a hurt monster studies at
+ * `hp` of the usual rate, which targets exactly the window the patrol limit
+ * creates — does restore active dominance to 73/27 at tier 1. It also takes the
+ * first evolution from 26.0 battles to 44.5 and from 4.4 hours to 7.5, which
+ * buys a ratio by damaging the one milestone most likely to decide whether a
+ * new player stays. The passive share already falls to 28% by tier 2 on its
+ * own, because battle Study scales with wild level while idling is flat: the
+ * game shifts towards active play as it goes, which is the right shape without
+ * paying for it at the front.
  *
  * The relative term is the anti-grind, and it matters more here than in most
  * games: wild level scales with Warden rank, so low-stage species stay low-level
