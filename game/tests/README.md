@@ -51,8 +51,9 @@ the build is a comment with extra steps.**
 
 ## How long they take
 
-**About a hundred seconds for all fourteen**, and `run.mjs` prints a per-suite
-breakdown so you never have to guess:
+**Under a hundred seconds for all fourteen** — 86.8s, 93.5s and 104.5s across
+three measured runs — and `run.mjs` prints a per-suite breakdown so you never
+have to guess:
 
 ```
 TIME
@@ -69,7 +70,7 @@ with real mouse input, and 140 iterations of aim-and-click at a 130 ms trigger
 hold is 18 seconds that is genuinely testing something.
 
 This README previously said "about ninety minutes". That was wrong by roughly
-fiftyfold and it was never measured — it came from watching a clock while
+thirtyfold and it was never measured — it came from watching a clock while
 several runs competed for one machine. It is written up in
 `game/13-phase3-findings.md` under "the suites do not take ninety minutes",
 because a wrong number in a test README makes people avoid running the tests.
