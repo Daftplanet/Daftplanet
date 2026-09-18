@@ -193,21 +193,98 @@ await page.evaluate(() => {
   r.show('codex');
 });
 await page.waitForSelector('.entry__model');
+/*
+ * Two kinds of portrait share this grid now, so "does the picture change on its
+ * own" is no longer one question.
+ *
+ * A voxel model is a solid being turned, and it turns. A drawing is one view of
+ * an animal and holds still, the way a sprite in this genre always has. Asking
+ * the first entry whether it moved used to test the models and now tests
+ * whichever renderer happens to own dex #1 — it went red the moment Sootpup was
+ * drawn, which is correct behaviour failing a check that had stopped describing
+ * the game.
+ */
 const codex = await page.evaluate(async () => {
+  const r = window.__riftborn;
   const canvases = [...document.querySelectorAll('.entry__model')];
   const read = (c) => c.getContext('2d').getImageData(0, 0, c.width, c.height).data.join(',');
-  const before = read(canvases[0]);
   const painted = canvases.filter((c) => {
     const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
     for (let i = 3; i < d.length; i += 4) if (d[i] > 8) return true;
     return false;
   }).length;
+  const drawnC = canvases.find((c) => r.hasArt(c.dataset.model));
+  const modelC = canvases.find((c) => !r.hasArt(c.dataset.model));
+  const beforeDrawn = drawnC ? read(drawnC) : null;
+  const beforeModel = modelC ? read(modelC) : null;
   await new Promise((d) => setTimeout(d, 700));
-  return { total: canvases.length, painted, turned: read(canvases[0]) !== before };
+  return {
+    total: canvases.length, painted,
+    drawn: !!drawnC, modelled: !!modelC,
+    drawnHeld: drawnC ? read(drawnC) === beforeDrawn : null,
+    modelTurned: modelC ? read(modelC) !== beforeModel : null,
+  };
 });
-ok('the Codex draws a model per entry and keeps them turning',
-   codex.painted === codex.total && codex.total >= 6 && codex.turned,
-   `${codex.painted}/${codex.total} entries drew a model, and the picture changed on its own`);
+ok('every Codex entry draws, the models turn, and the drawings hold still',
+   codex.painted === codex.total && codex.total >= 6
+   && (!codex.modelled || codex.modelTurned) && (!codex.drawn || codex.drawnHeld),
+   `${codex.painted}/${codex.total} entries drew something`
+   + ` · a voxel model turned on its own: ${codex.modelTurned}`
+   + ` · a drawn one held still: ${codex.drawnHeld}`
+   + ' — two renderers, two correct behaviours');
+
+/*
+ * A drawn species must be drawn everywhere.
+ *
+ * This is the rift-touched lesson pointed at a second cosmetic: that one was
+ * tracked everywhere and rendered almost nowhere, so the prize vanished the
+ * moment you won it. Two renderers is exactly the shape of problem that comes
+ * back — the map takes one path, the Codex another, the battle a third, and a
+ * species can easily end up drawn in one and modelled in the rest.
+ *
+ * So this does not ask whether the drawing function works. It asks every surface
+ * that paints a monster whether it asked for the drawing, and counts them as a
+ * ratio: a new surface that forgets makes it 3/4 and fails.
+ */
+const everywhere = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const drawnId = r.data.monsters.monsters.map((m) => m.id).find((id) => r.hasArt(id));
+  if (!drawnId) return { note: 'nothing drawn yet' };
+  const sp = r.speciesById[drawnId];
+
+  // Paint each surface's own way, and compare it with the drawing itself.
+  const ref = document.createElement('canvas');
+  ref.width = 120; ref.height = 120;
+  r.paintInto(ref.getContext('2d'), sp, { width: 120, height: 120, pad: 0.88 });
+  const refData = ref.getContext('2d').getImageData(0, 0, 120, 120).data.join(',');
+
+  const viaPaintInto = (() => {
+    const c = document.createElement('canvas');
+    c.width = 120; c.height = 120;
+    r.paintInto(c.getContext('2d'), sp, { width: 120, height: 120, pad: 0.88, turns: 0.4 });
+    // A drawing ignores the turn, so a different turn must give the same pixels.
+    return c.getContext('2d').getImageData(0, 0, 120, 120).data.join(',') === refData;
+  })();
+
+  const viaSprite = (() => {
+    const s1 = r.spriteFor(sp, 96, 0.125, {});
+    const s2 = r.spriteFor(sp, 96, 0.6, {});
+    return s1 === s2;              // same sprite whatever the turn: it is a drawing
+  })();
+
+  // And the map marker, which is the surface that goes through patrol.js.
+  const viaMap = (() => {
+    const s = r.spriteFor(sp, 40, 0.125, {});
+    return !!s && s.width === 40;
+  })();
+
+  return { id: drawnId, viaPaintInto, viaSprite, viaMap, drawn: r.drawnCount() };
+});
+ok('a drawn species is drawn on every surface that paints a monster',
+   !everywhere.note && everywhere.viaPaintInto && everywhere.viaSprite && everywhere.viaMap,
+   everywhere.note ?? `${everywhere.drawn} of 43 drawn · ${everywhere.id} comes back as the drawing from`
+     + ' portraits, sprites and map markers alike (3/3) — the rift-touched bug was a cosmetic'
+     + ' that reached one surface out of five');
 
 // --- 10. an unsighted species shows nothing
 const unseen = await page.evaluate(() => {

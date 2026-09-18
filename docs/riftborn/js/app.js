@@ -16,7 +16,8 @@ import { fitCanvas, draw } from './render.js';
 import { createInput } from './input.js';
 import { createProfile, AMMO_COST, ITEM_COST, RANK_XP, WEAPON_UNLOCK, RESEARCH_COST } from './profile.js';
 import { drawFieldReport, toPng } from './report.js';
-import { buildModel, modelFor, fitModel, spriteFor, clearVoxelCache, ELEMENT_RAMP, setBiomeCoats, biomeCoat } from './voxel.js';
+import { buildModel, modelFor, fitModel, clearVoxelCache, ELEMENT_RAMP, setBiomeCoats, biomeCoat } from './voxel.js';
+import { spriteFor, paintInto, hasArt, drawnCount } from './art.js';
 import { TILT, structuresOn, drawStructures, drawTileSkyline, standsUp } from './city.js';
 import { configuredKey, createGoogleBasemap, forgetKey } from './gmap.js';
 import {
@@ -632,9 +633,8 @@ function boot(data) {
     const wildC = $('wild-model');
     const wc = wildC.getContext('2d');
     wc.clearRect(0, 0, wildC.width, wildC.height);
-    fitModel(wc, modelFor(b.wild.species, {
+    paintInto(wc, b.wild.species, {
       riftTouched: !!battleSpawn?.riftTouched, biome: battleSpawn?.biome ?? null,
-    }), {
       turns: battleTurns, width: wildC.width, height: wildC.height, pad: 0.88,
       alpha: b.wild.fainted ? 0.25 : 1, flash: b.wild.flash,
     });
@@ -646,10 +646,9 @@ function boot(data) {
       mc.clearRect(0, 0, c.width, c.height);
       // Your own monster faces away, which is the convention and also reads as
       // "this one is on your side" without needing a label.
-      fitModel(mc, modelFor(mine.species, {
+      paintInto(mc, mine.species, {
         riftTouched: !!mine.resident?.riftTouched, biome: mine.resident?.biome ?? null,
-      }), {
-        turns: battleTurns + 0.5, width: c.width, height: c.height, pad: 0.88,
+        turns: battleTurns, facing: -1, width: c.width, height: c.height, pad: 0.88,
         alpha: mine.fainted ? 0.25 : 1, flash: mine.flash,
       });
     }
@@ -1564,7 +1563,7 @@ function boot(data) {
       // the prize disappeared the moment you won it.
       const riftTouched = c.dataset.touched === 'true';
       const biome = c.dataset.biome || null;
-      fitModel(ctx2, modelFor(sp, { riftTouched, biome }), { turns, width: c.width, height: c.height, pad: 0.88 });
+      paintInto(ctx2, sp, { turns, width: c.width, height: c.height, pad: 0.88, riftTouched, biome });
     }
   }
 
@@ -2132,6 +2131,7 @@ function boot(data) {
     get fight() { return fight; },
     get basemap() { return basemap; },
     initBasemap, forgetMapKey: forgetKey, configuredKey,
+    paintInto, hasArt, drawnCount, spriteFor,
     get frames() { return frame.count ?? 0; },
     show, startFight, startBattle, renderSanctuary, renderContracts, renderParty,
     /*

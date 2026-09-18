@@ -19,7 +19,7 @@ import {
 } from './world.js';
 import { lonLatToWorld, groundScale, groundMetres } from './geo.js';
 import { createTileSource, MAP_ZOOM } from './tiles.js';
-import { spriteFor } from './voxel.js';
+import { spriteFor } from './art.js';
 import { TILT, drawTileSkyline, standsUp } from './city.js';
 
 export const VIEW = { w: 960, h: 640 };
