@@ -358,6 +358,229 @@ const ART = {
     eye(ctx, 60, 58, 6, { look: 0.2 });
     weakSpot(ctx, 50, 30, 3.4, p);
   },
+
+  /*
+   * Slagmite — Slag, stage 1. A lump of cooling slag that turned out to be
+   * alive. Bottom-heavy and craggy, so it reads as heavy; the heat shows only
+   * through the cracks, which is what makes the crust look thick.
+   */
+  slagmite(ctx, p) {
+    const crust = curve(ctx, [[14, 74], [20, 50], [38, 36], [62, 34], [82, 48], [88, 74], [50, 84]]);
+    form(ctx, crust, p, { fill: p.accent, shade: 0.5, lit: p.accentDark });
+    ctx.save();
+    crust(); ctx.clip();
+    // The seams, glowing. Drawn as a bright line under a wider dark one so they
+    // read as depth rather than as scribble.
+    ctx.lineCap = 'round';
+    for (const seam of [[[20, 46], [36, 62], [40, 80]], [[58, 38], [66, 58], [86, 66]], [[44, 70], [62, 76]]]) {
+      for (const [w, col] of [[6.5, p.line], [3, p.light]]) {
+        ctx.beginPath();
+        ctx.moveTo(seam[0][0], seam[0][1]);
+        for (let i = 1; i < seam.length; i++) ctx.lineTo(seam[i][0], seam[i][1]);
+        ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke();
+      }
+    }
+    ctx.restore();
+    weakSpot(ctx, 64, 58, 4, p);
+    eye(ctx, 38, 48, 5.6, { look: 0.2 });
+    eye(ctx, 60, 46, 5.2, { look: 0.2 });
+  },
+
+  /*
+   * Frostnib — Rime, stage 1. A small cold thing with a breath sac at the
+   * throat, which is its weak point and also the reason it has a silhouette:
+   * without the sac it would be another round pup.
+   */
+  frostnib(ctx, p) {
+    for (const lx of [36, 60]) {
+      form(ctx, curve(ctx, [[lx - 6, 70], [lx + 6, 70], [lx + 7, 86], [lx - 7, 86]]), p,
+           { fill: p.dark, shade: 0.3, line: 2.2 });
+    }
+    form(ctx, oval(ctx, 52, 60, 22, 17), p, { shade: 0.5, lit: p.light });
+    // the sac, pale and round, hanging under the chin
+    form(ctx, oval(ctx, 34, 60, 13, 12), p,
+         { fill: mix(p.accent, '#ffffff', 0.45), shade: 0.3, line: 2.2 });
+    weakSpot(ctx, 30, 62, 3.6, p);
+    form(ctx, oval(ctx, 36, 38, 19, 17), p, { shade: 0.45, lit: p.light });
+    // ice tufts instead of ears — three spikes, uneven, so it is not symmetrical
+    ctx.save();
+    ctx.fillStyle = p.accent; ctx.strokeStyle = p.line; ctx.lineWidth = 2;
+    for (const [tx, ty, h] of [[26, 24, 16], [37, 18, 21], [48, 24, 14]]) {
+      ctx.beginPath();
+      ctx.moveTo(tx - 5, ty); ctx.lineTo(tx, ty - h); ctx.lineTo(tx + 5, ty);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+    eye(ctx, 30, 38, 5.4, { look: -0.4 });
+    eye(ctx, 45, 39, 4.8, { look: -0.3 });
+  },
+
+  /*
+   * Mycelid — Myco, stage 1. Sporelet's sour cousin: a thin stalk with a
+   * drooping cap and gloom under the gills. Same family of shape, different
+   * posture — Sporelet stands up and this one hangs, which is most of what
+   * separates a cheerful fungus from an unpleasant one.
+   */
+  mycelid(ctx, p) {
+    // A stalk thick enough to carry a face, and bent, so it slouches.
+    form(ctx, curve(ctx, [[40, 48], [60, 48], [64, 88], [38, 88]]), p,
+         { fill: p.light, shade: 0.42 });
+    // Gills first, so they show under the cap rim instead of being clipped away
+    // inside it — which is where the first version hid them.
+    ctx.save();
+    ctx.strokeStyle = p.accent; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+    for (let i = 0; i < 9; i++) {
+      const gx = 26 + i * 6;
+      ctx.beginPath(); ctx.moveTo(gx, 40); ctx.lineTo(gx + (gx - 50) * 0.06, 52); ctx.stroke();
+    }
+    ctx.restore();
+    // A proper dome with a drooping rim, narrower than the old arc.
+    const cap = curve(ctx, [[24, 44], [26, 26], [50, 14], [74, 26], [76, 44], [62, 38], [50, 40], [38, 38]]);
+    form(ctx, cap, p, { shade: 0.5, lit: p.light });
+    ctx.save();
+    cap(); ctx.clip();
+    ctx.fillStyle = mix(p.base, p.line, 0.4);
+    ctx.beginPath(); ctx.ellipse(50, 44, 30, 9, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    weakSpot(ctx, 50, 62, 3.6, p);
+    eye(ctx, 44, 64, 4.8, { look: 0.1, angry: true });
+    eye(ctx, 58, 64, 4.8, { look: 0.1, angry: true });
+  },
+
+  /*
+   * Gustling — Gale, stage 1. A puff of moving air. Nothing here has a hard
+   * edge except the outline itself, and the trailing wisp is what says it is
+   * going somewhere rather than sitting there.
+   */
+  gustling(ctx, p) {
+    ctx.save();
+    ctx.strokeStyle = p.accent; ctx.lineWidth = 3.4; ctx.lineCap = 'round';
+    for (const [wy, len] of [[44, 26], [58, 20]]) {
+      ctx.beginPath();
+      ctx.moveTo(84, wy);
+      ctx.quadraticCurveTo(84 + len * 0.6, wy - 6, 84 + len, wy - 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+    const puff = curve(ctx, [[18, 52], [22, 32], [40, 22], [60, 24], [76, 36], [78, 56], [58, 68], [34, 66]]);
+    form(ctx, puff, p, { shade: 0.4, lit: p.light });
+    // a comma wing on each side, the shape that says "wind" fastest
+    for (const [wx, dir] of [[26, -1], [72, 1]]) {
+      form(ctx, curve(ctx, [[wx, 40], [wx + dir * 16, 26], [wx + dir * 10, 44]]), p,
+           { fill: mix(p.light, '#ffffff', 0.3), shade: 0.25, line: 2.2 });
+    }
+    weakSpot(ctx, 30, 42, 3.4, p);
+    eye(ctx, 42, 46, 5.6, { look: 0.3 });
+    eye(ctx, 60, 46, 5.6, { look: 0.3 });
+  },
+
+  /*
+   * Sparkmite — Volt, stage 1. A bright core with legs. The corona is drawn as
+   * spikes of two lengths: an even ring reads as a sun, and an uneven one reads
+   * as something crackling.
+   */
+  sparkmite(ctx, p) {
+    ctx.save();
+    ctx.strokeStyle = p.line; ctx.lineWidth = 3.2; ctx.lineCap = 'round';
+    for (let i = 0; i < 6; i++) {
+      const a = (i / 6) * Math.PI * 2 + 0.4;
+      ctx.beginPath();
+      ctx.moveTo(50 + Math.cos(a) * 16, 54 + Math.sin(a) * 14);
+      ctx.lineTo(50 + Math.cos(a) * 30, 54 + Math.sin(a) * 30);
+      ctx.stroke();
+    }
+    ctx.restore();
+    ctx.save();
+    ctx.strokeStyle = p.light; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      const len = i % 2 ? 34 : 24;
+      ctx.beginPath();
+      ctx.moveTo(50 + Math.cos(a) * 18, 54 + Math.sin(a) * 17);
+      ctx.lineTo(50 + Math.cos(a) * len, 54 + Math.sin(a) * len);
+      ctx.stroke();
+    }
+    ctx.restore();
+    form(ctx, oval(ctx, 50, 54, 20, 18), p, { shade: 0.4, lit: p.light });
+    ctx.save();
+    const glow = ctx.createRadialGradient(50, 54, 1, 50, 54, 15);
+    glow.addColorStop(0, 'rgba(255,246,190,0.95)');
+    glow.addColorStop(1, 'rgba(255,246,190,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(50, 54, 15, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    weakSpot(ctx, 50, 54, 5.5, p);
+    eye(ctx, 42, 50, 5, { look: 0.2 });
+    eye(ctx, 59, 50, 5, { look: 0.2 });
+  },
+
+  /*
+   * Shadelet — Gloom, stage 1. A shadow with an opinion. The bottom edge is
+   * ragged rather than closed, so it looks like it is soaking into the ground
+   * instead of resting on it, and the eyes are the only bright thing on it.
+   */
+  shadelet(ctx, p) {
+    const blob = curve(ctx, [
+      [26, 58], [28, 34], [50, 20], [72, 34], [74, 60],
+      [66, 72], [60, 62], [50, 78], [40, 62], [34, 74],
+    ]);
+    form(ctx, blob, p, { shade: 0.5, lit: p.light });
+    // a faint inner shadow, so it is not a flat cut-out
+    ctx.save();
+    blob(); ctx.clip();
+    ctx.fillStyle = mix(p.base, p.line, 0.55);
+    ctx.beginPath(); ctx.ellipse(62, 62, 26, 22, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // wisps coming off the top
+    ctx.save();
+    ctx.strokeStyle = p.accent; ctx.lineWidth = 2.6; ctx.lineCap = 'round';
+    for (const [wx, wy] of [[36, 26], [50, 18], [64, 26]]) {
+      ctx.beginPath();
+      ctx.moveTo(wx, wy);
+      ctx.quadraticCurveTo(wx + 4, wy - 10, wx - 2, wy - 16);
+      ctx.stroke();
+    }
+    ctx.restore();
+    eye(ctx, 41, 46, 6.4, { look: 0.2, glow: '#e9defb' });
+    eye(ctx, 60, 46, 6.4, { look: 0.2, glow: '#e9defb' });
+  },
+
+  /*
+   * Riftspawn — Rift, stage 1. Not an animal: a piece of somewhere else,
+   * held together badly. Everything is straight lines and hard angles, because
+   * every other creature here is curves and that is what makes this one wrong.
+   */
+  riftspawn(ctx, p) {
+    ctx.save();
+    ctx.strokeStyle = p.light; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+    ctx.globalAlpha = 0.75;
+    for (const [ax, ay, bx, by] of [[18, 30, 10, 18], [82, 34, 92, 20], [20, 70, 8, 80], [80, 72, 92, 84]]) {
+      ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke();
+    }
+    ctx.restore();
+    const shard = () => {
+      ctx.beginPath();
+      ctx.moveTo(50, 12); ctx.lineTo(78, 34); ctx.lineTo(72, 72);
+      ctx.lineTo(50, 88); ctx.lineTo(28, 72); ctx.lineTo(22, 34);
+      ctx.closePath();
+    };
+    form(ctx, shard, p, { shade: 0.5, lit: p.light });
+    // the seam, which is the weak point and the only thing holding it shut
+    ctx.save();
+    shard(); ctx.clip();
+    ctx.strokeStyle = mix(p.light, '#ffffff', 0.5); ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(50, 12); ctx.lineTo(44, 40); ctx.lineTo(56, 58); ctx.lineTo(50, 88);
+    ctx.stroke();
+    ctx.strokeStyle = mix(p.base, p.line, 0.5); ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(22, 34); ctx.lineTo(44, 40); ctx.moveTo(78, 34); ctx.lineTo(56, 42);
+    ctx.stroke();
+    ctx.restore();
+    weakSpot(ctx, 52, 50, 4.4, p);
+    eye(ctx, 40, 44, 5, { look: 0.3, angry: true, glow: '#f0d8fa' });
+    eye(ctx, 62, 46, 5, { look: 0.3, angry: true, glow: '#f0d8fa' });
+  },
 };
 
 /** Whether this species has been drawn yet, or still falls back to the model. */
