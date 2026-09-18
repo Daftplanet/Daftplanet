@@ -1663,8 +1663,15 @@ health and both act every turn, so you take roughly what you deal unless the
 type chart or a status move buys you an edge.
 
 Condition carries now: `hp` as a fraction of its own bar, `pp` spent per move.
-A party of three sustains about four fights on health and six on PP, so health
-is the binding constraint — which is right, because it is the legible one.
+Health is the binding constraint rather than PP, which is right because it is
+the legible one.
+
+> **Corrected in part 7.** This paragraph originally read "a party of three
+> sustains about four fights on health and six on PP". The four came from
+> dividing three full bars by a 75% cost — arithmetic, not a measurement, and
+> wrong: monsters faint outright rather than sliding evenly down a bar, so a
+> member lost early takes its whole remaining share with it. `PATROL=1` measures
+> **1.6 to 2.1**.
 
 ## Recovery, and why culling pays for it
 
@@ -1828,7 +1835,7 @@ They raise the win rate within a fight; the Deep Salve is what buys another
 fight. The two halves of the kit do different jobs, which is the argument for
 having both.
 
-## A number I had been quoting was never a measurement
+## Two numbers I had been quoting were never measurements
 
 Part 6 reported **3.2 battles per patrol, 1.8 won, 56%**, and that figure went
 into the pull request. The committed `PATROL=1` diagnostic measures **1.6 to 2.1
@@ -1843,6 +1850,12 @@ nothing in the repository could re-run it. In a project whose entire method is
 that claims get measured, a measurement that only ever existed in a terminal is
 worth exactly as much as a guess — and it is more dangerous than a guess,
 because it sounds like it was checked.
+
+The same paragraph carried a second one: "a party of three sustains about four
+fights". That was three full health bars divided by a 75% cost per fight, which
+is arithmetic dressed as a result. It is wrong for a reason the arithmetic
+cannot see — monsters faint outright rather than sliding evenly down a bar, so a
+member lost early takes its whole remaining share out of the patrol with it.
 
 Every headline number in the findings now has a committed diagnostic behind it
 or says plainly that it does not.
