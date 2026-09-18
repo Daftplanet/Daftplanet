@@ -2302,3 +2302,96 @@ Everything downstream of it inherits the error and looks rigorous doing it. The
 tables had a noise column, the comment cited a control, the control existed and
 ran — and the number connecting them had been reasoned about rather than
 measured. It took re-reading the diagnostic that was supposed to be the check.
+
+# Phase 4, part 12: what playing well is actually worth
+
+`AIM` measures what skill is worth in the arena — a 43-point spread between a
+steady hand and a walking thumb. `MOVES=1` measures it for one turn-based fight:
+status-first wins 52.5% of fair matchups against 35.2% for random, seventeen
+points. Nothing measured it across a **progression**, which is the version a
+player lives in, because a loss does not just cost a fight — it costs condition,
+which costs the rest of the patrol, which costs time.
+
+`PROGRESS=1` now runs the same progression under four move policies:
+
+| tier | policy | battles | game hours | vs best | won | faints |
+|---|---|---|---|---|---|---|
+| 1 → 2 | status first | 26.2 | 4.4h | 1.00x | 59% | 19.8 |
+| 1 → 2 | best damage | 27.7 | 4.7h | 1.08x | 58% | 21.1 |
+| 1 → 2 | biggest power | 26.5 | 4.7h | 1.08x | 56% | 21.7 |
+| 1 → 2 | **random** | 23.8 | 4.5h | **1.03x** | 52% | 22.0 |
+| 2 → 3 | status first | 38.1 | 8.3h | 1.00x | 56% | 27.3 |
+| 2 → 3 | best damage | 34.4 | 9.0h | 1.09x | 51% | 30.0 |
+| 2 → 3 | biggest power | 35.6 | 9.5h | 1.15x | 46% | 32.6 |
+| 2 → 3 | **random** | 37.3 | 9.2h | **1.11x** | 53% | 30.2 |
+
+**Time to evolve is very nearly skill-independent.** Pressing buttons at random
+costs 3% at the first evolution and 11% at the second. Seventeen points of
+per-fight advantage collapse to almost nothing over a progression.
+
+## Why, and the perverse bit
+
+Two reasons, and the second is the uncomfortable one.
+
+Losing still teaches: `escaped` is worth 0.35 of a win and `wiped` 0.25, by
+design — "losing still teaches something, and deliberately teaches more than
+running away, because you stayed in it."
+
+And **losing ends the patrol, which sends you home, which is where half the
+Study comes from at tier 1.** Part 10 measured that split at 51/49. A weak player
+loses faster, goes home sooner, and the passive channel fills the gap. That is
+why `random` at tier 1 reaches the threshold in *fewer battles* than playing
+well — 23.8 against 26.2. It is not better play; it is fewer, worse patrols with
+more recovery time between them, and recovery pays.
+
+## Where skill does pay
+
+On the axis it should: **faints**. Status-first loses 19.8 monsters to the first
+evolution and 27.3 to the second; biggest-power loses 21.7 and 32.6. At tier 2
+that is 20% more faints, and every faint is a monster out of the field — Essence
+to mend, or an hour of the clock to wait out.
+
+So the systems built in parts 6 and 7 are doing their job: a loss costs condition,
+condition costs Essence or time, and the field kit exists to soften that. What is
+insensitive is the **Study clock**, and it is insensitive because it is
+half a *time* clock. That is a defensible design — evolution is a
+collection goal measured in weeks, not a combat reward — but the pull request
+implied battle quality drove progression, and it does not.
+
+## The rejected fix, rejected again for a second reason
+
+Part 10 turned down "a hurt monster studies at `hp` of the usual rate" because it
+nearly doubles the first evolution. The obvious hope was that it would also make
+skill matter. Measured, it barely does:
+
+| | as shipped | hurt monsters study less |
+|---|---|---|
+| tier 1 spread | 1.00x – 1.08x | 1.00x – 1.12x |
+| tier 2 spread | 1.00x – 1.15x | 1.00x – 1.18x |
+
+Three points of extra spread for double the time to the first milestone. The
+decision stands, now on two independent grounds rather than one.
+
+## And I walked into the same trap I documented
+
+The first run of this table printed **1.00x for all four policies, identical to
+the decimal** — which is the exact signature of correction #1 in this document,
+where "identical to the decimal" meant the measurement was rigged rather than
+the effects being equal.
+
+It was rigged again, and more stupidly. I had threaded the policy through the
+harness and replaced the line that calls it — in the wrong diagnostic. `FIELD`
+and `PROGRESS` contained character-for-character identical lines, the edit landed
+on `FIELD`, and `PROGRESS` went on calling status-first for every policy while
+`FIELD` referenced a variable that did not exist in its scope and crashed outright.
+
+Two things saved it, and neither was care:
+
+1. **The result was too clean.** Four policies agreeing to the decimal is not a
+   finding, it is a smell, and this document had already named it once.
+2. **Running the other diagnostic.** `FIELD` was broken loudly and immediately —
+   but only for someone who ran it. It had been green minutes earlier.
+
+The lesson is small and practical: an edit applied by matching a line of code can
+land in the wrong function when two functions share a line, and nothing will say
+so. Assert the match count, or match on something unique to the target.

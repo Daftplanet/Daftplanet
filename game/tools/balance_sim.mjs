@@ -1156,11 +1156,12 @@ if (process.env.PROGRESS) {
   };
 
   /** One life, from zero Study to an evolution threshold, played as patrols. */
-  function raise(partyIds, wildPool, rank, threshold, seed0) {
+  function raise(partyIds, wildPool, rank, threshold, seed0, pick = statusFirst) {
     const rng = mulberry32(seed0);
     const party = partyIds.map(() => ({ hp: 1, pp: null, study: 0 }));
     const lead = party[0];
     let battles = 0, patrols = 0, minutes = 0, fromBattle = 0, fromPassive = 0, guard = 0;
+    let wins = 0, faints = 0;
 
     while (lead.study < threshold && guard++ < 4000) {
       const fit = party.map((r, i) => [r, i]).filter(([r]) => r.hp > 0);
@@ -1178,10 +1179,12 @@ if (process.env.PROGRESS) {
       while (!b.outcome && g++ < 200) {
         const m = activeMon(b);
         if (!m || m.fainted) break;
-        takeTurn(b, { kind: 'move', index: statusFirst(b, m) });
+        takeTurn(b, { kind: 'move', index: pick(b, m, rng) });
       }
       if (!b.outcome) b.outcome = 'escaped';
       battles += 1;
+      if (b.outcome === 'defeated' || b.outcome === 'caught') wins += 1;
+      faints += b.team.filter((c) => c.fainted).length;
       // Time passes during a fight too, so the passive channel is credited for
       // it. Leaving it out flattered the active share.
       minutes += MINUTES_PER_BATTLE;
@@ -1223,8 +1226,35 @@ if (process.env.PROGRESS) {
         }
       }
     }
-    return { battles, patrols, minutes, fromBattle, fromPassive };
+    return { battles, patrols, minutes, fromBattle, fromPassive, wins, faints };
   }
+
+  /*
+   * How much does playing WELL matter, measured over a whole progression rather
+   * than one fight?
+   *
+   * MOVES=1 answers the per-fight version: status-first wins 52.5% of fair
+   * matchups against 35.2% for random, a 17-point spread. AIM answers it for the
+   * arena. Nothing answered it for the turn battle across a progression, which
+   * is the version a player experiences — because losses do not just cost a
+   * fight, they cost condition, which costs the rest of the patrol, which is
+   * time. A game where a weak player takes three times as long to reach the
+   * first evolution is punishing them compoundingly, and that is an onboarding
+   * hazard rather than a difficulty curve.
+   */
+  const POLICIES = {
+    'status first': statusFirst,
+    'best damage ': bestDamage,
+    'biggest power': (b, mine) => {
+      let bi = 0, bp = -1;
+      mine.moves.forEach((mv, i) => { if (canUse(mine, i) && mv.power > bp) { bp = mv.power; bi = i; } });
+      return bi;
+    },
+    'random      ': (b, mine, rng) => {
+      const ok = mine.moves.map((mv, i) => i).filter((i) => canUse(mine, i));
+      return ok[Math.floor(rng() * ok.length)] ?? 0;
+    },
+  };
 
   const TIERS = [
     { label: 'stage 1 -> 2  (400 Study)', party: ['sootpup', 'pebblit', 'brinelet'], rank: 3, need: 400 },
@@ -1243,6 +1273,26 @@ if (process.env.PROGRESS) {
       + `${(avg((r) => r.minutes) / 60).toFixed(1).padStart(12)} `
       + `${`${((fb / (fb + fp)) * 100).toFixed(0)}% / ${((fp / (fb + fp)) * 100).toFixed(0)}%`.padStart(24)}`);
   }
+
+  console.log('\nWHAT PLAYING BADLY COSTS — the same progression, by move policy');
+  console.log('tier                 policy          battles   game hours   vs best     won   faints');
+  for (const t of TIERS) {
+    const pool = t.party.map((id) => byId[id]).filter(Boolean);
+    let bestHours = null;
+    for (const [name, pick] of Object.entries(POLICIES)) {
+      const runs = Array.from({ length: Math.max(20, Math.round(N / 2)) }, (_, i) =>
+        raise(t.party.filter((id) => byId[id]), pool, t.rank, t.need, i * 104729 + 7, pick));
+      const avg = (f) => runs.reduce((a, r) => a + f(r), 0) / runs.length;
+      const hours = avg((r) => r.minutes) / 60;
+      if (bestHours === null) bestHours = hours;
+      console.log(`${t.label.slice(0, 12).padEnd(20)} ${name}  ${avg((r) => r.battles).toFixed(1).padStart(7)} `
+        + `${hours.toFixed(1).padStart(12)} ${`${(hours / bestHours).toFixed(2)}x`.padStart(9)}`
+        + `${`${((avg((r) => r.wins) / avg((r) => r.battles)) * 100).toFixed(0)}%`.padStart(8)}`
+        + `${avg((r) => r.faints).toFixed(1).padStart(9)}`);
+    }
+  }
+  console.log('\nTime to evolve is only one axis. `faints` is the one skill should pay on:');
+  console.log('every faint is a monster out of the field, and Essence to mend or an hour to wait.');
   console.log('\nsanctuary.js claims active play beats idling about five to one. If the passive');
   console.log('share is near half, the patrol limit repealed that without anyone noticing.');
 }
