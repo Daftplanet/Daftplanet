@@ -338,6 +338,58 @@ ok('the map paints and credits its source',
    drew.loaded >= 4 && drew.colours > 6 && /OpenStreetMap/.test(drew.attribution),
    `${drew.loaded} tiles · ${drew.colours} distinct colours sampled · "${drew.attribution}"`);
 
+/*
+ * The Google basemap is optional, and "optional" has to mean the game is
+ * identical without it. This suite runs with no key at all — the ordinary case
+ * for anyone who clones this — so it is also the case where a regression would
+ * hide: a hard dependency on a third party's script would show up here as a
+ * blank map rather than as an error.
+ *
+ * Nothing below touches the network. Pointing a check at Google would make it
+ * fail for reasons that are not this code's, which is the same rule the fake
+ * tile server exists to honour.
+ */
+const noKey = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const c = document.createElement('canvas');
+  c.width = 400; c.height = 300;
+  const g = c.getContext('2d');
+  r.drawPatrol(g, r.patrol, { dpr: 1 }, r.speciesById ?? {});
+  const px = g.getImageData(0, 0, 400, 300).data;
+  const seen = new Set();
+  for (let i = 0; i < px.length; i += 4 * 137) seen.add(`${px[i]},${px[i + 1]},${px[i + 2]}`);
+  return {
+    basemap: r.basemap,
+    mapped: document.getElementById('gmap').parentElement.classList.contains('stage--mapped'),
+    hidden: document.getElementById('gmap').hidden,
+    colours: seen.size,
+  };
+});
+ok('with no Maps key the game draws its own city and nothing is missing',
+   noKey.basemap === null && noKey.hidden === true && noKey.mapped === false && noKey.colours > 6,
+   `no basemap · the container stays hidden · the canvas still paints ${noKey.colours} colours`
+   + ' — an optional dependency that is not optional is just a dependency');
+
+/*
+ * And a key must not linger in the address bar. It is saved for next time and
+ * stripped, so it cannot be shoulder-read, screenshotted into a bug report, or
+ * pasted into a chat along with the URL.
+ */
+const keyHandling = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const was = location.href;
+  history.replaceState(null, '', `${location.pathname}?gmaps_key=TEST-NOT-A-REAL-KEY&zoom=3`);
+  const got = r.configuredKey();
+  const after = location.search;
+  try { localStorage.removeItem('riftborn.gmaps.key'); } catch { /* ignore */ }
+  history.replaceState(null, '', was);
+  return { key: got.key, after };
+});
+ok('a Maps key is remembered and taken straight back out of the URL',
+   keyHandling.key === 'TEST-NOT-A-REAL-KEY'
+   && !keyHandling.after.includes('gmaps_key') && keyHandling.after.includes('zoom=3'),
+   `read the key, left "${keyHandling.after}" in the address bar — other parameters survive, the key does not`);
+
 // --- 14. phone layout
 await page.setViewportSize({ width: 390, height: 844 });
 await page.evaluate(() => window.__riftborn.show('patrol'));

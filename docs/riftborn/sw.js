@@ -10,7 +10,7 @@
  * with no way to tell — so it is generated rather than remembered.
  */
 
-const VERSION = '8c0a2dc16009';
+const VERSION = 'eefc70710512';
 const CACHE = `riftborn-${VERSION}`;
 
 const SHELL = [
@@ -26,6 +26,7 @@ const SHELL = [
   'js/world.js',
   'js/patrol.js',
   'js/city.js',
+  'js/gmap.js',
   'js/profile.js',
   'js/sanctuary.js',
   'js/report.js',

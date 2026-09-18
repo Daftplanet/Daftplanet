@@ -658,6 +658,33 @@ select {
 #locate-where { color: var(--ink-faint); font-variant-numeric: tabular-nums; margin-left: auto; }
 #btn-locate[data-active="true"] { border-color: var(--restraint); color: var(--restraint); }
 /* In manual mode the map is a drag handle, so say so with the cursor. */
+/*
+ * The Google basemap lies underneath the patrol canvas and matches its box. The
+ * canvas keeps its own background unless the basemap is live, at which point it
+ * has to go transparent or it would hide the streets it is drawn over.
+ */
+#gmap {
+  position: absolute;
+  inset: 0;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+#gmap[hidden] { display: none; }
+.stage--mapped #map { background: transparent; border-color: transparent; }
+
+/* A monster standing on the real map: the sprite, and its name under it. */
+.pin { display: flex; flex-direction: column; align-items: center; pointer-events: none; }
+.pin canvas { display: block; background: none; border: 0; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.55)); }
+.pin__name {
+  margin-top: 2px; padding: 1px 5px; border-radius: 3px;
+  font: 11px/1.3 ui-monospace, Menlo, Consolas, monospace;
+  color: #e6e9ed; background: rgba(14,16,19,0.72); white-space: nowrap;
+}
+.pin__name[data-touched="true"] { color: #dfa0f0; }
+
+#map-note { color: var(--warn, #d9c04a); }
+
 #map { cursor: grab; }
 #map:active { cursor: grabbing; }
 

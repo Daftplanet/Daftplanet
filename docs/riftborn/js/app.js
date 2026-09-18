@@ -18,6 +18,7 @@ import { createProfile, AMMO_COST, ITEM_COST, RANK_XP, WEAPON_UNLOCK, RESEARCH_C
 import { drawFieldReport, toPng } from './report.js';
 import { buildModel, modelFor, fitModel, spriteFor, clearVoxelCache, ELEMENT_RAMP, setBiomeCoats, biomeCoat } from './voxel.js';
 import { TILT, structuresOn, drawStructures, drawTileSkyline, standsUp } from './city.js';
+import { configuredKey, createGoogleBasemap, forgetKey } from './gmap.js';
 import {
   createBattle, makeCombatant, takeTurn, options, catchChance,
   levelOf, wildLevel, activeMon, movesFor, computeMoveDamage, remaining, concealed,
@@ -26,7 +27,7 @@ import {
 import {
   buildPool, apexForecast, riftForCell, placementFits, inTimeWindow, weatherIs, biomeAt,
   PLACEMENT_VOCABULARY, WEATHER, RIFT_RANK, RIFT_RADIUS_M, TILE_M, visibleSpawns, BIOMES,
-  setRiftTouchedRate,
+  setRiftTouchedRate, DETECT_M, ENGAGE_M,
 } from './world.js';
 import { blockers, escortAbility, studyFromBattle, studyAsMinutes } from './sanctuary.js';
 import {
@@ -284,6 +285,75 @@ function boot(data) {
     el.hidden = false;
     clearTimeout(flashTimer);
     flashTimer = setTimeout(() => { el.hidden = true; }, 4000);
+  }
+
+  /*
+   * The real basemap, when there is a key for one.
+   *
+   * Null the rest of the time, and every caller checks — so the game runs
+   * identically with no key, no network, or a Google outage, which is the only
+   * acceptable shape for a dependency in a game you play outdoors.
+   */
+  let basemap = null;
+
+  async function initBasemap() {
+    const { key, mapId } = configuredKey();
+    if (!key) return;
+    basemap = await createGoogleBasemap({ key, mapId, container: $('gmap') });
+    if (!basemap) return;
+    $('gmap').hidden = false;
+    $('gmap').parentElement.classList.add('stage--mapped');
+    /*
+     * Say what is missing, where somebody will see it. A flat map on a phone
+     * looks like a bug in the game; it is almost always a setting in a console,
+     * and the difference between those two is twenty minutes of the wrong
+     * search. The console warning alone is no good — nobody opens a console on
+     * a walk.
+     */
+    const advice = basemap.advice;
+    if (advice) {
+      console.warn(`[riftborn] Google basemap: ${advice}`);
+      $('map-note').textContent = advice;
+      $('map-note').hidden = false;
+      $('map-note-sep').hidden = false;
+    }
+  }
+
+  /** One marker per spawn: the monster, and its name when you are close enough. */
+  function markerContent(s) {
+    const sp = speciesById[s.speciesId];
+    const wrap = document.createElement('div');
+    wrap.className = 'pin';
+    const px = Math.round((SIZE_PIN[sp.size] ?? 8) * 3.4);
+    const sprite = spriteFor(sp, px, 0.125, {
+      riftTouched: !!s.riftTouched, biome: s.biome ?? null,
+    });
+    const img = document.createElement('canvas');
+    img.width = sprite.width; img.height = sprite.height;
+    img.style.width = `${px}px`; img.style.height = `${px}px`;
+    img.getContext('2d').drawImage(sprite, 0, 0);
+    wrap.appendChild(img);
+    const pack = s.packSize ?? 1;
+    const tag = document.createElement('span');
+    tag.className = 'pin__name';
+    tag.textContent = pack > 1 ? `${sp.name} ×${pack}` : sp.name;
+    if (s.riftTouched) tag.dataset.touched = 'true';
+    wrap.appendChild(tag);
+    return wrap;
+  }
+
+  const SIZE_PIN = { mote: 5, whelp: 7, strider: 9, brute: 12, colossus: 16, titan: 20 };
+
+  function updateBasemap() {
+    const detect = DETECT_M
+      * (WEATHER[patrol.weather ?? 'overcast']?.detectionScale ?? 1)
+      * (1 + (profile.bonus?.('detection_radius') ?? 0));
+    // Our world Y grows southward; a compass heading is clockwise from north.
+    const headingDeg = (Math.atan2(Math.cos(patrol.heading), -Math.sin(patrol.heading))
+                        * 180 / Math.PI + 360) % 360;
+    basemap.follow(patrol, { heading: headingDeg });
+    basemap.rings(patrol, { detectM: detect, engageM: ENGAGE_M });
+    basemap.spawns(patrol.spawns, markerContent);
   }
 
   function renderPatrolHud() {
@@ -2002,7 +2072,14 @@ function boot(data) {
 
     try {
       if (view === 'patrol') {
-        drawPatrol(mapCtx, patrol, mapView, speciesById);
+        // With a real basemap the ground, the monsters and the rings all belong
+        // to Google, and the canvas has nothing left to draw.
+        if (basemap) {
+          updateBasemap();
+          mapCtx.clearRect(0, 0, mapCanvas.width, mapCanvas.height);
+        } else {
+          drawPatrol(mapCtx, patrol, mapView, speciesById);
+        }
         renderPatrolHud();
       } else if (view === 'fight' && fight) {
         // Before the drawing, and in its own try: a fight that has ended must
@@ -2042,10 +2119,19 @@ function boot(data) {
     return option ? blockers(resident, species, option, ctx) : ['fully evolved'];
   };
 
+  /*
+   * Off it goes, without being waited on. The game is fully playable before this
+   * resolves and fully playable if it never does, so blocking the boot on a
+   * third party's script would be trading the one for the other.
+   */
+  initBasemap().catch((err) => console.warn('[riftborn] basemap init failed', err));
+
   window.__riftborn = {
     profile, patrol, speciesById, data,
     get view() { return view; },
     get fight() { return fight; },
+    get basemap() { return basemap; },
+    initBasemap, forgetMapKey: forgetKey, configuredKey,
     get frames() { return frame.count ?? 0; },
     show, startFight, startBattle, renderSanctuary, renderContracts, renderParty,
     /*

@@ -60,9 +60,14 @@
       <span id="locate-state">Drag the marker to move · turn on location to walk for real</span>
       <span class="sep">·</span>
       <span id="locate-where">—</span>
+      <span class="sep" id="map-note-sep" hidden>·</span>
+      <span id="map-note" hidden></span>
     </div>
 
     <div class="stage">
+      <!-- The real basemap, when a Maps key is configured. It sits behind the
+           canvas, which then draws nothing but the parts Google does not own. -->
+      <div id="gmap" hidden aria-hidden="true"></div>
       <canvas id="map" width="960" height="640" aria-label="Patrol map"></canvas>
 
       <div class="engage" id="engage" hidden>
