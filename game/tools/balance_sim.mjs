@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-import { loadLoadout } from '../../docs/riftborn/js/rules.js';
+import { loadLoadout, rollFieldDrop } from '../../docs/riftborn/js/rules.js';
 import { escortAbility } from '../../docs/riftborn/js/sanctuary.js';
 import { createFight, step, weakPointPositions, assistMiss, ARENA } from '../../docs/riftborn/js/game.js';
 import { visibleSpawns, buildPool, TILE_M, setRiftTouchedRate } from '../../docs/riftborn/js/world.js';
@@ -935,11 +935,11 @@ if (process.env.PATROL) {
   };
 
   // A patrol: fight until every member is down, carrying condition between fights.
-  const patrol = (seed, { salves = 0, deeps = 0 }) => {
+  const patrol = (seed, { salves = 0, deeps = 0, drops = false }) => {
     const rng = mulberry32(seed);
     // The party as resident records — the same shape profile.js keeps.
     const party = partyIds.map(() => ({ hp: 1, pp: null }));
-    let battles = 0, won = 0, usedSalve = 0, usedDeep = 0;
+    let battles = 0, won = 0, usedSalve = 0, usedDeep = 0, dropped = 0;
 
     for (let guard = 0; guard < 40; guard++) {
       // Between fights: patch up whoever is worst, if there is anything to use.
@@ -960,6 +960,7 @@ if (process.env.PATROL) {
       const b = createBattle({ data, team, wilds: [wild], rng });
 
       let stock = salves, g = 0;
+      const startedWith = stock;
       while (!b.outcome && g++ < 200) {
         // The engine sends out the next fit one itself when the lead goes down,
         // and calls the battle 'wiped' when there is nobody left, so this loop
@@ -985,10 +986,29 @@ if (process.env.PATROL) {
       }
       battles += 1;
       if (b.outcome === 'defeated' || b.outcome === 'caught') won += 1;
+      salves = stock;                      // unspent salves carry to the next fight
+      /*
+       * A resolved encounter can hand you something. This is the whole question
+       * the drop table has to answer: does what the world gives you refill the
+       * kit faster than a patrol spends it? If it does, "go home and mend"
+       * becomes "keep walking", and the condition system stops meaning anything.
+       */
+      if (drops && (b.outcome === 'defeated' || b.outcome === 'caught')) {
+        const got = rollFieldDrop(data.ammo.field_drops, wildSp.tier ?? 1, rng);
+        if (got) {
+          dropped += 1;
+          if (got === 'field_salve') salves += 1;
+          else if (got === 'deep_salve') deeps += 1;
+          // focus_draught and rouse_vial are not modelled by this loop: it does
+          // not run out of PP and it does not revive. Counting them in `dropped`
+          // and spending neither is the honest version — it would overstate the
+          // effect to pretend every drop was one the patrol could use.
+        }
+      }
       // Condition goes home with them, which is what makes this a patrol.
       fit.forEach(([r], k) => { const c = conditionOf(team[k]); r.hp = c.hp; r.pp = c.pp; });
     }
-    return { battles, won, usedSalve, usedDeep };
+    return { battles, won, usedSalve, usedDeep, dropped };
   };
 
   const KITS = {
@@ -996,19 +1016,25 @@ if (process.env.PATROL) {
     '2 field salves       ': { salves: 2, deeps: 0 },
     '1 deep salve         ': { salves: 0, deeps: 1 },
     '2 salves + 2 deep    ': { salves: 2, deeps: 2 },
+    // The two rows the drop table has to answer for: what the world alone gives
+    // a player who never visits a bench, and whether drops on top of a full kit
+    // run the patrol away from the limit.
+    'nothing + drops      ': { salves: 0, deeps: 0, drops: true },
+    '2+2 kit + drops      ': { salves: 2, deeps: 2, drops: true },
   };
   console.log(`\nPATROL LENGTH — party of ${partyIds.length} vs ${stage2.length} stage-2 species, ${N} patrols each`);
-  console.log('field kit               battles   won    win%   items used');
+  console.log('field kit               battles   won    win%   items used  dropped');
   let base = 0;
   for (const [name, kit] of Object.entries(KITS)) {
-    let battles = 0, won = 0, items = 0;
+    let battles = 0, won = 0, items = 0, dropped = 0;
     for (let i = 0; i < N; i++) {
       const r = patrol(i * 7919 + 13, kit);
-      battles += r.battles; won += r.won; items += r.usedSalve + r.usedDeep;
+      battles += r.battles; won += r.won; items += r.usedSalve + r.usedDeep; dropped += r.dropped ?? 0;
     }
     if (!base) base = battles / N;
     console.log(`${name} ${(battles / N).toFixed(1).padStart(7)} ${(won / N).toFixed(1).padStart(6)} `
-      + `${`${((won / battles) * 100).toFixed(0)}%`.padStart(7)} ${(items / N).toFixed(2).padStart(12)}`);
+      + `${`${((won / battles) * 100).toFixed(0)}%`.padStart(7)} ${(items / N).toFixed(2).padStart(12)}`
+      + `${(dropped / N).toFixed(2).padStart(9)}`);
   }
   console.log('\nA patrol should get LONGER with a kit, not endless. If the bottom row runs away');
   console.log('from the top one, the field kit has cancelled the limit the whole system exists to create.');

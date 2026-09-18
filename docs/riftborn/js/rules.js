@@ -286,3 +286,32 @@ export function rollSpecimen(species, sizeDef, rng) {
   const heightM = Math.max(lo, Math.min(hi, mean * (1 + z * HEIGHT_SIGMA)));
   return { heightM, percentile: heightPercentile(species, sizeDef, heightM) };
 }
+
+/**
+ * What a resolved encounter hands you, beyond materials and a Codex line.
+ *
+ * Pure and seeded, so the headless diagnostics can roll exactly what the game
+ * rolls. That matters more than usual here: the rate is the whole design, and a
+ * rate measured against a different roll than the one that ships is not a
+ * measurement of anything.
+ *
+ * Returns an item id or null. The caller decides what to do with it, because
+ * this file has no opinion about where a player keeps things.
+ */
+export function rollFieldDrop(drops, tier, rng) {
+  if (!drops?.weights) return null;
+  const chance = drops.chance_by_tier?.[String(tier)] ?? drops.chance_by_tier?.['1'] ?? 0;
+  if (rng() >= chance) return null;
+
+  const entries = Object.entries(drops.weights);
+  const total = entries.reduce((sum, [, w]) => sum + w, 0);
+  if (total <= 0) return null;
+  // Walk the weights rather than normalising: the table is authored as whole
+  // numbers so somebody reading the data can see the ratios without dividing.
+  let roll = rng() * total;
+  for (const [id, w] of entries) {
+    roll -= w;
+    if (roll < 0) return id;
+  }
+  return entries[entries.length - 1][0];
+}

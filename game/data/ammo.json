@@ -320,5 +320,20 @@
       "revives_to": 0.5,
       "note": "Brings one back from down, at half. The only way to un-lose a monster mid-patrol, and never mid-fight."
     }
-  ]
+  ],
+  "field_drops": {
+    "$comment": "Field items are craftable at the bench, and until now that was the ONLY way to get one: nothing in the world handed you a salve for playing. A kit you can only buy is a kit most players never carry, which makes the whole field-item system something you read about rather than use.\n\nTwo constraints decided these numbers rather than taste.\n\nFirst, drops must not cancel the patrol limit. FIELD=1 measured that a generous heal is worth +15 points of win rate and makes the dumbest policy the best one; PATROL=1 measured that a full kit buys about one extra battle. A drop rate that refills the kit faster than a patrol spends it turns 'go home and mend' into 'keep walking', which is the one thing the condition system exists to prevent. Measured, the patrol limit turned out NOT to be the binding constraint: at five times these rates a patrol still runs 2.0 battles against 1.9 with nothing, because drops arrive at the rate the patrol ends and a patrol is only about two battles long. What drops really change is the economy between patrols, so the rate is set against that instead — about one kit's worth (four items) per evolution milestone, which PROGRESS=1 puts at 7.4 patrols. The world supplies roughly one kit per milestone and the bench supplies the rest.\n\nSecond, culling and cataloguing drop at the SAME rate. The design has always held that both paths are legitimate — culling pays today, cataloguing pays in three weeks — and a loot table that favours one would quietly settle that argument in a way no document agreed to.",
+    "chance_by_tier": {
+      "1": 0.45,
+      "2": 0.55,
+      "3": 0.7
+    },
+    "$weights_note": "Which item, once something drops. Deep Salve is the one that extends a patrol, so it is deliberately the scarce one; Rouse Vial un-loses a monster and is scarcer still.",
+    "weights": {
+      "field_salve": 58,
+      "focus_draught": 26,
+      "deep_salve": 13,
+      "rouse_vial": 3
+    }
+  }
 }

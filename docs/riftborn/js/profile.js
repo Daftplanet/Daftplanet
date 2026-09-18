@@ -7,7 +7,7 @@
  */
 
 import { passiveBonuses, studyRate, STUDY_PER_KM_WALKED, FEED_COST, FEED_STUDY } from './sanctuary.js';
-import { speciesHeight } from './rules.js';
+import { speciesHeight, rollFieldDrop } from './rules.js';
 import { escortAbility } from './sanctuary.js';
 
 const KEY = 'riftborn.profile.v2';
@@ -416,6 +416,31 @@ export function createProfile(content) {
       } else {
         if (outcome === 'escaped') state.stats.escapes += 1;
         if (this._rank(e.state) < this._rank('encountered')) e.state = 'encountered';
+      }
+
+      /*
+       * Something from the field.
+       *
+       * The kit was craftable and nothing else, so it was a system most players
+       * would read about rather than carry. This is the other half: a resolved
+       * encounter can hand you one.
+       *
+       * Culling and cataloguing drop at the same rate on purpose. The design has
+       * always held both paths legitimate — culling pays today, cataloguing pays
+       * in three weeks — and a loot table favouring one would settle that
+       * argument without anyone agreeing to it.
+       *
+       * It does not threaten the patrol limit, and that is measured rather than
+       * hoped: at five times these rates a patrol still runs 2.0 battles against
+       * 1.9 with nothing, because drops arrive at the rate the patrol ends.
+       */
+      if (outcome === 'culled' || outcome === 'catalogued') {
+        const got = rollFieldDrop(content.fieldDrops, tier, Math.random);
+        if (got) {
+          state.items = state.items ?? {};
+          state.items[got] = (state.items[got] ?? 0) + 1;
+          e.lastDrop = got;
+        }
       }
 
       state.codex[species.id] = e;

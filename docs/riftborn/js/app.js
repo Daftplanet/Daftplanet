@@ -7,7 +7,7 @@
  * you have never seen — which need catalogueing too.
  */
 
-import { loadLoadout, applyMods, modUnlocked, speciesHeight, rollSpecimen, heightPercentile } from './rules.js';
+import { loadLoadout, applyMods, modUnlocked, speciesHeight, rollSpecimen, heightPercentile, rollFieldDrop } from './rules.js';
 import {
   createFight, step, readouts, activeStatuses, useEscort, applyLethal, cycleLock,
   assistPhase, assistMiss, ringSeconds, weakPointPositions, WEAPON_SWAP_SECONDS,
@@ -144,6 +144,7 @@ function boot(data) {
     bonusCap: data.elements.sanctuary_bonus_cap_per_element ?? 0.15,
     battleRules: data.elements.battle_rules,
     fieldItems: data.ammo.field ?? [],
+    fieldDrops: data.ammo.field_drops ?? null,
   });
 
   const mapCanvas = $('map');
@@ -2131,7 +2132,7 @@ function boot(data) {
     get fight() { return fight; },
     get basemap() { return basemap; },
     initBasemap, forgetMapKey: forgetKey, configuredKey,
-    paintInto, hasArt, drawnCount, spriteFor,
+    paintInto, hasArt, drawnCount, spriteFor, rollFieldDrop,
     get frames() { return frame.count ?? 0; },
     show, startFight, startBattle, renderSanctuary, renderContracts, renderParty,
     /*

@@ -2838,3 +2838,57 @@ invalidates them.** Nothing went red. Fourteen browser suites passed throughout,
 because "is this fight winnable at the rate it was designed for" is not a
 question a browser suite asks. Only the diagnostic that was built to ask it
 noticed, and only because it got re-run.
+
+# Phase 4, part 19: a kit you could only buy
+
+Field items were craftable at the bench and obtainable in no other way. Nothing
+in the world handed you a salve for playing, which makes the whole field-item
+system something a player reads about rather than carries — and the half of it
+that exists so a wrecked party two miles from home is a hunting problem rather
+than a walk was the half nobody would ever have in their bag.
+
+So a resolved encounter can now drop one. Two things decided the numbers, and
+neither was taste.
+
+## Culling and cataloguing drop at the same rate
+
+The design has held from the first document that both paths are legitimate —
+culling pays today, cataloguing pays in three weeks. A loot table that favoured
+one would have settled that argument quietly, in a data file, without any
+document agreeing to it. They pay equally, and the check asserts both do.
+
+## The patrol limit turned out not to be the constraint
+
+The obvious worry was that drops refill the kit faster than a patrol spends it,
+which would turn "go home and mend" into "keep walking" and repeal the condition
+system. `FIELD=1` had already measured that a generous heal is worth +15 points
+and makes the dumbest policy the best one, so the fear was reasonable.
+
+It is also wrong, and the sweep says so:
+
+| drop rate | patrol, nothing | patrol, drops only | items dropped |
+|---|---|---|---|
+| base | 1.9 battles | 1.9 | 0.25 |
+| x2 | 1.9 | 1.9 | 0.42 |
+| x3 | 1.9 | 1.9 | 0.65 |
+| **x5** | 1.9 | **2.0** | 0.72 |
+
+At five times the rate the patrol moves by a tenth of a battle. The reason is
+structural rather than lucky: **drops arrive at the rate the patrol ends.** A
+patrol is about two battles and wins fewer than one, so there is no room to
+accumulate anything inside one. What drops actually change is the economy
+*between* patrols, which this diagnostic does not model, because `patrol()`
+starts fresh every time.
+
+That reframed the question, and the rate is set against the real constraint
+instead: **about one kit's worth per evolution milestone.** A kit is four items
+and `PROGRESS=1` puts a first evolution at 7.4 patrols, so the target is roughly
+0.54 items a patrol. Measured at the shipped rates, a player who never visits a
+bench gets 0.39 a patrol and one running a full kit gets 0.67 — the world
+supplies about one kit per milestone and the bench supplies the rest.
+
+The lesson is the one about controls, pointed at a fear rather than a finding:
+**the thing you are afraid of breaking is worth measuring before you tune around
+it.** Half an hour of sweeping said the patrol limit was never at risk, and the
+rate that came out the other side is roughly twice what caution would have
+picked.

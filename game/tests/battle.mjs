@@ -1120,6 +1120,61 @@ ok('out of battle the deep salve works, and a Rouse Vial is the only way back fr
    `10% → ${Math.round(field.afterDeep * 100)}% · a revive on a standing monster is refused and not spent`
    + ` · down → ${Math.round(field.afterRevive * 100)}% and fit to go out again`);
 
+/*
+ * The world hands you a kit, not just the bench.
+ *
+ * Craftable-only meant the field items were a system most players would read
+ * about rather than carry. The roll is seeded and pure, so this can ask it
+ * directly for the rate, and then ask the GAME whether a drop actually reaches
+ * the bag — which is the half that the rift-touched cosmetic got wrong, being
+ * tracked everywhere and surfaced nowhere.
+ */
+const drops = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const table = r.data.ammo.field_drops;
+
+  // Rate, over enough rolls to mean something, with a seeded generator.
+  let seed = 12345;
+  const rng = () => { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; };
+  const counts = {};
+  const N = 4000;
+  for (let i = 0; i < N; i++) {
+    const got = r.rollFieldDrop(table, 2, rng);
+    if (got) counts[got] = (counts[got] ?? 0) + 1;
+  }
+  const total = Object.values(counts).reduce((a, b) => a + b, 0);
+
+  // And the real path: resolve an encounter and see whether the bag moved.
+  const sp = r.data.monsters.monsters.find((m) => !m.apex && m.stage === 2);
+  const before = { ...(r.profile.state.items ?? {}) };
+  for (let i = 0; i < 60; i++) r.profile.recordOutcome(sp, 'culled', { hpFraction: 0.5 });
+  const afterCull = { ...(r.profile.state.items ?? {}) };
+  for (let i = 0; i < 60; i++) r.profile.recordOutcome(sp, 'catalogued', { hpFraction: 0.9 });
+  const afterCat = { ...(r.profile.state.items ?? {}) };
+  const gained = (a, b) => Object.keys({ ...a, ...b })
+    .reduce((n, k) => n + Math.max(0, (b[k] ?? 0) - (a[k] ?? 0)), 0);
+
+  return {
+    rate: total / N,
+    want: table.chance_by_tier['2'],
+    // The scarce ones must actually be the scarce ones.
+    salveShare: (counts.field_salve ?? 0) / total,
+    deepShare: (counts.deep_salve ?? 0) / total,
+    rouseShare: (counts.rouse_vial ?? 0) / total,
+    fromCull: gained(before, afterCull),
+    fromCatalogue: gained(afterCull, afterCat),
+  };
+});
+ok('a resolved encounter can hand you a field item, from either path',
+   Math.abs(drops.rate - drops.want) < 0.04
+   && drops.salveShare > drops.deepShare && drops.deepShare > drops.rouseShare
+   && drops.fromCull > 0 && drops.fromCatalogue > 0,
+   `rolled ${(drops.rate * 100).toFixed(0)}% against a declared ${(drops.want * 100).toFixed(0)}%`
+   + ` · salve ${(drops.salveShare * 100).toFixed(0)}% > deep ${(drops.deepShare * 100).toFixed(0)}%`
+   + ` > rouse ${(drops.rouseShare * 100).toFixed(0)}%`
+   + ` · 60 culls gave ${drops.fromCull} items and 60 catalogues gave ${drops.fromCatalogue}`
+   + ' — both paths pay, because the design says both are legitimate');
+
 // --- 39. the field kit is crafted, costs materials, and shows up on patrol
 const fieldkit = await page.evaluate(() => {
   const r = window.__riftborn;
