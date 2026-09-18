@@ -127,6 +127,30 @@ const base = `http://127.0.0.1:${server.address().port}/riftborn/`;
 
 const wanted = process.argv.slice(2).length ? process.argv.slice(2) : Object.keys(SUITES);
 let failed = 0;
+let repoFailed = 0;
+
+/*
+ * Two repository checks, run before the browser starts.
+ *
+ * Both already existed as scripts and neither was wired to anything, so the
+ * only thing standing between a stale service-worker stamp and every installed
+ * player pinned to a dead build was somebody remembering to type the command.
+ * A commit that changed two files under docs/riftborn/ and left VERSION alone
+ * went out precisely that way. A check nothing runs is a comment.
+ *
+ * They are skipped when a single suite is named, because that is the tight loop
+ * and neither has anything to say about one suite.
+ */
+if (!process.argv.slice(2).length) {
+  const repo = fileURLToPath(new URL('../..', import.meta.url));
+  for (const tool of ['game/tools/stamp_sw.py', 'game/tools/sync_prototype_data.py']) {
+    const code = await new Promise((done) => {
+      spawn('python3', [tool, '--check'], { stdio: 'inherit', cwd: repo }).on('exit', done);
+    });
+    if (code !== 0) repoFailed++;
+  }
+  if (repoFailed) console.log('');
+}
 /*
  * Time each suite. Without this the only thing anyone knew about the run was
  * that it took "about ninety minutes", which is not a number you can act on —
@@ -164,5 +188,7 @@ if (times.length > 1) {
   }
   console.log(`  ${'total'.padEnd(12)} ${total.toFixed(1).padStart(7)}s  (${(total / 60).toFixed(1)} min)`);
 }
-console.log(failed ? `\n${failed} suite(s) failed` : '\nall suites passed');
-process.exit(failed ? 1 : 0);
+const trouble = [failed && `${failed} suite(s) failed`,
+                repoFailed && `${repoFailed} repository check(s) failed`].filter(Boolean);
+console.log(trouble.length ? `\n${trouble.join(' · ')}` : '\nall suites passed');
+process.exit(failed || repoFailed ? 1 : 0);
