@@ -20,7 +20,7 @@ import { buildModel, modelFor, fitModel, spriteFor, clearVoxelCache } from './vo
 import {
   createBattle, makeCombatant, takeTurn, options, catchChance,
   levelOf, wildLevel, activeMon, movesFor, computeMoveDamage, remaining, concealed,
-  phaseAt, phaseCount, apexPhaseTable, canUse, ppLeft, usableMoves,
+  phaseAt, phaseCount, apexPhaseTable, canUse, ppLeft, usableMoves, conditionOf,
 } from './battle.js';
 import {
   buildPool, apexForecast, riftForCell, placementFits, inTimeWindow, weatherIs, biomeAt,
@@ -133,6 +133,7 @@ function boot(data) {
     escortRules: data.elements.escort_ability_rules,
     elementDefs: data.elements.elements,
     bonusCap: data.elements.sanctuary_bonus_cap_per_element ?? 0.15,
+    battleRules: data.elements.battle_rules,
   });
 
   const mapCanvas = $('map');
@@ -377,11 +378,14 @@ function boot(data) {
      */
     const size = data.elements.battle_rules.party_size ?? 3;
     const chosen = profile.party;
-    const residents = chosen.length
-      ? chosen.slice(0, size)
+    // A monster that is down cannot go out. It will come back on its own, or
+    // you can pay to mend it — either way it is not coming to this fight.
+    const fit = (r) => (r.hp ?? 1) > 0;
+    const residents = (chosen.length
+      ? chosen
       : [...profile.state.residents]
         .sort((a, c) => (a.uid === profile.state.escortUid ? -1 : c.uid === profile.state.escortUid ? 1 : 0))
-        .slice(0, size);
+    ).filter(fit).slice(0, size);
     const team = residents
       .map((r) => {
         const rsp = speciesById[r.speciesId];
@@ -685,6 +689,20 @@ function boot(data) {
      * stronger by sitting in its pen while the thing you spend the whole game
      * doing counted for zero.
      */
+    /*
+     * Wounds and spent rounds go home with them. This is what makes a patrol a
+     * unit of play rather than a series of unrelated battles: a party of three
+     * sustains about four fights, and then you are walking back or paying up.
+     */
+    const hurt = [];
+    for (const c of b.team) {
+      if (!c.resident) continue;
+      const cond = conditionOf(c);
+      c.resident.hp = cond.hp;
+      c.resident.pp = cond.pp;
+      if (cond.hp <= 0) hurt.push(c.species.name);
+    }
+
     const taught = [];
     for (const c of b.team) {
       if (!c.participated || !c.resident) continue;
@@ -704,6 +722,7 @@ function boot(data) {
       after.essence - before.ess && `+${fmt(after.essence - before.ess)} essence`,
       after.researchPoints - before.rp && `+${fmt(after.researchPoints - before.rp)} RP`,
       taught.length && `${taught.map((t) => `${t.name} +${fmt(t.gained)} Study`).join(' · ')}`,
+      hurt.length && `${hurt.join(' and ')} went down — mend or wait`,
     ].filter(Boolean).join(' · ');
     if (gains) flash(gains);
 
@@ -1394,8 +1413,12 @@ function boot(data) {
         // Say who actually goes out, since the answer used to be "whoever was
         // caught first" and nothing anywhere said so.
         const party = profile.party;
-        if (party.length) return ` · party: ${party.map((r) => speciesById[r.speciesId]?.name ?? '?').join(' → ')}`;
-        return s.residents.length ? ' · no party chosen — the first three go out' : '';
+        const down = s.residents.filter((r) => (r.hp ?? 1) <= 0).length;
+        const tail = down ? ` · ${down} down` : '';
+        if (party.length) {
+          return ` · party: ${party.map((r) => speciesById[r.speciesId]?.name ?? '?').join(' → ')}${tail}`;
+        }
+        return (s.residents.length ? ' · no party chosen — the first three go out' : '') + tail;
       })()
       + (profile.permanentMods.length ? ' · Bio-Scanner earned' : '')
       + (profile.escort ? ` · escorting ${speciesById[profile.escort.speciesId]?.name} (${profile.escortAbility?.name ?? '—'})` : ' · no escort');
@@ -1485,10 +1508,25 @@ function boot(data) {
                   + `<span>${m.element ? title(m.element) : 'untyped'} · ${what}`
                   + `${m.priority > 0 ? ' · quick' : m.priority < 0 ? ' · slow' : ''} · ${pp} PP</span></li>`;
               }).join('');
+              // Condition: what it walked out of its last fight with.
+              const cond = Math.max(0, Math.min(1, r.hp ?? 1));
+              const down = cond <= 0;
+              const cost = profile.mendCost(r.uid);
               return `
-                <div class="kit">
+                <div class="kit" data-down="${down}">
                   <p class="kit__head">Lv.${lvl} · ${c.maxHp} HP · ${c.attack.toFixed(0)} atk`
                    + ` · ${Math.round(c.armour * 100)}% armour · ${c.speed} spd</p>
+                  <div class="kit__cond">
+                    <div class="meter__track meter__track--slim">
+                      <div class="meter__fill meter__fill--hp" style="width:${cond * 100}%"
+                           data-state="${down ? 'critical' : cond > 0.5 ? 'ok' : 'low'}"></div>
+                    </div>
+                    <span>${down ? 'down' : `${Math.round(cond * 100)}% fit`}</span>
+                    ${cost > 0
+                      ? `<button class="ghost" data-mend="${r.uid}" type="button"
+                           ${profile.state.essence >= cost ? '' : 'disabled'}>Mend ${cost} ess</button>`
+                      : '<span class="kit__ready">ready</span>'}
+                  </div>
                   <ul class="kit__moves">${moves}</ul>
                 </div>`;
             })()}
@@ -1525,6 +1563,11 @@ function boot(data) {
     }
     for (const b of document.querySelectorAll('[data-escort]')) {
       b.addEventListener('click', () => { profile.setEscort(b.dataset.escort); renderSanctuary(); });
+    }
+    for (const b of document.querySelectorAll('[data-mend]')) {
+      b.addEventListener('click', () => {
+        if (profile.mend(b.dataset.mend)) { renderSanctuary(); renderWarden(); }
+      });
     }
     for (const b of document.querySelectorAll('[data-party]')) {
       b.addEventListener('click', () => {
@@ -1832,7 +1875,7 @@ function boot(data) {
     catchChance: (ammo) => catchChance(battle, ammo),
     makeCombatant, createBattle, levelOf, wildLevel, movesFor, activeMon,
     computeMoveDamage, remaining, studyFromBattle, studyAsMinutes, concealed,
-    phaseAt, phaseCount, apexPhaseTable, canUse, ppLeft, usableMoves,
+    phaseAt, phaseCount, apexPhaseTable, canUse, ppLeft, usableMoves, conditionOf,
     loadLoadout, applyMods, modUnlocked, fittedMods,
     speciesHeight, rollSpecimen, heightPercentile, createFight, drawFieldReport,
     escortAbility, useEscort, cycleLock, assistPhase, assistMiss, ringSeconds,

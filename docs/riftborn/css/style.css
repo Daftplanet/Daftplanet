@@ -731,6 +731,21 @@ select {
   color: var(--ink-dim);
   font-variant-numeric: tabular-nums;
 }
+/* Condition: what it walked out of its last fight with. */
+.kit__cond {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 6px;
+  font-size: 11px;
+  color: var(--ink-dim);
+}
+.kit__cond .meter__track { flex: 1; min-width: 60px; }
+.kit__cond button { padding: 2px 6px; font-size: 10px; }
+.kit__ready { color: var(--restraint, #6ac48a); }
+.kit[data-down="true"] { border-color: var(--warn, #c4694a); }
+.kit[data-down="true"] .kit__moves { opacity: 0.5; }
+
 .kit__moves { margin: 0; padding: 0; list-style: none; display: grid; gap: 2px; }
 .kit__moves li {
   display: flex;

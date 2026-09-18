@@ -302,17 +302,28 @@ const arena = await page.evaluate(async () => {
     r.refreshSpawns();
   }
   const s = r.patrol.spawns[0];
+  if (!s) return { note: 'no spawn found' };
   r.teleportTo(s);
+  // One frame so the engage panel is wired to this spawn before it is clicked.
+  await new Promise((d) => requestAnimationFrame(d));
   document.getElementById('engage-go').click();
-  await new Promise((d) => setTimeout(d, 400));
+  await new Promise((d) => requestAnimationFrame(d));
   const wentToArena = r.view === 'fight';
+  const out = {
+    wentToArena,
+    hasFight: Boolean(r.fight),
+    mode: r.profile.state.combatMode,
+    nearest: Boolean(r.patrol.nearest),
+    view: r.view,
+  };
   r.profile.state.combatMode = 'turn';
   r.profile.save();
-  return { wentToArena, hasFight: Boolean(r.fight) };
+  return out;
 });
 ok('the real-time arena is still there for anyone who wants it',
    arena.wentToArena && arena.hasFight,
-   'the world panel switches combat mode, and the old shooter runs unchanged');
+   `mode "${arena.mode}" · view "${arena.view}" · a spawn in range: ${arena.nearest}`
+   + ` · a live fight object: ${arena.hasFight}`);
 
 // --- 11. a pack comes up one at a time, and every member is recorded
 const pack = await page.evaluate(async () => {
@@ -889,7 +900,118 @@ ok('the Sanctuary shows a level, the stats and all four moves',
    `"${sheet.head.trim()}" · ${sheet.moves.length} moves listed · button reads "${sheet.partyBtn}"`
    + ' — none of this was anywhere in the game before');
 
-// --- 32. phone layout
+// --- 32. a monster carries its wounds out of the fight
+const carried = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['cinderfang'], 'voltfang', { study: 900 });
+  const b = r.battle;
+  const res = r.profile.state.residents[0];
+  const before = { hp: res.hp, pp: res.pp };
+  const mine = r.activeMon(b);
+  // Take some damage and spend some PP, then end it.
+  let guard = 0;
+  while (!b.outcome && guard++ < 60) {
+    let bi = 0, bd = -1;
+    mine.moves.forEach((m, i) => {
+      if (!r.canUse(mine, i)) return;
+      const d = r.computeMoveDamage(mine, b.wild, m, r.data, () => 0.5).damage;
+      if (d > bd) { bd = d; bi = i; }
+    });
+    r.takeTurn({ kind: 'move', index: bi });
+  }
+  const inFight = { hp: mine.hp / mine.maxHp, fainted: mine.fainted };
+  r.finishBattle();
+  const after = r.profile.state.residents[0];
+  return {
+    before, inFight,
+    hp: after.hp,
+    pp: after.pp,
+    spent: after.pp ? Object.values(after.pp).some((v, i) => v < (mine.moves.filter((m) => m.pp != null)[i]?.pp ?? 99)) : false,
+  };
+});
+ok('a monster walks out of a battle in the condition it finished in',
+   carried.before.hp === 1 && carried.before.pp === null
+   && carried.hp < 1 && Math.abs(carried.hp - carried.inFight.hp) < 0.02
+   && carried.pp && Object.keys(carried.pp).length > 0,
+   `went in at 100%, came out at ${(carried.hp * 100).toFixed(0)}% with PP recorded per move`
+   + ' — every battle used to start everyone at full');
+
+// --- 33. a downed monster does not go out, and the Warden goes alone
+const down = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['cinderfang', 'brinelet'], 'sootpup', { study: 900 });
+  const ids = r.profile.state.residents.map((x) => x.uid);
+  r.profile.state.partyUids = [...ids];
+  // One down, one fit.
+  r.profile.state.residents[0].hp = 0;
+  r.profile.save();
+  r.startBattle({ id: 'd1', speciesId: 'sootpup', x: r.patrol.x, y: r.patrol.y });
+  const oneDown = { team: r.battle.team.map((c) => c.species.name), warden: r.battle.wardenOnly };
+  // Both down: the Warden fights alone rather than the game refusing to start.
+  r.profile.state.residents[1].hp = 0;
+  r.profile.save();
+  r.startBattle({ id: 'd2', speciesId: 'sootpup', x: r.patrol.x, y: r.patrol.y });
+  const allDown = { team: r.battle.team.length, warden: r.battle.wardenOnly };
+  return { oneDown, allDown, fit: r.profile.fit(ids[0]) };
+});
+ok('a monster that is down stays home, and a wiped party does not stop you playing',
+   down.oneDown.team.length === 1 && !down.oneDown.warden
+   && down.allDown.team === 0 && down.allDown.warden === true && down.fit === false,
+   `one down → ${down.oneDown.team.join(', ')} goes out alone · all down → the Warden fights with the gun`
+   + ' — which is the safety valve for a game you play on a walk');
+
+// --- 34. mending costs Essence, and culling is what pays for it
+const mend = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['cinderfang'], 'sootpup', { study: 900 });
+  const res = r.profile.state.residents[0];
+  const sp = r.speciesById[res.speciesId];
+  res.hp = 0;
+  r.profile.state.essence = 0;
+  r.profile.save();
+  const cost = r.profile.mendCost(res.uid);
+  const broke = r.profile.mend(res.uid);
+  r.profile.state.essence = cost;
+  const paid = r.profile.mend(res.uid);
+  const half = { ...res };
+  res.hp = 0.5;
+  const halfCost = r.profile.mendCost(res.uid);
+  return {
+    cost, tier: sp.tier, broke, paid, hp: res.hp,
+    essenceLeft: r.profile.state.essence, halfCost,
+    cullPays: 8 * sp.tier,
+  };
+});
+ok('mending costs Essence, priced at about one cull per heal',
+   mend.broke === false && mend.paid === true && mend.essenceLeft === 0
+   && mend.cost > 0 && mend.halfCost < mend.cost
+   && Math.abs(mend.cost - mend.cullPays) <= mend.cullPays,
+   `a tier ${mend.tier} monster costs ${mend.cost} Essence from empty (${mend.halfCost} from half),`
+   + ` and culling one pays ${mend.cullPays} — refused at 0 Essence, worked once it was affordable`);
+
+// --- 35. it also comes back on its own
+const regen = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  await window.battleWith(['cinderfang'], 'sootpup', { study: 900 });
+  const res = r.profile.state.residents[0];
+  res.hp = 0.2;
+  res.pp = { 1: 0, 2: 0, 3: 0 };
+  // Wind the clock back ten minutes and let the same tick that grows Study run.
+  r.profile.state.lastTick = Date.now() - 10 * 60 * 1000;
+  r.profile.state.devStudyRate = 1;
+  r.profile.tickStudy();
+  const after = { hp: res.hp, pp: res.pp };
+  res.hp = 0.2;
+  r.profile.state.lastTick = Date.now() - 120 * 60 * 1000;
+  r.profile.tickStudy();
+  return { after, full: res.hp, clearedPP: res.pp === null, rate: r.data.elements.battle_rules.hp_regen_per_minute };
+});
+ok('a wounded monster recovers on its own, at the rate the data says',
+   regen.after.hp > 0.2 && regen.after.hp < 1 && regen.full === 1 && regen.clearedPP,
+   `${(regen.rate * 100).toFixed(0)}%/min · 20% + ten minutes = ${(regen.after.hp * 100).toFixed(0)}%,`
+   + ' and two hours puts it back to full with its rounds restored');
+
+// --- 36. phone layout
 await page.setViewportSize({ width: 390, height: 844 });
 await page.evaluate(async () => { await window.battleWith(['brinelet'], 'cinderfang'); });
 await page.waitForTimeout(400);

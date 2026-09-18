@@ -124,6 +124,14 @@ export function makeCombatant(species, level, data, { resident = null, wild = fa
   const specimen = resident
     ? { heightM: resident.heightM ?? null, percentile: resident.percentile ?? null }
     : rollSpecimen(species, sizeDef, specimenRng);
+  /*
+   * A resident comes into a battle in the condition it left the last one. Full
+   * health is still the default — a wild monster has never been in a fight, and
+   * a resident with no `hp` recorded is one from a save that predates this.
+   */
+  const carried = resident && typeof resident.hp === 'number'
+    ? Math.max(0, Math.min(1, resident.hp)) : 1;
+
   return {
     heightM: specimen.heightM,
     percentile: specimen.percentile,
@@ -132,8 +140,9 @@ export function makeCombatant(species, level, data, { resident = null, wild = fa
     resident,
     wild,
     level,
-    hp: stats.maxHp,
+    hp: Math.max(carried > 0 ? 1 : 0, Math.round(stats.maxHp * carried)),
     maxHp: stats.maxHp,
+    fainted: carried <= 0,
     attack: stats.attack,
     armour: stats.armour,
     speed: stats.speed,
@@ -150,7 +159,6 @@ export function makeCombatant(species, level, data, { resident = null, wild = fa
     statuses: {},          // id -> turns remaining
     restraint: 0,
     required: 0,           // set for the wild side when the battle starts
-    fainted: false,
     // Was this one ever on the field? Only participants earn Study.
     participated: false,
     // For a pack member: the ending it reached, once it has reached one.
@@ -363,7 +371,19 @@ export function createBattle(opts) {
 /** Fill every combatant's PP from its move list. Called once, at the start. */
 function stockPP(c) {
   c.pp = {};
-  c.moves.forEach((m, i) => { c.pp[i] = m.pp ?? null; });
+  const carried = c.resident?.pp ?? null;
+  c.moves.forEach((m, i) => {
+    if (m.pp == null) { c.pp[i] = null; return; }              // Strike, always
+    c.pp[i] = carried && typeof carried[i] === 'number'
+      ? Math.max(0, Math.min(m.pp, carried[i])) : m.pp;
+  });
+}
+
+/** The condition to write back onto a resident when the battle ends. */
+export function conditionOf(c) {
+  const pp = {};
+  c.moves.forEach((m, i) => { if (m.pp != null) pp[i] = ppLeft(c, i); });
+  return { hp: c.maxHp > 0 ? Math.max(0, c.hp) / c.maxHp : 0, pp };
 }
 
 /** Can this move be used right now? Strike always can. */

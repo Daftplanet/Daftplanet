@@ -415,6 +415,45 @@ export function createProfile(content) {
       if (!r) return null;
       return escortAbility(speciesById[r.speciesId], content.escortAbilities, content.escortRules);
     },
+    // ---------------------------------------------------------- condition
+    /** What it costs to put this one straight back in the field. */
+    mendCost(uid) {
+      const r = state.residents.find((x) => x.uid === uid);
+      if (!r) return 0;
+      const sp = speciesById[r.speciesId];
+      const per = content.battleRules?.mend_essence_per_tier ?? 10;
+      const missing = 1 - Math.max(0, Math.min(1, r.hp ?? 1));
+      return Math.ceil(per * (sp?.tier ?? 1) * missing);
+    },
+
+    /**
+     * Heal it now, for Essence.
+     *
+     * Priced at about one cull per heal at the same tier — a tier 2 cull pays 16
+     * Essence and mending a tier 2 monster from empty costs 20. That is the
+     * point rather than a coincidence: culling pays to keep the monsters you
+     * catalogued in the field, so the game's two halves need each other instead
+     * of merely coexisting.
+     */
+    mend(uid) {
+      const r = state.residents.find((x) => x.uid === uid);
+      if (!r) return false;
+      const cost = this.mendCost(uid);
+      if (cost <= 0) return false;
+      if (state.essence < cost) return false;
+      state.essence -= cost;
+      r.hp = 1;
+      r.pp = null;
+      notify();
+      return true;
+    },
+
+    /** Can this one be sent out at all? */
+    fit(uid) {
+      const r = state.residents.find((x) => x.uid === uid);
+      return Boolean(r) && (r.hp ?? 1) > 0;
+    },
+
     setEscort(uid) {
       state.escortUid = state.escortUid === uid ? null : (uid ?? null);
       notify();
@@ -498,6 +537,14 @@ export function createProfile(content) {
         percentile: detail.percentile ?? null,
         biome: detail.biome ?? null,
         habitat: null,
+        /*
+         * Condition, carried between battles. `hp` is a fraction of its own bar;
+         * `pp` is spent rounds by move index, or null for untouched. A monster
+         * used to walk out of every fight at full health with full PP, which
+         * made a patrol a series of unrelated battles.
+         */
+        hp: 1,
+        pp: null,
       });
       notify();      // every public mutator persists; admit was the one that did not
       return true;
@@ -542,6 +589,13 @@ export function createProfile(content) {
         if (!sp) continue;
         const hab = r.habitat !== null ? state.habitats[r.habitat] : null;
         r.study += studyRate(r, sp, hab?.element ?? null) * minutes;
+        // Wounds close and rounds come back at the same rate, so one bar in the
+        // Sanctuary answers "can this one go out again?".
+        const regen = (content.battleRules?.hp_regen_per_minute ?? 0.03) * minutes;
+        if ((r.hp ?? 1) < 1) {
+          r.hp = Math.min(1, (r.hp ?? 1) + regen);
+          if (r.hp >= 1) r.pp = null;
+        }
         changed = true;
       }
       return changed;

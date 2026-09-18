@@ -1642,6 +1642,89 @@ That is not new mechanics — it is the existing mechanics, said out loud. But
 three sections of combat depth are worth very little if the only place to read
 them is mid-fight.
 
+# Phase 4, part 6: a patrol that costs something
+
+Every battle started everyone at full health with full PP. The resident record
+held an `hpFraction`, but that is the health it was *caught* at — a Codex
+detail, not a current state. So:
+
+- fainting cost nothing past the turn it happened on;
+- there was no reason to rotate the party, or to have chosen one;
+- there was no reason, ever, to go home.
+
+For a game whose entire structure is *go out on a patrol, come back to the
+Sanctuary*, the Sanctuary was a tab you never needed to open.
+
+## What a fight actually costs
+
+Measured over 40 fair matchups, winning one costs the winner **75% of its health
+and 6 of its 13 PP**, over 7.2 turns. Both sides deal damage as a share of
+health and both act every turn, so you take roughly what you deal unless the
+type chart or a status move buys you an edge.
+
+Condition carries now: `hp` as a fraction of its own bar, `pp` spent per move.
+A party of three sustains about four fights on health and six on PP, so health
+is the binding constraint — which is right, because it is the legible one.
+
+## Recovery, and why culling pays for it
+
+Two ways back:
+
+- **Time.** 3% of the bar per minute, on the same tick that already accrues
+  Study. Half an hour from empty.
+- **Essence.** Mend it now, priced at `10 × tier` from empty. A tier 2 monster
+  costs 20 Essence and culling a tier 2 monster pays 16.
+
+That price is the point rather than a coincidence. **Culling pays to keep the
+monsters you catalogued in the field.** The design bible has always said the two
+paths are both legitimate — *"culling pays today; this pays in three weeks"* —
+but until now they never touched. A wounded Sanctuary is the thing that makes
+you want the materials.
+
+## The safety valve, which a walking game must have
+
+The worst failure mode for a game played outdoors is *you walked here and now
+the game says come back in half an hour*. It cannot happen: a party with nobody
+fit falls through to the Warden-only battle, which was built for rank 1 and wins
+about 72% of its openings with the equipped weapon. You can always play. You
+just cannot play with your good monsters.
+
+## The patrol, measured
+
+| policy | battles | won |
+|---|---|---|
+| status-first, varied stage 2 wilds | **3.2** | **1.8** (56%) |
+
+Three fights, two of them won, and then you are walking home or paying up. That
+is a patrol.
+
+## A fourth narrow sample
+
+The first version of that measurement fought the same wild every time — a
+Voltfang, which happens to be a poor matchup for the party I picked — and
+reported **1.1 wins per patrol** and a design that looked far too harsh. Varying
+the wild across all stage 2 species gave 1.8 wins at a 56% rate.
+
+That is the fourth time on this branch: the rigged move-policy sample, the
+mirror-match fight length, the unmeasured ninety minutes, and now this. Every
+one was caught by widening the sample, and every one would have passed unnoticed
+if I had not. The pattern is specific enough to name: **my first sample is
+almost always too narrow, and it is narrow in whichever direction makes the
+result interesting.**
+
+## And the speedup left a race behind
+
+The `battle` suite's arena check began failing. Not the condition work — the
+test-speedup commit before it. The check teleports to a spawn and clicks Engage,
+and it used to be preceded by a 300 ms sleep in the walk loop. With the sleep
+gone it clicks before the engage panel has bound to the new spawn.
+
+One real frame fixes it. Worth recording because it is the honest cost of that
+optimisation: removing a sleep removes the slack that was hiding a missing
+synchronisation, and the check that catches it had a diagnostic reading *"the
+world panel switches combat mode"* — a sentence, not a measurement. It now
+prints the mode, the view, and whether a spawn was in range.
+
 ## Still open
 
 1. **Party play** (the multiplayer kind) and the server-side half of Codex
@@ -1650,9 +1733,9 @@ them is mid-fight.
    and the turn battle fights every apex at its solo numbers, because a
    turn-based party is your three residents rather than three Wardens. The
    bestiary's `party_size` of 4–8 has no turn-based meaning yet.
-3. PP does not persist between battles, so there is no resource to manage across
-   a patrol — only within a fight. Whether it should is a design question about
-   how punishing a walking game is allowed to be.
+3. PP and health both persist across a patrol now — see part 6. What is still
+   undesigned is a *field* restore: something you carry and use mid-patrol, the
+   way a potion works, rather than only paying Essence from the Sanctuary tab.
 4. The wild monster's move choice is a one-line heuristic with a random factor.
    It now respects PP and will not re-apply a status it has already landed, but
    it does not plan.
