@@ -16,16 +16,40 @@ export const DETECT_M = 130;       // how far a spawn shows on the map
 export const ENGAGE_M = 25;        // how close you must be to start the fight
 export const BUCKET_MS = 15 * 60 * 1000;
 
+/*
+ * Nine biomes, and until now each one was a single flat hex — a label with a
+ * colour attached rather than a place. `skin` is what makes them somewhere:
+ *
+ *   ground   two or three tones, picked per tile, so the floor is a patchwork
+ *            rather than one unbroken slab of colour
+ *   prop     the silhouette scattered across it. This is the part that does the
+ *            work: you should know a Woodland from a Works at a glance and
+ *            without reading the legend, the way a Pokemon route tells you where
+ *            you are by what is growing on it
+ *   density  props per tile, roughly. Woodland is a canopy; open ground is bare
+ *   ink/lit  the two accents a prop draws with — its shadow side and its lit side
+ *
+ * The rates are unchanged. This is entirely presentation.
+ */
 export const BIOMES = {
-  urban_core:  { name: 'Urban Core',  colour: '#3b4353', rate: 0.20 },
-  industrial:  { name: 'Industrial',  colour: '#4a4132', rate: 0.22 },
-  works:       { name: 'Works',       colour: '#5c4c33', rate: 0.24 },
-  transit:     { name: 'Transit',     colour: '#2a3138', rate: 0.21 },
-  waterside:   { name: 'Waterside',   colour: '#25445c', rate: 0.22 },
-  woodland:    { name: 'Woodland',    colour: '#22412a', rate: 0.20 },
-  parkland:    { name: 'Parkland',    colour: '#2d5436', rate: 0.16 },
-  open_ground: { name: 'Open Ground', colour: '#31463a', rate: 0.15 },
-  residential: { name: 'Residential', colour: '#2b2f36', rate: 0.07 },
+  urban_core:  { name: 'Urban Core',  colour: '#414a5e', rate: 0.20,
+    skin: { ground: ['#3a4256', '#414a5e', '#4a5468'], prop: 'rooftops', density: 1.8, ink: '#2a3040', lit: '#6f7c95' } },
+  industrial:  { name: 'Industrial',  colour: '#5a4a2e', rate: 0.22,
+    skin: { ground: ['#514228', '#5a4a2e', '#645336'], prop: 'tanks', density: 1.3, ink: '#382d1a', lit: '#a5854c' } },
+  works:       { name: 'Works',       colour: '#6d5330', rate: 0.24,
+    skin: { ground: ['#614a2b', '#6d5330', '#795d38'], prop: 'rubble', density: 3.0, ink: '#42311a', lit: '#b28a4e' } },
+  transit:     { name: 'Transit',     colour: '#333a44', rate: 0.21,
+    skin: { ground: ['#2d343d', '#333a44', '#3b434e'], prop: 'rails', density: 1.0, ink: '#1e232a', lit: '#8d9aa8' } },
+  waterside:   { name: 'Waterside',   colour: '#1d5074', rate: 0.22,
+    skin: { ground: ['#194668', '#1d5074', '#235b82'], prop: 'ripples', density: 2.4, ink: '#123549', lit: '#7fc6e8' } },
+  woodland:    { name: 'Woodland',    colour: '#1f4a28', rate: 0.20,
+    skin: { ground: ['#1a4122', '#1f4a28', '#245430'], prop: 'trees', density: 4.0, ink: '#0f2716', lit: '#4fa85c' } },
+  parkland:    { name: 'Parkland',    colour: '#356b3c', rate: 0.16,
+    skin: { ground: ['#2f6136', '#356b3c', '#3c7644'], prop: 'trees', density: 1.4, ink: '#1c3f21', lit: '#7fc97f' } },
+  open_ground: { name: 'Open Ground', colour: '#5c6b33', rate: 0.15,
+    skin: { ground: ['#53612d', '#5c6b33', '#66763a'], prop: 'tufts', density: 3.2, ink: '#3c471f', lit: '#a8bd5e' } },
+  residential: { name: 'Residential', colour: '#5b4a46', rate: 0.07,
+    skin: { ground: ['#52423e', '#5b4a46', '#66534e'], prop: 'houses', density: 1.6, ink: '#382b28', lit: '#b08d78' } },
 };
 
 /* Element spawn multipliers by time of day, from 08-world-and-progression.md. */

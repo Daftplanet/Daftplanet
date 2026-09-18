@@ -144,6 +144,150 @@ export function stepPatrol(p, dt, intent) {
 
 // ---------------------------------------------------------------- rendering
 
+/*
+ * ---------------------------------------------------------------- biome skins
+ *
+ * A biome used to be one flat colour per tile. That reads as a legend swatch
+ * rather than a place, and this is a game whose whole premise is that the ground
+ * under you decides what lives there — so the ground has to say which ground it
+ * is before you read anything.
+ *
+ * The approach is the one a tile-based game has always used: a patchwork floor
+ * of two or three tones, and a scatter of silhouettes that name the place. You
+ * should know a Woodland from a Works at a glance. Everything is seeded from the
+ * tile's own coordinates, so a place looks the same every time you walk back to
+ * it, and nothing is stored.
+ */
+function tileRng(tx, ty, salt = 0) {
+  let a = (Math.imul(tx | 0, 0x27d4eb2d) ^ Math.imul(ty | 0, 0x165667b1) ^ (salt * 0x9e3779b9)) >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const PROPS = {
+  /** Flat roofs, seen from above, with the sunward edge catching the light. */
+  rooftops(ctx, x, y, s, r, ink, lit) {
+    const w = s * (0.34 + r() * 0.3), h = s * (0.28 + r() * 0.26);
+    ctx.fillStyle = ink;
+    ctx.fillRect(x + 2, y + 2, w, h);
+    ctx.fillStyle = lit;
+    ctx.fillRect(x, y, w, h * 0.22);
+  },
+  /*
+   * A pitched roof seen from above: a rectangle with a ridge down the middle and
+   * the sunward slope lighter. The first version drew a bare triangle, which at
+   * 68 pixels a tile read as a pine tree or a traffic cone — the suburbs looked
+   * like a forest. A roof is a rectangle; the ridge is what says roof.
+   */
+  houses(ctx, x, y, s, r, ink, lit) {
+    const w = s * (0.3 + r() * 0.16), h = w * (0.62 + r() * 0.2);
+    ctx.fillStyle = ink;
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = lit;
+    ctx.fillRect(x, y, w, h / 2);                       // the slope facing the light
+    ctx.strokeStyle = ink; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(x, y + h / 2); ctx.lineTo(x + w, y + h / 2); ctx.stroke();
+  },
+  /** Canopy first, trunk under it, so the crown always sits on top. */
+  trees(ctx, x, y, s, r, ink, lit) {
+    const rad = s * (0.07 + r() * 0.06);
+    ctx.fillStyle = ink;
+    ctx.fillRect(x - 1, y, 2, rad * 1.6);
+    ctx.fillStyle = lit;
+    ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = ink;
+    ctx.beginPath(); ctx.arc(x + rad * 0.34, y + rad * 0.3, rad * 0.55, 0, Math.PI * 2); ctx.fill();
+  },
+  /** Three strokes, splayed. Anything more and open ground stops reading as open. */
+  tufts(ctx, x, y, s, r, ink, lit) {
+    const h = s * (0.05 + r() * 0.05);
+    ctx.strokeStyle = lit; ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const dx of [-2, 0, 2]) { ctx.moveTo(x + dx, y); ctx.lineTo(x + dx * 1.8, y - h); }
+    ctx.stroke();
+  },
+  /** Arcs, not circles: a ripple is the near edge of a ring, lit from one side. */
+  ripples(ctx, x, y, s, r, ink, lit) {
+    const rad = s * (0.06 + r() * 0.08);
+    ctx.strokeStyle = lit; ctx.lineWidth = 1; ctx.globalAlpha = 0.5;
+    ctx.beginPath(); ctx.arc(x, y, rad, Math.PI * 0.15, Math.PI * 0.85); ctx.stroke();
+    ctx.beginPath(); ctx.arc(x, y, rad * 0.55, Math.PI * 0.2, Math.PI * 0.8); ctx.stroke();
+    ctx.globalAlpha = 1;
+  },
+  /** A cylinder read from above is a disc with a pipe running off it. */
+  tanks(ctx, x, y, s, r, ink, lit) {
+    const rad = s * (0.08 + r() * 0.05);
+    ctx.fillStyle = ink;
+    ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = lit; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.arc(x, y, rad * 0.62, 0, Math.PI * 2); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x + rad, y); ctx.lineTo(x + rad * 2.4, y); ctx.stroke();
+  },
+  /** Spoil heaps: irregular, low, and never the same twice. */
+  rubble(ctx, x, y, s, r, ink, lit) {
+    const w = s * (0.05 + r() * 0.06);
+    ctx.fillStyle = r() > 0.5 ? ink : lit;
+    ctx.beginPath();
+    ctx.moveTo(x - w, y + w * 0.6); ctx.lineTo(x, y - w); ctx.lineTo(x + w, y + w * 0.6);
+    ctx.closePath(); ctx.fill();
+  },
+  /** Two rails and their sleepers, running the length of the tile. */
+  rails(ctx, x, y, s, r, ink, lit) {
+    const len = s * 0.9, gap = s * 0.09;
+    ctx.strokeStyle = ink; ctx.lineWidth = 3;
+    ctx.beginPath();
+    for (let i = 0; i < 5; i++) {
+      const t = (i / 4) * len - len / 2;
+      ctx.moveTo(x + t, y - gap); ctx.lineTo(x + t, y + gap);
+    }
+    ctx.stroke();
+    ctx.strokeStyle = lit; ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(x - len / 2, y - gap); ctx.lineTo(x + len / 2, y - gap);
+    ctx.moveTo(x - len / 2, y + gap); ctx.lineTo(x + len / 2, y + gap);
+    ctx.stroke();
+  },
+};
+
+/** Paint one tile of ground: a tone from the patchwork, then its props. */
+export function drawTileSkin(ctx, biome, tx, ty, sx, sy, px, { alpha = 1, propsOnly = false } = {}) {
+  const def = BIOMES[biome];
+  const skin = def?.skin;
+  if (!skin) {
+    ctx.fillStyle = def?.colour ?? '#2b2f36';
+    ctx.fillRect(sx, sy, px + 1, px + 1);
+    return;
+  }
+  const r = tileRng(tx, ty);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  // The ground tone is still drawn from the same rng even when it is not painted,
+  // so a tile's props land in the same places with or without the floor under them.
+  const tone = skin.ground[Math.floor(r() * skin.ground.length)] ?? def.colour;
+  if (!propsOnly) {
+    ctx.fillStyle = tone;
+    ctx.fillRect(sx, sy, px + 1, px + 1);
+  }
+
+  const draw = PROPS[skin.prop];
+  if (draw) {
+    // A fractional density is a chance rather than a count, so parkland can
+    // average fewer than one tree a tile without ever drawing half of one.
+    const whole = Math.floor(skin.density);
+    const n = whole + (r() < skin.density - whole ? 1 : 0);
+    for (let i = 0; i < n; i++) {
+      const x = sx + (0.12 + r() * 0.76) * px;
+      const y = sy + (0.12 + r() * 0.76) * px;
+      draw(ctx, x, y, px, r, skin.ink, skin.lit);
+    }
+  }
+  ctx.restore();
+}
+
 export function drawPatrol(ctx, p, view, speciesById) {
   const { dpr } = view;
   ctx.save();
@@ -174,11 +318,7 @@ export function drawPatrol(ctx, p, view, speciesById) {
       for (let tx = ctx0 - reach; tx <= ctx0 + reach; tx++) {
         const biome = biomeAt(tx, ty, p.profile.state.seed);
         const [sx, sy] = toScreen(tx * TILE_M, ty * TILE_M);
-        ctx.fillStyle = BIOMES[biome].colour;
-        ctx.fillRect(sx, sy, tilePx + 1, tilePx + 1);
-        ctx.strokeStyle = 'rgba(0,0,0,0.22)';
-        ctx.lineWidth = 1;
-        ctx.strokeRect(sx + 0.5, sy + 0.5, tilePx, tilePx);
+        drawTileSkin(ctx, biome, tx, ty, sx, sy, tilePx);
       }
     }
   } else {
@@ -192,6 +332,25 @@ export function drawPatrol(ctx, p, view, speciesById) {
         const [sx, sy] = toScreen(tx * TILE_M, ty * TILE_M);
         ctx.fillStyle = BIOMES[biome].colour;
         ctx.fillRect(sx, sy, tilePx + 1, tilePx + 1);
+      }
+    }
+    ctx.restore();
+
+    /*
+     * Over real streets the props go on lightly, and only for the biomes that
+     * are a surface rather than a building — trees and water read as the ground
+     * they sit on, where rooftops and rails would argue with the ones already
+     * drawn underneath.
+     */
+    const NATURAL = new Set(['woodland', 'parkland', 'open_ground', 'waterside']);
+    ctx.save();
+    ctx.globalAlpha = 0.45;
+    for (let ty = cty0 - reach; ty <= cty0 + reach; ty++) {
+      for (let tx = ctx0 - reach; tx <= ctx0 + reach; tx++) {
+        const biome = biomeAtWorld(p, (tx + 0.5) * TILE_M, (ty + 0.5) * TILE_M);
+        if (!NATURAL.has(biome)) continue;
+        const [sx, sy] = toScreen(tx * TILE_M, ty * TILE_M);
+        drawTileSkin(ctx, biome, tx, ty, sx, sy, tilePx, { propsOnly: true });
       }
     }
     ctx.restore();

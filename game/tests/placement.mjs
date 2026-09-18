@@ -293,7 +293,56 @@ ok('a forecast rift is really there when you walk to it',
    inside?.inRift && inside.apexUp && inside.apexSpawn && inside.elements.every((e) => e === 'rift'),
    `${inside?.apexId} up · ${inside?.spawns} spawns, all ${inside?.elements.join('/')}-element`);
 
-// --- 10. phone layout
+// --- 10. a biome looks like somewhere, not like a legend swatch
+/*
+ * Each biome used to be one flat hex per tile. That is a colour key, not a
+ * place — and this is a game whose premise is that the ground under you decides
+ * what lives there, so the ground has to say which ground it is before you read
+ * anything. Nine biomes, nine palettes, nine silhouettes scattered on them.
+ */
+const skins = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const B = r.BIOMES;
+  const ids = Object.keys(B);
+  const props = new Set(ids.map((k) => B[k].skin?.prop).filter(Boolean));
+  const tones = new Set();
+  for (const k of ids) for (const c of B[k].skin?.ground ?? []) tones.add(c);
+
+  // Paint one tile of every biome offscreen and count what actually landed.
+  const painted = ids.map((k) => {
+    const c = document.createElement('canvas');
+    c.width = 68; c.height = 68;
+    const g = c.getContext('2d');
+    r.drawTileSkin(g, k, 3, 7, 0, 0, 68);
+    const px = g.getImageData(0, 0, 68, 68).data;
+    const seen = new Set();
+    for (let i = 0; i < px.length; i += 4) seen.add(`${px[i]},${px[i + 1]},${px[i + 2]}`);
+    return { id: k, colours: seen.size };
+  });
+  // The same tile twice must be identical; a different tile must not be.
+  const shot = (tx, ty) => {
+    const c = document.createElement('canvas');
+    c.width = 68; c.height = 68;
+    const g = c.getContext('2d');
+    r.drawTileSkin(g, 'woodland', tx, ty, 0, 0, 68);
+    return g.getImageData(0, 0, 68, 68).data.join(',');
+  };
+  return {
+    biomes: ids.length, props: props.size, tones: tones.size,
+    flat: painted.filter((x) => x.colours < 3).map((x) => x.id),
+    minColours: Math.min(...painted.map((x) => x.colours)),
+    stable: shot(4, 9) === shot(4, 9),
+    differs: shot(4, 9) !== shot(5, 9),
+  };
+});
+ok('every biome paints a patterned ground that is stable for its tile',
+   skins.flat.length === 0 && skins.biomes === 9 && skins.props >= 7
+   && skins.minColours >= 3 && skins.stable && skins.differs,
+   `${skins.biomes} biomes · ${skins.props} distinct prop silhouettes · ${skins.tones} ground tones`
+   + ` · thinnest tile still paints ${skins.minColours} colours`
+   + ' · the same tile redraws identically and its neighbour does not — each was one flat hex before');
+
+// --- 11. phone layout
 await page.setViewportSize({ width: 390, height: 844 });
 await page.evaluate(() => window.__riftborn.show('patrol'));
 await page.waitForTimeout(400);

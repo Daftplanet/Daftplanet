@@ -2471,3 +2471,90 @@ The rule that catches this one is narrower than the earlier ones and worth
 stating on its own: **when measuring what a feature adds, the comparison has to
 differ only in that feature.** Two rounds that share a status and differ in one
 data field are a real control. A round against no round is not.
+
+# Phase 4, part 14: giving the world a skin
+
+Two placeholders had survived every phase without anyone calling them
+placeholders.
+
+**A biome was one flat hex.** `urban_core: '#3b4353'` — a legend swatch, painted
+across every tile of it. For a game whose whole premise is that the ground under
+you decides what lives there, the ground never once said which ground it was.
+
+**A monster was four tones of one hue.** The voxel builder picked
+`ramp[band]` and stopped, so every model was a correctly shaped monochrome blob
+and every Cinderfang was pixel-identical to every other.
+
+## The ground, as a tile-based game has always done it
+
+Two or three ground tones picked per tile so the floor is a patchwork rather
+than a slab, and a scatter of silhouettes that name the place — canopy for
+woodland, rails for transit, tanks for industrial, ridged roofs for residential,
+ripples for waterside. Everything is seeded from the tile's own coordinates, so
+a place looks the same every time you walk back to it and nothing is stored.
+
+Then I looked at it, which is the only way to do this part.
+
+- **It was one grey mass with an ochre stripe.** Urban Core, Residential and
+  Transit had been authored within a few points of the same slate blue, so
+  despite having three different silhouettes on them the map read as one
+  material. The fix is not subtle and should not be: push the nine palettes
+  across the wheel. Residential is warm brown, Open Ground is khaki, Parkland is
+  a lighter green than Woodland, Waterside is a proper blue. A route in a
+  Pokémon game tells you where you are by its colour before you read anything.
+- **The houses looked like pine trees.** A bare triangle at 68 pixels a tile is
+  a cone, so the suburbs read as a forest. A roof is a *rectangle* with a ridge
+  down it and one slope catching the light. That reads as a roof; the triangle
+  never could.
+
+## The monsters, and what a marking is allowed to mean
+
+Markings are most of what makes a creature readable at sprite size — the pale
+belly, the banding down a serpent, the mask across a face. Here they also carry
+information: **the accent is the species' second element**, so a dual type is
+legible from the model before you open a menu. Tide/Stone is a tide-coloured
+animal with stone banding.
+
+Three things were wrong when rendered, and only rendering found them:
+
+- **Single-element species came out flat.** Their accent was
+  `mix(ramp[3], white, 0.34)` — a lighter version of an already-light band.
+  Pebblit, Obelisc, Umbrakhan and Glimmerfly were all technically marked and
+  visibly plain, because **a highlight is not a contrast**. Each element has a
+  fixed partner now: gold on grey stone, violet on cream lumen, pale on violet
+  gloom. That carries no type meaning and is not meant to — for a dual element
+  the accent *is* the second element, and for a single it is just what makes the
+  animal read as an animal.
+- **Stripes were a barcode.** `axis % 4 < 2` is perfectly even and perfectly
+  artificial; Cinderfang looked like corrugated iron. Offsetting each band by
+  height gives the stripe a lean, which is what makes it look grown rather than
+  printed.
+- **Two markings barely landed.** The gloom mask wanted the top 40% *and* the
+  front 38%, which on a wraith is a handful of voxels; the stone ridge wanted the
+  top two layers *and* the middle fifth, which on a broad lump is almost none.
+
+## The measurement that is possible here, and the one that is not
+
+Most of this is a judgement you can only make by looking. But two properties are
+checkable, and both are now checks:
+
+- **No model is flat and none is swamped.** Across all 43 species: 3 to 5
+  distinct tones each, median 21% of voxels repainted, nothing at 0% and nothing
+  above 70%. That range is the whole claim — a marking, not a recolour.
+- **Every dual-element species wears its second element.** 12 of 12.
+
+The first version of that second check demanded the second element's *exact*
+hex and failed 3 of 12 — on markings that were working. A mask paints a
+darkened accent and a mottle blends toward it; both read as the second element
+and neither equals it. The check asks the real question now: is there a colour
+on this model nearer to element two's ramp than to element one's?
+
+That is the same lesson as part 13 arriving from the art direction: **test the
+property, not the implementation.** A check that asserts a specific hex is
+asserting how the code happens to be written.
+
+One number found a real bug rather than confirming a claim. Gustling measured
+**81% repainted** — a Gale monster that had stopped looking Gale — because
+"the bottom third" of a three-voxel-tall model rounds up to two of its three
+layers. Counted in whole layers instead it is 33%. A fraction works on a tall
+animal and swallows a short one.

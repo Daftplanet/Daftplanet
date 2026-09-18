@@ -16,7 +16,7 @@ import { fitCanvas, draw } from './render.js';
 import { createInput } from './input.js';
 import { createProfile, AMMO_COST, ITEM_COST, RANK_XP, WEAPON_UNLOCK, RESEARCH_COST } from './profile.js';
 import { drawFieldReport, toPng } from './report.js';
-import { buildModel, modelFor, fitModel, spriteFor, clearVoxelCache } from './voxel.js';
+import { buildModel, modelFor, fitModel, spriteFor, clearVoxelCache, ELEMENT_RAMP } from './voxel.js';
 import {
   createBattle, makeCombatant, takeTurn, options, catchChance,
   levelOf, wildLevel, activeMon, movesFor, computeMoveDamage, remaining, concealed,
@@ -24,11 +24,11 @@ import {
 } from './battle.js';
 import {
   buildPool, apexForecast, riftForCell, placementFits, inTimeWindow, weatherIs, biomeAt,
-  PLACEMENT_VOCABULARY, WEATHER, RIFT_RANK, RIFT_RADIUS_M, TILE_M, visibleSpawns,
+  PLACEMENT_VOCABULARY, WEATHER, RIFT_RANK, RIFT_RADIUS_M, TILE_M, visibleSpawns, BIOMES,
 } from './world.js';
 import { blockers, escortAbility, studyFromBattle, studyAsMinutes } from './sanctuary.js';
 import {
-  createPatrol, stepPatrol, drawPatrol, patrolClock, biomeUnderfoot, biomeAtWorld, placePatrol,
+  createPatrol, stepPatrol, drawPatrol, drawTileSkin, patrolClock, biomeUnderfoot, biomeAtWorld, placePatrol,
   VIEW as MAP_VIEW, ELEMENT_COLOUR,
 } from './patrol.js';
 import { createTileSource, MAP_ZOOM } from './tiles.js';
@@ -1995,6 +1995,7 @@ function boot(data) {
      * without the waiting.
      */
     refreshSpawns: () => stepPatrol(patrol, 0, { moveX: 0, moveY: 0 }),
+    drawTileSkin, BIOMES,
     get battle() { return battle; },
     takeTurn: (a) => takeTurn(battle, a), battleOptions: () => options(battle),
     // For driving a battle the app does not own — a harness building its own.
@@ -2007,7 +2008,7 @@ function boot(data) {
     loadLoadout, applyMods, modUnlocked, fittedMods,
     speciesHeight, rollSpecimen, heightPercentile, createFight, drawFieldReport,
     escortAbility, useEscort, cycleLock, assistPhase, assistMiss, ringSeconds,
-    buildModel, modelFor, fitModel, spriteFor, clearVoxelCache,
+    buildModel, modelFor, fitModel, spriteFor, clearVoxelCache, ELEMENT_RAMP,
     apexForecast, riftForCell, placementFits, inTimeWindow, weatherIs, biomeAt,
     PLACEMENT_VOCABULARY, WEATHER, visibleSpawns,
     locator, tiles, createTileSource, placePatrol, biomeUnderfoot, biomeAtWorld,

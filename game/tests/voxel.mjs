@@ -219,7 +219,64 @@ ok('a species you have never seen is still a blank slot',
    unseen.dots > 0 && unseen.models > 0,
    `${unseen.models} models for what you have seen · ${unseen.dots} blanks for what you have not`);
 
-// --- 11. phone layout
+// --- 11. every monster carries markings, and they say what the second element is
+/*
+ * A model used to be four tones of one hue — correctly shaped and completely
+ * flat. Markings are most of what makes a creature readable at sprite size, and
+ * here they carry information: the accent is the SECOND element where there is
+ * one, so a dual-type is legible from the model before you open a menu.
+ */
+const marks = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const rows = r.data.monsters.monsters.map((sp) => {
+    const m = r.buildModel(sp);
+    const offRamp = m.voxels.filter((v) => !m.ramp.includes(v.colour) && !v.weak).length;
+    return { id: sp.id, els: sp.elements ?? [], tones: new Set(m.voxels.map((v) => v.colour)).size,
+      marked: offRamp / m.voxels.length };
+  });
+  /*
+   * A dual-element species should WEAR its second element — but not necessarily
+   * in that element's exact hex. A mask paints a darkened accent and a mottle
+   * blends toward it, both of which read as the second element and neither of
+   * which equals it. The first version of this check demanded the literal
+   * colour and failed 3 of 12 on markings that were working correctly.
+   *
+   * So test the property instead: somewhere on the model there is a colour
+   * nearer to element two's ramp than to element one's.
+   */
+  const hex = (c) => {
+    if (c.startsWith('rgb')) { const n = c.match(/\d+/g).map(Number); return n; }
+    return [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+  };
+  const near = (c, ramp) => Math.min(...ramp.map((q) => {
+    const a = hex(c), b = hex(q);
+    return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
+  }));
+  const dual = rows.filter((x) => x.els.length > 1);
+  const secondShows = dual.filter((x) => {
+    const sp = r.data.monsters.monsters.find((m) => m.id === x.id);
+    const m = r.buildModel(sp);
+    const one = r.ELEMENT_RAMP[sp.elements[0]], two = r.ELEMENT_RAMP[sp.elements[1]];
+    if (!one || !two) return true;
+    return m.voxels.some((v) => !v.weak && near(v.colour, two) < near(v.colour, one));
+  }).length;
+  return {
+    total: rows.length,
+    flat: rows.filter((x) => x.marked === 0).map((x) => x.id),
+    swamped: rows.filter((x) => x.marked > 0.7).map((x) => x.id),
+    minTones: Math.min(...rows.map((x) => x.tones)),
+    median: rows.map((x) => x.marked).sort((a, b) => a - b)[Math.floor(rows.length / 2)],
+    dual: dual.length, secondShows,
+  };
+});
+ok('every monster carries markings, and a dual-element one wears its second element',
+   marks.flat.length === 0 && marks.swamped.length === 0 && marks.minTones >= 3
+   && marks.median > 0.05 && marks.median < 0.6 && marks.secondShows === marks.dual,
+   `${marks.total} species · none flat, none swamped · median ${(marks.median * 100).toFixed(0)}% marked`
+   + ` · ${marks.secondShows}/${marks.dual} dual-element species show their second element`
+   + ' — models used to be four tones of one hue');
+
+// --- 12. phone layout
 await page.setViewportSize({ width: 390, height: 844 });
 await page.waitForTimeout(400);
 const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);

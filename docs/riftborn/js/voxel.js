@@ -17,7 +17,7 @@
 
 // ---------------------------------------------------------------- palette
 
-const ELEMENT_RAMP = {
+export const ELEMENT_RAMP = {
   ember:   ['#5a2410', '#8f3a17', '#c2622f', '#e8924a'],
   tide:    ['#153346', '#2a5f80', '#4a90b8', '#7fc3e0'],
   verdant: ['#1d3a1c', '#3a6b33', '#5f9e5a', '#8fce85'],
@@ -221,6 +221,124 @@ const DEFAULT_REGION = { x: 0.5, y: 0.6, z: 0.7 };
  * Build a species' voxel model. Deterministic from the species id, so the same
  * monster is the same monster on every device and in every session.
  */
+// ---------------------------------------------------------------- markings
+
+/*
+ * A monster used to be four tones of one hue and nothing else — a correctly
+ * shaped blob. What a creature design needs on top of a silhouette is MARKINGS:
+ * the belly that is paler than the back, the banding down a serpent, the mask
+ * across a face. They are most of what makes one readable at sprite size, and
+ * all of what makes two animals of the same build look like different animals.
+ *
+ * The accent they draw with is the species' SECOND element where it has one, so
+ * the marking is not decoration — it is the type chart, legible on the model. A
+ * Tide/Stone reads as a tide-coloured animal with stone banding, and knowing
+ * that before you open the menu is the whole point of a type being visible.
+ */
+const MARKING = {
+  cinder: 'stripes', volt: 'stripes',
+  brine: 'underside', tide: 'underside', rime: 'underside', gale: 'underside',
+  crag: 'plates', lumen: 'plates',
+  thorn: 'spots', myco: 'spots',
+  gloom: 'mask', slag: 'mottle',
+};
+
+/*
+ * A single-element species has no second element to wear, and the first attempt
+ * gave it `mix(ramp[3], white, 0.34)` — a lighter version of an already-light
+ * band. Rendered, Pebblit, Obelisc, Umbrakhan and Glimmerfly came out flat:
+ * technically marked, visibly plain, because a highlight is not a contrast.
+ *
+ * Each element gets a fixed partner instead, chosen to sit across from it rather
+ * than beside it — gold on grey stone, violet on cream lumen, pale on violet
+ * gloom. This carries no type meaning and is not supposed to: for a DUAL element
+ * the accent is the second element and means something, and for a single it is
+ * just the colour that makes the animal read as an animal.
+ */
+const CONTRAST = {
+  stone: 'volt', ember: 'stone', tide: 'lumen', verdant: 'lumen',
+  gale: 'volt', volt: 'gloom', gloom: 'lumen', lumen: 'gloom', rift: 'lumen',
+};
+
+/** The colour a marking draws in: the second element, or the first's partner. */
+function accentFor(species, ramp) {
+  const els = species.elements ?? [];
+  if (els.length > 1 && ELEMENT_RAMP[els[1]]) return ELEMENT_RAMP[els[1]][2];
+  const partner = ELEMENT_RAMP[CONTRAST[els[0]] ?? 'volt'];
+  return partner ? partner[2] : mix(ramp[3], '#ffffff', 0.34);
+}
+
+function markingFor(species) {
+  if (MARKING[species.family]) return MARKING[species.family];
+  // Apexes have no family, so their plan decides — a wraith gets a mask, a
+  // serpent a belly, and nothing falls through to "no markings at all".
+  const plan = planFor(species);
+  return plan === 'serpent' ? 'underside' : plan === 'wraith' ? 'mask'
+    : plan === 'insect' ? 'stripes' : plan === 'flier' ? 'underside' : 'plates';
+}
+
+/**
+ * Repaint some of the body in the accent. Runs before weak points, which
+ * overwrite whatever they land on — an eye outranks a stripe.
+ */
+function applyMarkings(species, voxels, size, ramp, r) {
+  const kind = markingFor(species);
+  const accent = accentFor(species, ramp);
+  const deep = mix(accent, '#000000', 0.35);
+
+  for (const v of voxels) {
+    switch (kind) {
+      case 'stripes': {
+        /*
+         * Bands across the long axis, nudged by height so they are not a
+         * barcode. A flat `axis % 4 < 2` rendered as corrugated iron: perfectly
+         * even, perfectly artificial. Offsetting each layer gives the band a
+         * lean, which is what makes it read as an animal's stripe.
+         */
+        const axis = size.x >= size.z ? v.x : v.z;
+        if ((axis + (v.y >> 1)) % 5 < 2 && v.y > size.y * 0.22) v.colour = accent;
+        break;
+      }
+      case 'underside': {
+        /*
+         * Counted in LAYERS, not as a fraction of the height. A fraction works
+         * on a tall animal and swallows a short one: Gustling is three voxels
+         * tall, so "the bottom third" rounded up to two of its three layers and
+         * repainted 81% of the model — a Gale monster that had stopped looking
+         * Gale. Floor it to whole layers and it is 33%.
+         */
+        if (v.y < Math.max(1, Math.floor(size.y * 0.35))) v.colour = accent;
+        break;
+      }
+      case 'plates': {
+        // A ridge along the spine. The first version wanted the top two layers
+        // AND the middle fifth, which on a broad lump is almost no voxels at all.
+        const mid = Math.abs(v.z - (size.z - 1) / 2) <= Math.max(1, size.z * 0.3);
+        if (v.y >= size.y - Math.max(2, Math.round(size.y * 0.3)) && mid) v.colour = accent;
+        break;
+      }
+      case 'spots': {
+        // Deterministic per voxel, so a species is spotted the same way forever.
+        const h = Math.imul((v.x + 1) * 73856093 ^ (v.y + 1) * 19349663 ^ (v.z + 1) * 83492791, 0x27d4eb2d) >>> 0;
+        if (h % 100 < 22) v.colour = h % 2 ? accent : deep;
+        break;
+      }
+      case 'mask': {
+        // The front of the upper body, where a face would be. Both thresholds
+        // were too tight: on a wraith it landed on a handful of voxels and the
+        // monster stayed one flat colour.
+        if (v.y > size.y * 0.5 && v.z > size.z * 0.5) v.colour = deep;
+        break;
+      }
+      case 'mottle': {
+        if (r() < 0.24) v.colour = mix(v.colour, accent, 0.55);
+        break;
+      }
+      default: break;
+    }
+  }
+}
+
 export function buildModel(species) {
   const plan = PLANS[planFor(species)] ?? PLANS.lump;
   const r = rnd(hashString(species.id));
@@ -258,6 +376,8 @@ export function buildModel(species) {
     seen.add(k);
     voxels.push({ x, y, z, colour: ramp[Math.max(0, Math.min(3, v.band))], weak: false });
   }
+
+  applyMarkings(species, voxels, size, ramp, r);
 
   // Weak points last, so they overwrite whatever body voxel was there.
   const byKey = new Map(voxels.map((v) => [`${v.x},${v.y},${v.z}`, v]));
