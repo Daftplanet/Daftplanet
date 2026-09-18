@@ -285,5 +285,40 @@
   },
   "$restraint_decay_health_scale_note": "A healthy monster shakes off sedative faster than a wounded one. This is what stops 'swap to darts at half health' being a strategy with no failure mode: dart it early and the meter drains against you.",
   "wound_multiplier_exponent": 1.8,
-  "$wound_multiplier_exponent_note": "Curves the wound multiplier instead of ramping it linearly. Linear left almost no gradient between 50% and 30% health (2.0 vs 2.4), so darting early cost the same per capture as wounding deeply first and never risked the flee threshold \u2014 it strictly dominated. Curving it makes the timing of the chamber swap the decision it is supposed to be."
+  "$wound_multiplier_exponent_note": "Curves the wound multiplier instead of ramping it linearly. Linear left almost no gradient between 50% and 30% health (2.0 vs 2.4), so darting early cost the same per capture as wounding deeply first and never risked the flee threshold — it strictly dominated. Curving it makes the timing of the chamber swap the decision it is supposed to be.",
+  "$field_comment": "Field items are the only thing you can do about a wounded party WITHOUT going home. Health and PP carry across a patrol, which makes a patrol about three fights long; without a field item the only answers are walk back to the Sanctuary or wait out the regen clock, and 'wait half an hour' is not a thing you can ask of someone standing in a street.\n\nUsing one IN BATTLE costs the turn, and that turn is the whole balance. Measured (FIELD=1 in balance_sim.mjs): a salve restoring 40% is worth +15 points of win rate and the DUMBEST policy scores best — heal whenever you are low beats reading the matchup, so it is a button you hold, and it cancels the patrol limit this whole system exists to create. At 18% — about one turn of incoming damage, which is what the comparable-damage cap holds an exchange to — healing is worth only +3 flat, and a policy that reads whether the damage race is close beats every flat rule while spending FEWER salves. That is a decision, so that is what in_battle items are tuned to.\n\nThe generous restores are therefore NOT usable in a fight. They work between battles, on patrol, where extending the patrol is exactly their job and they cannot make a losing fight winnable by attrition.",
+  "field": [
+    {
+      "id": "field_salve",
+      "name": "Field Salve",
+      "tier": 1,
+      "in_battle": true,
+      "restores_hp": 0.18,
+      "note": "About one turn of incoming damage. Deliberately marginal: worth the turn when the race is close, wasted when it is not."
+    },
+    {
+      "id": "focus_draught",
+      "name": "Focus Draught",
+      "tier": 2,
+      "in_battle": true,
+      "restores_pp": 4,
+      "note": "4 PP back on every move. Costs the turn, so it only pays when the alternative is several turns of Strike."
+    },
+    {
+      "id": "deep_salve",
+      "name": "Deep Salve",
+      "tier": 2,
+      "in_battle": false,
+      "restores_hp": 0.85,
+      "note": "Most of the bar, between fights only. In a fight this was worth +15 points and made healing a button you hold."
+    },
+    {
+      "id": "rouse_vial",
+      "name": "Rouse Vial",
+      "tier": 3,
+      "in_battle": false,
+      "revives_to": 0.5,
+      "note": "Brings one back from down, at half. The only way to un-lose a monster mid-patrol, and never mid-fight."
+    }
+  ]
 }

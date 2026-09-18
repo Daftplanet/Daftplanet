@@ -1698,6 +1698,13 @@ just cannot play with your good monsters.
 Three fights, two of them won, and then you are walking home or paying up. That
 is a patrol.
 
+> **Corrected in part 7.** That row came from a script written in a shell and
+> never committed, so it cannot be re-run. The committed `PATROL=1` diagnostic
+> measures **1.6 to 2.1 battles and 33% to 44%** across three parties. The shape
+> of the claim survives — a patrol is a couple of fights and then you are walking
+> home — but the numbers above are not ones anybody can check, and should not be
+> quoted.
+
 ## A fourth narrow sample
 
 The first version of that measurement fought the same wild every time — a
@@ -1752,3 +1759,108 @@ prints the mode, the view, and whether a spawn was in range.
    visible instead of silently green. It needs a reproduction before it needs a
    fix, and the arena is the legacy combat mode, so it is not urgent — but it is
    a real hole and it should not be closed by loosening the check.
+
+# Phase 4, part 7: something to do about it in the field
+
+Part 6 made a patrol cost something. It did not give you anything to do about
+that cost except walk home, and "walk home" is a thirty-minute round trip in a
+game you play on a walk. So: field items, crafted at the bench from the same
+element materials as ammunition.
+
+## The measurement came first, and it inverted the design
+
+The spec was a Field Salve restoring 40% of the bar, usable from the BAG menu,
+costing the turn. That seemed obviously right — a potion, at the price of a
+turn. `FIELD=1` in `balance_sim.mjs` says it is obviously wrong.
+
+Four policies over 40 fair stage-2 matchups, each handed the same two salves:
+
+| policy | restores 40% | restores 18% |
+|---|---|---|
+| never heal | 53.6% | 53.6% |
+| heal below 60% | 67.9% | 56.1% |
+| heal below 35% | 67.3% | 55.4% |
+| heal below 20% | **68.8%** | 56.6% |
+| heal if hit softly | 67.9% | 53.1% |
+| heal if the race is close | 65.9% | **58.1%** |
+
+At 40% the **dumbest policy wins**. "Press it whenever you are low" beats reading
+the matchup by 3 points, and the whole item is worth +15 points of win rate.
+That is not a decision, it is a button you hold — and worse, it cancels the
+patrol limit part 6 exists to create, because any losing fight becomes winnable
+by attrition.
+
+At 18% the ordering inverts: the policy that checks whether a turn spent healing
+actually changes who runs out first beats every flat threshold, **and spends
+fewer salves doing it** (0.72 against 0.86). Healing is worth about +3 points
+flat, which is a nudge rather than a strategy.
+
+Why 18%: the comparable-damage cap holds a fair exchange to about a fifth of a
+bar, so a heal worth one turn of incoming damage is the break-even point. The
+sweep finds it exactly where the theory puts it — 10% measures **−2.5** points
+(a trap), 15% measures +1.6, 20% measures +3.6.
+
+So the item split in two:
+
+- **In a fight**: Field Salve (18%) and Focus Draught (+4 PP). Marginal on
+  purpose, and a real read.
+- **Between fights, on patrol**: Deep Salve (85%) and Rouse Vial (revive at
+  half). These are generous, and they are **not reachable from the BAG menu** —
+  the engine refuses them and the menu does not list them. A check exists purely
+  to keep that true, because the measurement above is the only reason it is.
+
+## What the kit actually buys
+
+`PATROL=1`, a party of three walking out until nobody is fit, 200 patrols:
+
+| party | bare | full kit |
+|---|---|---|
+| Cinderfang · Brinelet · Sporelet | 2.0 battles | 3.2 |
+| Pebblit · Glimmerfly · Sootpup | 1.6 | 2.3 |
+| Brinelet · Pebblit · Cinderfang | 2.1 | 2.6 |
+
+Longer, not endless — a patrol runs about 40–60% further with a full kit. That
+is the shape the design wants: the kit is a way to spend materials on more
+patrol, not a way to stop going home.
+
+Note the in-battle salves barely move the battle count on their own (2.0 → 2.0).
+They raise the win rate within a fight; the Deep Salve is what buys another
+fight. The two halves of the kit do different jobs, which is the argument for
+having both.
+
+## A number I had been quoting was never a measurement
+
+Part 6 reported **3.2 battles per patrol, 1.8 won, 56%**, and that figure went
+into the pull request. The committed `PATROL=1` diagnostic measures **1.6 to 2.1
+battles and 33% to 44%** across three parties. The old figure does not reproduce
+and cannot be checked, because it came from a script written in a shell, read
+once, and never committed.
+
+That is a different failure from the four before it. Those were samples too
+narrow, caught by widening them. This one was a perfectly reasonable measurement
+that **decayed into an assertion the moment the conversation moved on**, because
+nothing in the repository could re-run it. In a project whose entire method is
+that claims get measured, a measurement that only ever existed in a terminal is
+worth exactly as much as a guess — and it is more dangerous than a guess,
+because it sounds like it was checked.
+
+Every headline number in the findings now has a committed diagnostic behind it
+or says plainly that it does not.
+
+## And two test bugs, one of them mine from an hour earlier
+
+**The pack check demanded a win.** "A pack of three is three monsters" asserted
+that all three members reach an ending. But your side does not heal between pack
+members — by design, it is what makes a pack hard — so the third one can finish
+you, and the battle correctly ends `wiped` with a member unresolved. The check
+failed on correct behaviour roughly one run in five. I first saw it fail in the
+same run as my own new checks and assumed I had broken the pack loop; three runs
+on a clean tree passed, three with the change passed, and the real cause was the
+random profile seed. **One run is not a signal**, in either direction.
+
+**My own salve check measured the wrong thing.** It compared the monster's health
+before and after the turn and expected it to have gone up. It went *down* — the
+wild monster hits back on the same turn, and at 18% the salve does not always
+cover the hit that follows it. That is precisely the design, so "net health rose"
+was asserting the opposite of what the item is for. It reads the recovery off the
+battle log now.

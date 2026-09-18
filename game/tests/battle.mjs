@@ -275,9 +275,11 @@ const menu = await page.evaluate(async () => {
   const root = read();
   // No second monster, so Swap must be dead.
   const swap = root.find((x) => x.label === 'Swap');
-  // Empty the bag; Bag should go dead too.
+  // Empty the bag; Bag should go dead too. Field items live in the same bag now,
+  // so an "empty bag" means no rounds AND no salves.
   r.profile.state.ammo.tranq_dart = 0;
   r.profile.state.ammo.heavy_sedative_dart = 0;
+  r.profile.state.items = {};
   r.profile.save();
   document.querySelectorAll('.bchoice')[1].click();
   await new Promise((d) => setTimeout(d, 200));
@@ -286,7 +288,7 @@ const menu = await page.evaluate(async () => {
 });
 ok('a single monster cannot swap, and an empty bag says so',
    menu.root.join('/') === 'Fight/Bag/Swap/Run' && menu.swapDisabled === true
-   && menu.bag.some((x) => /No capture rounds/.test(x)),
+   && menu.bag.some((x) => /Nothing in the bag/.test(x)),
    `${menu.root.join(' · ')} — Swap greyed · bag reads "${menu.bag[0]}"`);
 
 // --- 10. the arena is still reachable
@@ -347,6 +349,7 @@ const pack = await page.evaluate(async () => {
   return {
     ...started,
     results: b.results.length,
+    outcome: b.outcome,
     outcomes,
     distinct,
     /*
@@ -362,9 +365,18 @@ const pack = await page.evaluate(async () => {
   };
 });
 ok('a pack of three is three monsters, fought one at a time and recorded one at a time',
-   pack.wilds === 3 && pack.results === 3 && pack.distinct === 3
-   && pack.encounters === 3 && pack.kept === pack.wantKept,
+   /*
+    * A wipe is a legitimate ending: your side does not heal between members, so
+    * the third one meets whatever the first two left of you and can finish you.
+    * This check used to demand all three resolve, which is demanding a WIN — it
+    * failed about one run in five on correct behaviour, and the failure looked
+    * exactly like a regression in the pack loop.
+    */
+   pack.wilds === 3 && pack.distinct === 3
+   && (pack.outcome === 'wiped' ? pack.results < 3 : pack.results === 3)
+   && pack.encounters === pack.results && pack.kept === pack.wantKept,
    `${pack.wilds} queued · ${pack.results} reached an ending (${pack.outcomes.join(', ')})`
+   + `${pack.outcome === 'wiped' ? ' before the party was wiped, which ends it' : ''}`
    + ` · ${pack.encounters} encounters logged · ${pack.kept} specimens kept of ${pack.wantKept}`
    + ` that did not get away · ${pack.distinct} distinct measured heights`);
 
@@ -1011,7 +1023,129 @@ ok('a wounded monster recovers on its own, at the rate the data says',
    `${(regen.rate * 100).toFixed(0)}%/min · 20% + ten minutes = ${(regen.after.hp * 100).toFixed(0)}%,`
    + ' and two hours puts it back to full with its rounds restored');
 
-// --- 36. phone layout
+// --- 36. a field salve costs the turn and gives some of the bar back
+const salve = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  const b = await window.battleWith(['brinelet'], 'cinderfang');
+  r.profile.state.items = { field_salve: 2, deep_salve: 1, rouse_vial: 1 };
+  const mine = b.team[0];
+  mine.hp = Math.round(mine.maxHp * 0.3);
+  const before = mine.hp, turnBefore = b.turn;
+  const log = r.takeTurn({ kind: 'item', itemId: 'field_salve' });
+  const item = r.data.ammo.field.find((f) => f.id === 'field_salve');
+  /*
+   * Read the recovery off the log rather than off the health bar. The first
+   * version of this check compared hp before and after the TURN and failed —
+   * correctly: the wild monster hits back on the same turn, and at 18% the
+   * salve does not always cover the hit that follows it. That is the whole
+   * design (a heal worth more than a turn of damage is a button you hold), so
+   * "net health went up" is the wrong thing to assert.
+   */
+  const line = log.find((l) => /recovers/.test(l.text));
+  const back = line ? Number(line.text.match(/recovers (\d+)/)[1]) : 0;
+  return {
+    before, after: mine.hp, maxHp: mine.maxHp, back,
+    want: Math.round(mine.maxHp * item.restores_hp),
+    restores: item.restores_hp,
+    turnSpent: b.turn > turnBefore,
+    // The wild monster must get its turn — that is the cost.
+    wildActed: log.some((l) => l.text.includes(b.wild.species.name) && l.text.includes('used')),
+    used: b.used.field_salve,
+  };
+});
+ok('a field salve gives back what the data says, and the wild one gets its turn for it',
+   salve.back > 0 && Math.abs(salve.back - salve.want) <= 1
+   && salve.turnSpent && salve.wildActed && salve.used === 1,
+   `recovered ${salve.back} of a ${salve.maxHp} bar — ${Math.round(salve.restores * 100)}% as the data says`
+   + ` · the turn was spent and ${salve.wildActed ? 'it hit back for more than the salve gave, which is the point'
+     : 'it did NOT hit back'}`);
+
+// --- 37. the generous restores are unreachable in a fight
+/*
+ * This is the check that protects the measurement. FIELD=1 in balance_sim.mjs
+ * found an 85% heal worth +15 points of win rate, with the DUMBEST policy
+ * scoring best — heal whenever low beat reading the matchup. A heal like that
+ * in the BAG menu cancels the patrol limit the condition system exists to
+ * create, so Deep Salve and Rouse Vial must not be reachable from a battle.
+ */
+const sealed = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  const b = await window.battleWith(['brinelet'], 'cinderfang');
+  r.profile.state.items = { field_salve: 2, deep_salve: 3, rouse_vial: 3 };
+  const mine = b.team[0];
+  mine.hp = Math.round(mine.maxHp * 0.3);
+  const before = mine.hp, turnBefore = b.turn;
+  const log = r.takeTurn({ kind: 'item', itemId: 'deep_salve' });
+  // And the menu must not offer it either.
+  r.show('battle');
+  document.querySelectorAll('.bchoice').forEach((el) => { if (el.textContent.includes('Bag')) el.click(); });
+  await new Promise((d) => requestAnimationFrame(d));
+  const labels = [...document.querySelectorAll('.bchoice')].map((el) => el.textContent);
+  return {
+    healed: mine.hp !== before,
+    turnSpent: b.turn > turnBefore,
+    refused: log.some((l) => l.kind === 'miss'),
+    offered: r.battleOptions().items.map((f) => f.id),
+    menuHasDeep: labels.some((t) => t.includes('Deep Salve')),
+    menuHasField: labels.some((t) => t.includes('Field Salve')),
+  };
+});
+ok('the generous restores cannot be spent in a fight, and the menu does not offer them',
+   !sealed.healed && !sealed.turnSpent && sealed.refused
+   && !sealed.offered.includes('deep_salve') && !sealed.offered.includes('rouse_vial')
+   && !sealed.menuHasDeep && sealed.menuHasField,
+   `refused, no turn lost · the bag offers ${sealed.offered.join(', ')}`
+   + ` — an 85% heal mid-fight measured +15 points with the dumbest policy winning`);
+
+// --- 38. the same salve works out of battle, and a Rouse Vial un-loses a monster
+const field = await page.evaluate(() => {
+  const r = window.__riftborn;
+  const res = r.profile.state.residents[0];
+  r.profile.state.items = { deep_salve: 1, rouse_vial: 1, field_salve: 0 };
+  res.hp = 0.1;
+  const deepOk = r.profile.useItem('deep_salve', res.uid);
+  const afterDeep = res.hp;
+  // A revive on a standing monster does nothing and is not consumed.
+  const wastedRevive = r.profile.useItem('rouse_vial', res.uid);
+  res.hp = 0;
+  const reviveOk = r.profile.useItem('rouse_vial', res.uid);
+  return {
+    deepOk, afterDeep, wastedRevive, reviveOk, afterRevive: res.hp,
+    left: r.profile.itemCount('rouse_vial'), fit: r.profile.fit(res.uid),
+  };
+});
+ok('out of battle the deep salve works, and a Rouse Vial is the only way back from down',
+   field.deepOk && field.afterDeep > 0.9 && !field.wastedRevive
+   && field.reviveOk && field.afterRevive === 0.5 && field.left === 0 && field.fit,
+   `10% → ${Math.round(field.afterDeep * 100)}% · a revive on a standing monster is refused and not spent`
+   + ` · down → ${Math.round(field.afterRevive * 100)}% and fit to go out again`);
+
+// --- 39. the field kit is crafted, costs materials, and shows up on patrol
+const fieldkit = await page.evaluate(() => {
+  const r = window.__riftborn;
+  r.profile.state.items = {};
+  r.profile.state.essence = 0;
+  // The strip shows the PARTY, and battleWith admits residents without choosing one.
+  for (const res of r.profile.state.residents) r.profile.toggleParty(res.uid, 3);
+  const broke = r.profile.canCraft('deep_salve', 1);
+  r.profile.state.essence = 500;
+  Object.assign(r.profile.state.materials, { verdant: 20, lumen: 20, gloom: 20, volt: 20 });
+  const before = { ess: r.profile.state.essence, verdant: r.profile.state.materials.verdant };
+  const made = r.profile.craft('deep_salve', 1);
+  const after = { ess: r.profile.state.essence, verdant: r.profile.state.materials.verdant };
+  r.show('patrol');
+  r.renderParty();
+  const rows = document.querySelectorAll('.partyrow').length;
+  const buttons = [...document.querySelectorAll('[data-use]')].map((b) => b.textContent.trim());
+  return { broke, made, spent: before.ess - after.ess, mats: before.verdant - after.verdant, rows, buttons };
+});
+ok('the field kit is crafted from element materials and reaches the patrol view',
+   !fieldkit.broke && fieldkit.made && fieldkit.spent === 26 && fieldkit.mats === 4 && fieldkit.rows >= 1
+   && fieldkit.buttons.some((t) => t.includes('Deep Salve')),
+   `refused at 0 Essence · cost ${fieldkit.spent} Essence and ${fieldkit.mats} verdant`
+   + ` · ${fieldkit.rows} party row(s) on patrol offering ${fieldkit.buttons.join(', ') || 'nothing'}`);
+
+// --- 40. phone layout
 await page.setViewportSize({ width: 390, height: 844 });
 await page.evaluate(async () => { await window.battleWith(['brinelet'], 'cinderfang'); });
 await page.waitForTimeout(400);

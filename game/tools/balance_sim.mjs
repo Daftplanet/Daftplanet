@@ -16,7 +16,7 @@ import { escortAbility } from '../../docs/riftborn/js/sanctuary.js';
 import { createFight, step, weakPointPositions, assistMiss, ARENA } from '../../docs/riftborn/js/game.js';
 import {
   makeCombatant, createBattle, takeTurn, levelOf, wildLevel, computeMoveDamage, catchChance,
-  activeMon, canUse,
+  activeMon, canUse, conditionOf,
 } from '../../docs/riftborn/js/battle.js';
 import { studyFromBattle, STUDY_PER_MINUTE } from '../../docs/riftborn/js/sanctuary.js';
 
@@ -704,4 +704,258 @@ if (process.env.MOVES) {
   const spread = (Math.max(...scores) - Math.min(...scores)) * 100;
   console.log(`\nspread best to worst: ${spread.toFixed(1)} points.`);
   console.log('If the top two rows tie, the moves are decoration and only the monster you bring matters.');
+}
+
+/*
+ * ---------------------------------------------------------------- FIELD=1
+ *
+ * Is a mid-fight heal a decision, or a trap?
+ *
+ * A field item costs the turn. Both sides deal damage as a share of health and
+ * the comparable-damage cap holds a fair exchange near a fifth of a bar, so a
+ * salve restoring 40% nets roughly +20% — positive, but only just, and only
+ * while you are still alive to spend the turn. The failure modes are symmetric
+ * and both fatal: restore too little and nobody should ever press it, restore
+ * too much and every losing fight becomes winnable by attrition, which turns
+ * the patrol limit this whole system exists to create straight back off.
+ *
+ * So the question is not "does healing help" — it is whether the answer depends
+ * on the situation. A heal that is right at every health level is a button you
+ * hold; one that is right only when you are ahead is a decision.
+ */
+if (process.env.FIELD) {
+  const byId = Object.fromEntries(data.monsters.monsters.map((m) => [m.id, m]));
+  const pool = data.monsters.monsters.filter((m) => !m.apex && m.stage === 2);
+  const pairs = [];
+  for (const a of pool) {
+    for (const z of pool) {
+      if (a.id === z.id || a.size !== z.size || a.elements[0] === z.elements[0]) continue;
+      pairs.push([a.id, z.id]);
+    }
+  }
+  const use = pairs.slice(0, Number(process.env.PAIRS ?? 40));
+  const N = Number(process.env.RUNS ?? 40);
+  const ITEM = process.env.ITEM ?? 'field_salve';
+  const item = { ...data.ammo.field.find((f) => f.id === ITEM) };
+  // RESTORE sweeps the tuning without editing the data file.
+  if (process.env.RESTORE) {
+    item.restores_hp = Number(process.env.RESTORE);
+    data.ammo.field = data.ammo.field.map((f) => (f.id === ITEM ? item : f));
+  }
+
+  const bestDamage = (b, mine) => {
+    let bi = 0, bd = -1;
+    mine.moves.forEach((mv, i) => {
+      if (!canUse(mine, i)) return;
+      const d = computeMoveDamage(mine, b.wild, mv, data, () => 0.5).damage * (mv.accuracy ?? 1);
+      if (d > bd) { bd = d; bi = i; }
+    });
+    return bi;
+  };
+  const statusFirst = (b, mine) => {
+    const si = mine.moves.findIndex((mv, i) => canUse(mine, i) && (mv.applies || mv.applies_self)
+      && !(mv.applies ? b.wild.statuses[mv.applies] : mine.statuses[mv.applies_self]));
+    return si >= 0 ? si : bestDamage(b, mine);
+  };
+
+  // Each policy gets the SAME number of salves, so what is measured is when you
+  // press it rather than how many you were handed.
+  const STOCK = Number(process.env.STOCK ?? 2);
+  /*
+   * Two shapes of policy, because "when do I heal" and "should I heal at all"
+   * are different questions. A flat threshold measures the second; the two
+   * conditional policies measure the first — if a policy that reads the
+   * matchup cannot beat one that ignores it, the item is a flat bonus rather
+   * than a decision, and it does not belong on a menu you press mid-fight.
+   */
+  const outdamaging = (b, mine) => {
+    const mineDmg = computeMoveDamage(mine, b.wild, mine.moves[bestDamage(b, mine)], data, () => 0.5).damage;
+    let wildDmg = 0;
+    b.wild.moves.forEach((mv) => {
+      const d = computeMoveDamage(b.wild, mine, mv, data, () => 0.5).damage;
+      if (d > wildDmg) wildDmg = d;
+    });
+    return { mineDmg, wildDmg, turnsToKill: b.wild.hp / Math.max(1, mineDmg),
+      turnsToDie: mine.hp / Math.max(1, wildDmg) };
+  };
+  const POLICIES = {
+    'never heal           ': null,
+    'heal below 60%       ': 0.60,
+    'heal below 35%       ': 0.35,
+    'heal below 20%       ': 0.20,
+    'heal if hit softly   ': (b, mine) => {
+      const { wildDmg } = outdamaging(b, mine);
+      // Worth a turn only when the heal buys more than a turn of survival.
+      return mine.hp / mine.maxHp < 0.6 && (item.restores_hp * mine.maxHp) > wildDmg * 1.2;
+    },
+    'heal if race is close': (b, mine) => {
+      const { turnsToKill, turnsToDie } = outdamaging(b, mine);
+      // A turn spent healing has to change who runs out first.
+      return mine.hp / mine.maxHp < 0.6 && turnsToDie < turnsToKill && turnsToDie + 1 > turnsToKill - 1;
+    },
+  };
+
+  console.log(`\nFIELD ITEMS — ${item.name}, restores ${
+    Math.round((item.restores_hp ?? 0) * 100)}% · ${use.length} fair stage-2 matchups x ${N} seeds · ${STOCK} in the bag`);
+  console.log('policy                  win%   turns   used   left at end');
+  const rows = [];
+  for (const [name, threshold] of Object.entries(POLICIES)) {
+    let win = 0, turns = 0, n = 0, used = 0, hpLeft = 0;
+    for (const [A, Z] of use) {
+      for (let s = 0; s < N; s++) {
+        const rng = mulberry32(s * 7919 + 13);
+        const mine = makeCombatant(byId[A], 20, data, { resident: { study: 900 }, specimenRng: rng });
+        const wild = makeCombatant(byId[Z], 20, data, { wild: true, specimenRng: rng });
+        const b = createBattle({ data, team: [mine], wilds: [wild], rng });
+        let stock = STOCK, g = 0;
+        while (!b.outcome && g++ < 200) {
+          const m = activeMon(b);
+          if (!m || m.fainted) break;
+          const wants = threshold === null ? false
+            : typeof threshold === 'function' ? threshold(b, m) : m.hp / m.maxHp < threshold;
+          if (wants && stock > 0) {
+            stock -= 1;
+            takeTurn(b, { kind: 'item', itemId: ITEM });
+          } else {
+            takeTurn(b, { kind: 'move', index: statusFirst(b, m) });
+          }
+        }
+        if (b.outcome === 'defeated') win++;
+        used += STOCK - stock;
+        hpLeft += Math.max(0, mine.hp) / mine.maxHp;
+        turns += b.turn; n++;
+      }
+    }
+    rows.push([name, win / n]);
+    console.log(`${name} ${`${((win / n) * 100).toFixed(1)}%`.padStart(7)} `
+      + `${(turns / n).toFixed(1).padStart(7)} ${(used / n).toFixed(2).padStart(6)} `
+      + `${`${((hpLeft / n) * 100).toFixed(0)}%`.padStart(13)}`);
+  }
+  const base = rows[0][1];
+  const best = Math.max(...rows.slice(1).map((r) => r[1]));
+  console.log(`\nbest healing policy beats never-heal by ${((best - base) * 100).toFixed(1)} points.`);
+  console.log('Near zero: the item is a trap. Very large: the patrol limit is off, and attrition always wins.');
+}
+
+/*
+ * --------------------------------------------------------------- PATROL=1
+ *
+ * How long is a patrol, and what does the field kit buy?
+ *
+ * A patrol is a party of three walking out, fighting until nobody is fit, and
+ * walking back. Health and PP carry from fight to fight, so this is a real
+ * limit rather than a number in a document — and it is the limit the whole
+ * condition system exists to create.
+ *
+ * The field kit is the only thing that moves it without going home, so the
+ * question is whether it extends the patrol (its job) or removes the limit
+ * (which would undo the point). A patrol that runs to twice its length is the
+ * design working; one that never ends is the design gone.
+ *
+ * The wild is drawn from ALL stage 2 species rather than one. Measured against
+ * a single species this came out at 1.1 wins per patrol and a design that
+ * looked far too harsh — the species happened to be a bad matchup for the party,
+ * which is the fourth time on this branch a first sample has been too narrow.
+ */
+if (process.env.PATROL) {
+  const byId = Object.fromEntries(data.monsters.monsters.map((m) => [m.id, m]));
+  const stage2 = data.monsters.monsters.filter((m) => !m.apex && m.stage === 2);
+  const partyIds = (process.env.PARTY ?? 'cinderfang,brinelet,sporelet').split(',');
+  const N = Number(process.env.RUNS ?? 300);
+  const salve = data.ammo.field.find((f) => f.id === 'field_salve');
+  const deep = data.ammo.field.find((f) => f.id === 'deep_salve');
+
+  const bestDamage = (b, mine) => {
+    let bi = 0, bd = -1;
+    mine.moves.forEach((mv, i) => {
+      if (!canUse(mine, i)) return;
+      const d = computeMoveDamage(mine, b.wild, mv, data, () => 0.5).damage * (mv.accuracy ?? 1);
+      if (d > bd) { bd = d; bi = i; }
+    });
+    return bi;
+  };
+  const statusFirst = (b, mine) => {
+    const si = mine.moves.findIndex((mv, i) => canUse(mine, i) && (mv.applies || mv.applies_self)
+      && !(mv.applies ? b.wild.statuses[mv.applies] : mine.statuses[mv.applies_self]));
+    return si >= 0 ? si : bestDamage(b, mine);
+  };
+
+  // A patrol: fight until every member is down, carrying condition between fights.
+  const patrol = (seed, { salves = 0, deeps = 0 }) => {
+    const rng = mulberry32(seed);
+    // The party as resident records — the same shape profile.js keeps.
+    const party = partyIds.map(() => ({ hp: 1, pp: null }));
+    let battles = 0, won = 0, usedSalve = 0, usedDeep = 0;
+
+    for (let guard = 0; guard < 40; guard++) {
+      // Between fights: patch up whoever is worst, if there is anything to use.
+      while (deeps > 0) {
+        const down = party.find((r) => r.hp <= 0);
+        const hurt = down ?? party.filter((r) => r.hp < 0.5).sort((a, z) => a.hp - z.hp)[0];
+        if (!hurt) break;
+        hurt.hp = Math.min(1, (hurt.hp <= 0 ? 0 : hurt.hp) + deep.restores_hp);
+        deeps -= 1; usedDeep += 1;
+      }
+      const fit = party.map((r, i) => [r, i]).filter(([r]) => r.hp > 0);
+      if (!fit.length) break;
+
+      const team = fit.map(([r, i]) => makeCombatant(byId[partyIds[i]], 20, data,
+        { resident: { study: 900, hp: r.hp, pp: r.pp }, specimenRng: rng }));
+      const wildSp = stage2[Math.floor(rng() * stage2.length)];
+      const wild = makeCombatant(wildSp, 20, data, { wild: true, specimenRng: rng });
+      const b = createBattle({ data, team, wilds: [wild], rng });
+
+      let stock = salves, g = 0;
+      while (!b.outcome && g++ < 200) {
+        // The engine sends out the next fit one itself when the lead goes down,
+        // and calls the battle 'wiped' when there is nobody left, so this loop
+        // only has to stop when it says so.
+        const m = activeMon(b);
+        if (!m || m.fainted) break;
+        // Heal only when the turn changes who runs out first — the policy that
+        // beat every flat threshold in FIELD=1, while spending fewer salves.
+        let heal = false;
+        if (stock > 0 && m.hp / m.maxHp < 0.6) {
+          const mineDmg = computeMoveDamage(m, b.wild, m.moves[bestDamage(b, m)], data, () => 0.5).damage;
+          let wildDmg = 0;
+          b.wild.moves.forEach((mv) => {
+            const d = computeMoveDamage(b.wild, m, mv, data, () => 0.5).damage;
+            if (d > wildDmg) wildDmg = d;
+          });
+          const toKill = b.wild.hp / Math.max(1, mineDmg);
+          const toDie = m.hp / Math.max(1, wildDmg);
+          heal = toDie < toKill && toDie + 1 > toKill - 1;
+        }
+        if (heal) { stock -= 1; usedSalve += 1; takeTurn(b, { kind: 'item', itemId: 'field_salve' }); }
+        else takeTurn(b, { kind: 'move', index: statusFirst(b, m) });
+      }
+      battles += 1;
+      if (b.outcome === 'defeated' || b.outcome === 'caught') won += 1;
+      // Condition goes home with them, which is what makes this a patrol.
+      fit.forEach(([r], k) => { const c = conditionOf(team[k]); r.hp = c.hp; r.pp = c.pp; });
+    }
+    return { battles, won, usedSalve, usedDeep };
+  };
+
+  const KITS = {
+    'nothing              ': { salves: 0, deeps: 0 },
+    '2 field salves       ': { salves: 2, deeps: 0 },
+    '1 deep salve         ': { salves: 0, deeps: 1 },
+    '2 salves + 2 deep    ': { salves: 2, deeps: 2 },
+  };
+  console.log(`\nPATROL LENGTH — party of ${partyIds.length} vs ${stage2.length} stage-2 species, ${N} patrols each`);
+  console.log('field kit               battles   won    win%   items used');
+  let base = 0;
+  for (const [name, kit] of Object.entries(KITS)) {
+    let battles = 0, won = 0, items = 0;
+    for (let i = 0; i < N; i++) {
+      const r = patrol(i * 7919 + 13, kit);
+      battles += r.battles; won += r.won; items += r.usedSalve + r.usedDeep;
+    }
+    if (!base) base = battles / N;
+    console.log(`${name} ${(battles / N).toFixed(1).padStart(7)} ${(won / N).toFixed(1).padStart(6)} `
+      + `${`${((won / battles) * 100).toFixed(0)}%`.padStart(7)} ${(items / N).toFixed(2).padStart(12)}`);
+  }
+  console.log('\nA patrol should get LONGER with a kit, not endless. If the bottom row runs away');
+  console.log('from the top one, the field kit has cancelled the limit the whole system exists to create.');
 }

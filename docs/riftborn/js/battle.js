@@ -365,6 +365,8 @@ export function createBattle(opts) {
     // Rounds actually fired, by ammo id. The caller spends these whether or not
     // the capture landed — a dart that bounces is still a dart you no longer have.
     spent: {},
+    // Field items consumed, by item id. Same contract as `spent`.
+    used: {},
   };
 }
 
@@ -868,6 +870,59 @@ export function takeTurn(b, action) {
       say(b, 'It shakes free.', 'weak');
     }
     wildTurn(b);
+  } else if (action.kind === 'item') {
+    /*
+     * A field item costs the TURN, and that is the entire balance question.
+     * The wild monster deals roughly a fifth of a bar per turn (the comparable
+     * damage cap), so a salve that restores less than that is a trap nobody
+     * should press, and one that restores far more makes every losing fight
+     * winnable by attrition. See the FIELD=1 diagnostic in balance_sim.mjs.
+     */
+    const item = (b.data.ammo.field ?? []).find((f) => f.id === action.itemId);
+    const target = action.index === undefined ? mine : b.team[action.index];
+    if (!item || !target || !item.in_battle) {
+      // The generous restores are deliberately not reachable here: measured at
+      // 40%, healing mid-fight was worth +15 points and the dumbest policy won.
+      say(b, item && !item.in_battle ? `${item.name} is no use in the middle of this.`
+        : 'Nothing to use.', 'miss');
+      b.turn -= 1;
+      return b.log.slice(from);
+    }
+    const bad = item.revives_to ? !target.fainted : target.fainted;
+    if (bad) {
+      say(b, item.revives_to ? `${target.species.name} is still standing.`
+        : `${target.species.name} is down — that will not reach it.`, 'miss');
+      b.turn -= 1;
+      return b.log.slice(from);
+    }
+
+    b.used[item.id] = (b.used[item.id] ?? 0) + 1;
+    say(b, `You use a ${item.name}.`, 'info');
+
+    if (item.revives_to) {
+      target.fainted = false;
+      target.hp = Math.max(1, Math.round(target.maxHp * item.revives_to));
+      say(b, `${target.species.name} is back on its feet.`, 'good');
+    }
+    if (item.restores_hp) {
+      const before = target.hp;
+      target.hp = Math.min(target.maxHp, target.hp + target.maxHp * item.restores_hp);
+      const back = Math.round(target.hp - before);
+      say(b, back > 0 ? `${target.species.name} recovers ${back}.`
+        : `${target.species.name} is already whole.`, back > 0 ? 'good' : 'miss');
+    }
+    if (item.restores_pp) {
+      let any = false;
+      target.moves.forEach((m, i) => {
+        if (m.pp == null || target.pp[i] == null) return;       // Strike has none
+        const was = target.pp[i];
+        target.pp[i] = Math.min(m.pp, was + item.restores_pp);
+        if (target.pp[i] > was) any = true;
+      });
+      say(b, any ? `${target.species.name} has its rounds back.`
+        : `${target.species.name} has nothing to restore.`, any ? 'good' : 'miss');
+    }
+    wildTurn(b);
   } else if (action.kind === 'run') {
     const odds = b.rules.flee_base ?? 0.35;
     if (b.rng() < odds + 0.3) {
@@ -957,5 +1012,6 @@ export function options(b) {
     canSwap: b.team.filter((c) => !c.fainted).length > 1,
     canCatch: !b.wild.fainted,
     canRun: true,
+    items: b.wardenOnly ? [] : (b.data.ammo.field ?? []).filter((f) => f.in_battle),
   };
 }

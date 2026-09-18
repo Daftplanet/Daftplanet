@@ -51,6 +51,19 @@ export const AMMO_COST = {
   anchor_tether:       { essence: 25, mats: { stone: 4, volt: 2 } },
 };
 
+/*
+ * Field items are craftable like ammunition and routed through the same element
+ * materials, so the answer to "my party is wrecked and I am two miles from the
+ * Sanctuary" is still a hunting problem. Priced against mending: a Deep Salve is
+ * dearer than mending the same monster at home, because it saves you the walk.
+ */
+export const ITEM_COST = {
+  field_salve:   { essence: 6,  mats: { verdant: 2 } },
+  focus_draught: { essence: 12, mats: { lumen: 2, volt: 1 } },
+  deep_salve:    { essence: 26, mats: { verdant: 4, lumen: 1 } },
+  rouse_vial:    { essence: 40, mats: { lumen: 3, gloom: 2 } },
+};
+
 export const RESEARCH_COST = { 1: 1, 2: 3, 3: 6 };
 
 export const XP = {
@@ -72,6 +85,7 @@ const DEFAULT = () => ({
   materials: { ember: 6, tide: 6, verdant: 10, stone: 6, gale: 4, volt: 6, gloom: 2, lumen: 2, rift: 0 },
   researchPoints: 0,
   ammo: { ball_round: 40, tranq_dart: 14 },
+  items: { field_salve: 2 },
   /*
    * Two weapon slots, per 02-weapons-and-ammo.md: "A Warden carries two weapons.
    * This forces a real choice: two lethal profiles, two capture profiles, or one
@@ -264,8 +278,10 @@ export function createProfile(content) {
     spendAmmo(id, n) { state.ammo[id] = Math.max(0, (state.ammo[id] ?? 0) - n); },
     material(el) { return state.materials[el] ?? 0; },
 
+    itemCount(id) { return state.items?.[id] ?? 0; },
+
     canCraft(id, n = 1) {
-      const c = AMMO_COST[id];
+      const c = AMMO_COST[id] ?? ITEM_COST[id];
       if (!c) return false;
       if (state.essence < c.essence * n) return false;
       for (const [el, amt] of Object.entries(c.mats ?? {})) {
@@ -275,10 +291,54 @@ export function createProfile(content) {
     },
     craft(id, n = 1) {
       if (!this.canCraft(id, n)) return false;
-      const c = AMMO_COST[id];
+      const c = AMMO_COST[id] ?? ITEM_COST[id];
       state.essence -= c.essence * n;
       for (const [el, amt] of Object.entries(c.mats ?? {})) state.materials[el] -= amt * n;
-      state.ammo[id] = (state.ammo[id] ?? 0) + n;
+      const bin = ITEM_COST[id] ? 'items' : 'ammo';
+      state[bin] = state[bin] ?? {};
+      state[bin][id] = (state[bin][id] ?? 0) + n;
+      notify();
+      return true;
+    },
+
+    /** Consume one, wherever it was used. Battles report what they spent. */
+    spendItem(id, n = 1) {
+      state.items = state.items ?? {};
+      state.items[id] = Math.max(0, (state.items[id] ?? 0) - n);
+    },
+
+    /**
+     * Use a field item on a resident OUT of battle — the half of the item system
+     * that exists so a wrecked party is not a walk home.
+     *
+     * The generous restores live only here. Measured in a fight, an 85% heal was
+     * worth +15 points of win rate and the dumbest policy scored best, which
+     * cancels the patrol limit the condition system exists to create. Out here
+     * it extends the patrol instead, which is its job.
+     */
+    useItem(id, uid) {
+      const item = (content.fieldItems ?? []).find((f) => f.id === id);
+      const r = state.residents.find((x) => x.uid === uid);
+      if (!item || !r || this.itemCount(id) < 1) return false;
+
+      const down = (r.hp ?? 1) <= 0;
+      if (item.revives_to && !down) return false;       // nothing to revive
+      if (!item.revives_to && down) return false;       // will not reach it
+
+      let did = false;
+      if (item.revives_to) { r.hp = item.revives_to; did = true; }
+      if (item.restores_hp && (r.hp ?? 1) < 1) {
+        r.hp = Math.min(1, (r.hp ?? 1) + item.restores_hp);
+        did = true;
+      }
+      if (item.restores_pp && r.pp) {
+        // stockPP clamps each move to its own maximum when the battle starts, so
+        // adding past it here is harmless and saves carrying the move list.
+        for (const k of Object.keys(r.pp)) r.pp[k] += item.restores_pp;
+        did = true;
+      }
+      if (!did) return false;
+      this.spendItem(id);
       notify();
       return true;
     },

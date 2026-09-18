@@ -14,7 +14,7 @@ import {
 } from './game.js';
 import { fitCanvas, draw } from './render.js';
 import { createInput } from './input.js';
-import { createProfile, AMMO_COST, RANK_XP, WEAPON_UNLOCK, RESEARCH_COST } from './profile.js';
+import { createProfile, AMMO_COST, ITEM_COST, RANK_XP, WEAPON_UNLOCK, RESEARCH_COST } from './profile.js';
 import { drawFieldReport, toPng } from './report.js';
 import { buildModel, modelFor, fitModel, spriteFor, clearVoxelCache } from './voxel.js';
 import {
@@ -134,6 +134,7 @@ function boot(data) {
     elementDefs: data.elements.elements,
     bonusCap: data.elements.sanctuary_bonus_cap_per_element ?? 0.15,
     battleRules: data.elements.battle_rules,
+    fieldItems: data.ammo.field ?? [],
   });
 
   const mapCanvas = $('map');
@@ -196,7 +197,7 @@ function boot(data) {
     if (next === 'codex') renderCodex();
     if (next === 'sanctuary') renderSanctuary();
     if (next === 'loadout') renderLoadout();
-    if (next === 'patrol') mapView = fitCanvas(mapCanvas);
+    if (next === 'patrol') { mapView = fitCanvas(mapCanvas); renderParty(); }
     if (next === 'fight') fightView = fitCanvas(fightCanvas);
   }
   for (const t of document.querySelectorAll('.tab')) {
@@ -348,6 +349,54 @@ function boot(data) {
     }).join('');
     for (const b of document.querySelectorAll('[data-claim]')) {
       b.addEventListener('click', () => { profile.claimContract(b.dataset.claim); renderContracts(); });
+    }
+  }
+
+  /*
+   * The field kit, on the patrol view rather than in the Sanctuary.
+   *
+   * Mend already exists at home and is cheaper; this is the same problem solved
+   * where you actually have it — two miles out, with a party at 20% and a spawn
+   * in front of you. The generous restores are the ones that appear here,
+   * because between fights is the only place they are allowed to work: measured
+   * inside a battle an 85% heal was worth +15 points of win rate and the dumbest
+   * policy scored best, which cancels the patrol limit outright.
+   */
+  function renderParty() {
+    const party = profile.party;
+    const board = $('party-board');
+    if (!board) return;
+    board.hidden = party.length === 0;
+    if (!party.length) { $('party-strip').innerHTML = ''; return; }
+
+    const usable = (data.ammo.field ?? []).filter((f) => !f.in_battle && profile.itemCount(f.id) > 0);
+    $('party-strip').innerHTML = party.map((r) => {
+      const sp = speciesById[r.speciesId];
+      const cond = Math.max(0, Math.min(1, r.hp ?? 1));
+      const down = cond <= 0;
+      const buttons = usable.map((f) => {
+        // Offer only what would actually do something: a revive on a standing
+        // monster and a salve on a downed one are both dead buttons.
+        const ok = f.revives_to ? down : (!down && cond < 1);
+        return `<button class="ghost" data-use="${f.id}" data-uid="${r.uid}" type="button" ${ok ? '' : 'disabled'}>${f.name} (${profile.itemCount(f.id)})</button>`;
+      }).join('');
+      return `
+        <div class="partyrow" data-down="${down}">
+          <b>${sp?.name ?? '?'}</b>
+          <div class="meter__track meter__track--slim">
+            <div class="meter__fill meter__fill--hp" style="width:${cond * 100}%"
+                 data-state="${down ? 'critical' : cond > 0.5 ? 'ok' : 'low'}"></div>
+          </div>
+          <span>${down ? 'down' : `${Math.round(cond * 100)}%`}</span>
+          ${buttons || '<span class="partyrow__none">no field kit — craft some at the bench</span>'}
+        </div>`;
+    }).join('');
+
+    for (const b of document.querySelectorAll('[data-use]')) {
+      b.addEventListener('click', () => {
+        if (profile.useItem(b.dataset.use, b.dataset.uid)) { renderParty(); renderWarden(); }
+        else flash('That would not do anything.');
+      });
     }
   }
 
@@ -573,7 +622,25 @@ function boot(data) {
             chance < 0.01 ? '<1' : Math.round(chance * 100)}% to take it`;
         return bchoice(a.name, sub, () => act({ kind: 'catch', ammoId: a.id }), { disabled: Boolean(sealed) });
       });
-      if (!items.length) items = [bchoice('No capture rounds', 'craft some at the bench', () => {}, { disabled: true })];
+      /*
+       * Field items sit in the same bag as the rounds, because they compete for
+       * the same thing: the turn. Only the in_battle ones are here — the generous
+       * restores are deliberately unreachable mid-fight (see ammo.json).
+       */
+      const mine = b.team[b.active];
+      for (const f of (data.ammo.field ?? []).filter((x) => x.in_battle)) {
+        const have = profile.itemCount(f.id);
+        if (!have) continue;
+        const full = f.restores_hp && mine && mine.hp >= mine.maxHp;
+        items.push(bchoice(
+          f.name,
+          `${have} left · ${f.restores_hp ? `back ${Math.round(f.restores_hp * 100)}% of the bar`
+            : `+${f.restores_pp} PP on every move`}${full ? ' · already whole' : ''} · costs the turn`,
+          () => act({ kind: 'item', itemId: f.id }),
+          { disabled: Boolean(full) || b.wardenOnly },
+        ));
+      }
+      if (!items.length) items = [bchoice('Nothing in the bag', 'craft rounds and salves at the bench', () => {}, { disabled: true })];
       items.push(bchoice('Back', '', () => { battleMenu = 'root'; renderBattleMenu(); }, { kind: 'back' }));
     } else if (battleMenu === 'swap') {
       items = b.team.map((c, i) => bchoice(
@@ -647,6 +714,7 @@ function boot(data) {
 
     // Every round fired is gone, landed or not.
     for (const [id, n] of Object.entries(b.spent)) profile.spendAmmo(id, n);
+    for (const [id, n] of Object.entries(b.used ?? {})) profile.spendItem(id, n);
 
     /*
      * Members that reached an ending, plus the one still standing when the
@@ -1693,6 +1761,29 @@ function boot(data) {
       }).join('');
     };
 
+    /*
+     * The field kit is what a patrol can do about a wounded party without
+     * walking home. Crafted one at a time rather than five, because these are
+     * dear on purpose: a Deep Salve costs more than mending the same monster at
+     * the Sanctuary, and what you are paying the difference for is the walk.
+     */
+    const fieldKit = () => (data.ammo.field ?? []).map((f) => {
+      const cost = ITEM_COST[f.id] ?? { essence: 0 };
+      const price = [`${cost.essence}e`, ...Object.entries(cost.mats ?? {}).map(([el, n]) => `${n} ${el}`)].join(' ');
+      const what = f.revives_to ? `back up at ${Math.round(f.revives_to * 100)}%`
+        : f.restores_hp ? `${Math.round(f.restores_hp * 100)}% of the bar`
+        : `+${f.restores_pp} PP on every move`;
+      return `
+        <div class="round">
+          <span class="round__pick" data-static="true">
+            <b>${f.name}</b>
+            <span>${what} \u00b7 ${f.in_battle ? 'usable in a fight, costs the turn' : 'between fights only'}</span>
+          </span>
+          <span class="round__owned">${profile.itemCount(f.id)}</span>
+          <button class="ghost round__craftitem" data-item="${f.id}" type="button" ${profile.canCraft(f.id, 1) ? '' : 'disabled'}>+1 \u00b7 ${price}</button>
+        </div>`;
+    }).join('');
+
     const modCards = () => {
       if (!weapon) return '<p class="empty">Pick a weapon for this slot first.</p>';
       const progress = profile.codexProgress;
@@ -1749,6 +1840,8 @@ function boot(data) {
       <div class="rounds">${rounds('lethal')}</div>
       <h2>Chamber B — capture</h2>
       <div class="rounds">${rounds('capture')}</div>
+      <h2>Field kit</h2>
+      <div class="rounds">${fieldKit()}</div>
       <h2>Mods for slot ${editingSlot + 1}</h2>
       ${fittedLine()}
       <div class="modrail">${modCards()}</div>
@@ -1786,6 +1879,9 @@ function boot(data) {
     }
     for (const b of document.querySelectorAll('.round__craft')) {
       b.addEventListener('click', () => { profile.craft(b.dataset.ammo, 5); renderLoadout(); });
+    }
+    for (const b of document.querySelectorAll('.round__craftitem')) {
+      b.addEventListener('click', () => { profile.craft(b.dataset.item, 1); renderLoadout(); });
     }
     for (const b of document.querySelectorAll('.modcard')) {
       b.addEventListener('click', () => { profile.setMod(editingSlot, b.dataset.cat, b.dataset.mod); renderLoadout(); });
@@ -1858,7 +1954,7 @@ function boot(data) {
     profile, patrol, speciesById, data,
     get view() { return view; },
     get fight() { return fight; },
-    show, startFight, startBattle, renderSanctuary, renderContracts,
+    show, startFight, startBattle, renderSanctuary, renderContracts, renderParty,
     /*
      * Regenerate the spawns around the Warden, synchronously. The browser suites
      * used to walk by nudging patrol.x and then sleeping 60ms per step to let the
@@ -1899,6 +1995,7 @@ function boot(data) {
   $('opt-weather').innerHTML = '<option value="">live (simulated)</option>'
     + Object.entries(WEATHER).map(([id, w]) => `<option value="${id}">${w.name}</option>`).join('');
   renderContracts();
+  renderParty();
   show('patrol');
   $('boot').hidden = true;
   requestAnimationFrame(frame);

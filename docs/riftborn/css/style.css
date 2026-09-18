@@ -805,3 +805,21 @@ select {
 .bchoice:disabled { opacity: 0.4; cursor: not-allowed; }
 .bchoice small { color: var(--ink-faint); font-size: 10px; }
 .bchoice[data-kind="back"] { border-style: dashed; }
+
+/* Field kit on the patrol view: the party's condition, and what you can do
+   about it without walking home. */
+.partyrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+.partyrow:last-child { border-bottom: 0; }
+.partyrow b { min-width: 96px; }
+.partyrow .meter__track { flex: 1; min-width: 70px; }
+.partyrow button { padding: 2px 8px; font-size: 11px; }
+.partyrow[data-down="true"] b { color: var(--warn, #c4694a); }
+.partyrow__none { color: var(--ink-dim); font-size: 11px; }
