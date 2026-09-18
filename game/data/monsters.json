@@ -1,0 +1,2053 @@
+{
+  "$comment": "RIFTBORN bestiary. 43 species: 12 families of 3 stages, 4 branch forms, 3 apexes. First-pass tuning values.",
+  "version": 1,
+  "apex_rules": {
+    "anchor_required_to_capture": true,
+    "cull_and_catalogue_mutually_exclusive_per_warden_per_fight": true,
+    "scales_to_party_size": true
+  },
+  "evolution_gates": {
+    "stage_1_to_2": {
+      "study": 400,
+      "rank": 3
+    },
+    "stage_2_to_3": {
+      "study": 1600,
+      "rank": 8
+    }
+  },
+  "monsters": [
+    {
+      "id": "sootpup",
+      "dex": 1,
+      "name": "Sootpup",
+      "family": "cinder",
+      "family_name": "Cinder",
+      "elements": [
+        "ember"
+      ],
+      "size": "whelp",
+      "stage": 1,
+      "tier": 1,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 120,
+        "attack": 14,
+        "armour_reduction": 0.05,
+        "speed": 6,
+        "base_restraint": 40,
+        "skittishness": 0.6,
+        "flee_threshold": 0.35
+      },
+      "aggression": "skittish",
+      "weak_points": [
+        "muzzle"
+      ],
+      "rarity": "common",
+      "spawn": {
+        "biomes": [
+          "industrial",
+          "urban_core",
+          "works",
+          "residential"
+        ],
+        "time_windows": [
+          "dusk",
+          "night"
+        ]
+      },
+      "evolves_from": null,
+      "evolves_to": [
+        {
+          "id": "cinderfang",
+          "condition": "none",
+          "study_required": 400,
+          "rank_required": 3
+        }
+      ],
+      "family_blurb": "Ash-furred pack canids. They nest in warm concrete: substations, laundromat vents, the south face of a car park."
+    },
+    {
+      "id": "cinderfang",
+      "dex": 2,
+      "name": "Cinderfang",
+      "family": "cinder",
+      "family_name": "Cinder",
+      "elements": [
+        "ember"
+      ],
+      "size": "strider",
+      "stage": 2,
+      "tier": 2,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 310,
+        "attack": 34,
+        "armour_reduction": 0.15,
+        "speed": 7,
+        "base_restraint": 95,
+        "skittishness": 0.4,
+        "flee_threshold": 0.25
+      },
+      "aggression": "territorial",
+      "weak_points": [
+        "throat",
+        "hind_joint"
+      ],
+      "rarity": "uncommon",
+      "spawn": {
+        "biomes": [
+          "industrial",
+          "urban_core",
+          "works"
+        ],
+        "time_windows": [
+          "dusk",
+          "night"
+        ]
+      },
+      "evolves_from": "sootpup",
+      "evolves_to": [
+        {
+          "id": "pyrecrown",
+          "condition": "none",
+          "study_required": 1600,
+          "rank_required": 8
+        },
+        {
+          "id": "ashenreaver",
+          "condition": "evolve_between_local_time",
+          "params": {
+            "start": "22:00",
+            "end": "04:00"
+          },
+          "study_required": 1600,
+          "rank_required": 8,
+          "description": "Evolve a Cinderfang between 22:00 and 04:00 local time."
+        }
+      ],
+      "family_blurb": "Ash-furred pack canids. They nest in warm concrete: substations, laundromat vents, the south face of a car park."
+    },
+    {
+      "id": "pyrecrown",
+      "dex": 3,
+      "name": "Pyrecrown",
+      "family": "cinder",
+      "family_name": "Cinder",
+      "elements": [
+        "ember"
+      ],
+      "size": "brute",
+      "stage": 3,
+      "tier": 3,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 720,
+        "attack": 66,
+        "armour_reduction": 0.25,
+        "speed": 6,
+        "base_restraint": 190,
+        "skittishness": 0.2,
+        "flee_threshold": 0.15
+      },
+      "aggression": "aggressive",
+      "weak_points": [
+        "crown_vents",
+        "chest"
+      ],
+      "rarity": "rare",
+      "spawn": {
+        "biomes": [
+          "industrial",
+          "urban_core",
+          "works"
+        ],
+        "time_windows": [
+          "dusk",
+          "night"
+        ]
+      },
+      "evolves_from": "cinderfang",
+      "evolves_to": [],
+      "family_blurb": "Ash-furred pack canids. They nest in warm concrete: substations, laundromat vents, the south face of a car park."
+    },
+    {
+      "id": "ashenreaver",
+      "dex": 4,
+      "name": "Ashenreaver",
+      "family": "cinder",
+      "family_name": "Cinder",
+      "elements": [
+        "ember"
+      ],
+      "size": "brute",
+      "stage": 3,
+      "tier": 3,
+      "is_branch_form": true,
+      "stats": {
+        "hp": 640,
+        "attack": 82,
+        "armour_reduction": 0.15,
+        "speed": 8,
+        "base_restraint": 210,
+        "skittishness": 0.1,
+        "flee_threshold": 0.1
+      },
+      "aggression": "aggressive",
+      "weak_points": [
+        "eyes",
+        "spine_ridge"
+      ],
+      "rarity": "rare",
+      "spawn": {
+        "biomes": [
+          "industrial",
+          "urban_core",
+          "works"
+        ],
+        "time_windows": [
+          "dusk",
+          "night"
+        ]
+      },
+      "evolves_from": "cinderfang",
+      "evolves_to": [],
+      "family_blurb": "Ash-furred pack canids. They nest in warm concrete: substations, laundromat vents, the south face of a car park."
+    },
+    {
+      "id": "slagmite",
+      "dex": 5,
+      "name": "Slagmite",
+      "family": "slag",
+      "family_name": "Slag",
+      "elements": [
+        "ember",
+        "stone"
+      ],
+      "size": "mote",
+      "stage": 1,
+      "tier": 1,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 85,
+        "attack": 10,
+        "armour_reduction": 0.3,
+        "speed": 3,
+        "base_restraint": 30,
+        "skittishness": 0.3,
+        "flee_threshold": 0.2
+      },
+      "aggression": "passive",
+      "weak_points": [
+        "cooling_seam"
+      ],
+      "rarity": "common",
+      "spawn": {
+        "biomes": [
+          "works",
+          "industrial"
+        ],
+        "time_windows": [
+          "any"
+        ]
+      },
+      "evolves_from": null,
+      "evolves_to": [
+        {
+          "id": "magmaw",
+          "condition": "none",
+          "study_required": 400,
+          "rank_required": 3
+        }
+      ],
+      "family_blurb": "Semi-molten lithovores. They eat rubble and excrete glass, and turn up wherever the ground has recently been opened."
+    },
+    {
+      "id": "magmaw",
+      "dex": 6,
+      "name": "Magmaw",
+      "family": "slag",
+      "family_name": "Slag",
+      "elements": [
+        "ember",
+        "stone"
+      ],
+      "size": "strider",
+      "stage": 2,
+      "tier": 2,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 440,
+        "attack": 40,
+        "armour_reduction": 0.4,
+        "speed": 3,
+        "base_restraint": 120,
+        "skittishness": 0.15,
+        "flee_threshold": 0.15
+      },
+      "aggression": "territorial",
+      "weak_points": [
+        "open_maw",
+        "underbelly"
+      ],
+      "rarity": "uncommon",
+      "spawn": {
+        "biomes": [
+          "works",
+          "industrial"
+        ],
+        "time_windows": [
+          "any"
+        ]
+      },
+      "evolves_from": "slagmite",
+      "evolves_to": [
+        {
+          "id": "vulcarne",
+          "condition": "none",
+          "study_required": 1600,
+          "rank_required": 8
+        }
+      ],
+      "family_blurb": "Semi-molten lithovores. They eat rubble and excrete glass, and turn up wherever the ground has recently been opened."
+    },
+    {
+      "id": "vulcarne",
+      "dex": 7,
+      "name": "Vulcarne",
+      "family": "slag",
+      "family_name": "Slag",
+      "elements": [
+        "ember",
+        "stone"
+      ],
+      "size": "colossus",
+      "stage": 3,
+      "tier": 4,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 1450,
+        "attack": 95,
+        "armour_reduction": 0.55,
+        "speed": 2,
+        "base_restraint": 340,
+        "skittishness": 0.05,
+        "flee_threshold": 0.1
+      },
+      "aggression": "aggressive",
+      "weak_points": [
+        "vent_stack_a",
+        "vent_stack_b",
+        "vent_stack_c"
+      ],
+      "rarity": "very_rare",
+      "spawn": {
+        "biomes": [
+          "works",
+          "industrial"
+        ],
+        "time_windows": [
+          "any"
+        ]
+      },
+      "evolves_from": "magmaw",
+      "evolves_to": [],
+      "family_blurb": "Semi-molten lithovores. They eat rubble and excrete glass, and turn up wherever the ground has recently been opened.",
+      "notes": "Ember/Stone, so Tide hits for 4.0x. The first Colossus most Wardens meet and the reason the Tether Harpoon exists."
+    },
+    {
+      "id": "brinelet",
+      "dex": 8,
+      "name": "Brinelet",
+      "family": "brine",
+      "family_name": "Brine",
+      "elements": [
+        "tide"
+      ],
+      "size": "mote",
+      "stage": 1,
+      "tier": 1,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 70,
+        "attack": 8,
+        "armour_reduction": 0.0,
+        "speed": 5,
+        "base_restraint": 28,
+        "skittishness": 0.8,
+        "flee_threshold": 0.5
+      },
+      "aggression": "passive",
+      "weak_points": [
+        "bell"
+      ],
+      "rarity": "common",
+      "spawn": {
+        "biomes": [
+          "waterside",
+          "urban_core"
+        ],
+        "time_windows": [
+          "any"
+        ]
+      },
+      "evolves_from": null,
+      "evolves_to": [
+        {
+          "id": "tidecoil",
+          "condition": "none",
+          "study_required": 400,
+          "rank_required": 3
+        }
+      ],
+      "family_blurb": "Coil-bodied filter feeders. They follow storm drains inland during heavy rain and beach themselves in car parks by morning."
+    },
+    {
+      "id": "tidecoil",
+      "dex": 9,
+      "name": "Tidecoil",
+      "family": "brine",
+      "family_name": "Brine",
+      "elements": [
+        "tide"
+      ],
+      "size": "strider",
+      "stage": 2,
+      "tier": 2,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 340,
+        "attack": 36,
+        "armour_reduction": 0.1,
+        "speed": 6,
+        "base_restraint": 105,
+        "skittishness": 0.5,
+        "flee_threshold": 0.3
+      },
+      "aggression": "skittish",
+      "weak_points": [
+        "siphon",
+        "eye_cluster"
+      ],
+      "rarity": "common",
+      "spawn": {
+        "biomes": [
+          "waterside",
+          "urban_core"
+        ],
+        "time_windows": [
+          "any"
+        ]
+      },
+      "evolves_from": "brinelet",
+      "evolves_to": [
+        {
+          "id": "maelstrix",
+          "condition": "none",
+          "study_required": 1600,
+          "rank_required": 8
+        }
+      ],
+      "family_blurb": "Coil-bodied filter feeders. They follow storm drains inland during heavy rain and beach themselves in car parks by morning."
+    },
+    {
+      "id": "maelstrix",
+      "dex": 10,
+      "name": "Maelstrix",
+      "family": "brine",
+      "family_name": "Brine",
+      "elements": [
+        "tide"
+      ],
+      "size": "brute",
+      "stage": 3,
+      "tier": 3,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 810,
+        "attack": 70,
+        "armour_reduction": 0.2,
+        "speed": 7,
+        "base_restraint": 205,
+        "skittishness": 0.3,
+        "flee_threshold": 0.2
+      },
+      "aggression": "territorial",
+      "weak_points": [
+        "core",
+        "mantle"
+      ],
+      "rarity": "rare",
+      "spawn": {
+        "biomes": [
+          "waterside",
+          "urban_core"
+        ],
+        "time_windows": [
+          "any"
+        ]
+      },
+      "evolves_from": "tidecoil",
+      "evolves_to": [],
+      "family_blurb": "Coil-bodied filter feeders. They follow storm drains inland during heavy rain and beach themselves in car parks by morning."
+    },
+    {
+      "id": "frostnib",
+      "dex": 11,
+      "name": "Frostnib",
+      "family": "rime",
+      "family_name": "Rime",
+      "elements": [
+        "tide",
+        "gale"
+      ],
+      "size": "whelp",
+      "stage": 1,
+      "tier": 1,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 100,
+        "attack": 16,
+        "armour_reduction": 0.05,
+        "speed": 7,
+        "base_restraint": 38,
+        "skittishness": 0.7,
+        "flee_threshold": 0.4
+      },
+      "aggression": "skittish",
+      "weak_points": [
+        "breath_sac"
+      ],
+      "rarity": "uncommon",
+      "spawn": {
+        "biomes": [
+          "open_ground",
+          "waterside",
+          "woodland"
+        ],
+        "time_windows": [
+          "dawn",
+          "night"
+        ]
+      },
+      "evolves_from": null,
+      "evolves_to": [
+        {
+          "id": "rimeclaw",
+          "condition": "none",
+          "study_required": 400,
+          "rank_required": 3
+        }
+      ],
+      "family_blurb": "Frost-riding ambushers. They hold still and cold until something walks past."
+    },
+    {
+      "id": "rimeclaw",
+      "dex": 12,
+      "name": "Rimeclaw",
+      "family": "rime",
+      "family_name": "Rime",
+      "elements": [
+        "tide",
+        "gale"
+      ],
+      "size": "strider",
+      "stage": 2,
+      "tier": 2,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 300,
+        "attack": 44,
+        "armour_reduction": 0.15,
+        "speed": 8,
+        "base_restraint": 100,
+        "skittishness": 0.45,
+        "flee_threshold": 0.25
+      },
+      "aggression": "territorial",
+      "weak_points": [
+        "foreclaws",
+        "throat"
+      ],
+      "rarity": "uncommon",
+      "spawn": {
+        "biomes": [
+          "open_ground",
+          "waterside",
+          "woodland"
+        ],
+        "time_windows": [
+          "dawn",
+          "night"
+        ]
+      },
+      "evolves_from": "frostnib",
+      "evolves_to": [
+        {
+          "id": "glaciarch",
+          "condition": "none",
+          "study_required": 1600,
+          "rank_required": 8
+        },
+        {
+          "id": "hoarfell",
+          "condition": "evolve_below_temperature",
+          "params": {
+            "celsius": 0
+          },
+          "study_required": 1600,
+          "rank_required": 8,
+          "description": "Evolve a Rimeclaw while the ambient temperature is below 0 C."
+        }
+      ],
+      "family_blurb": "Frost-riding ambushers. They hold still and cold until something walks past."
+    },
+    {
+      "id": "glaciarch",
+      "dex": 13,
+      "name": "Glaciarch",
+      "family": "rime",
+      "family_name": "Rime",
+      "elements": [
+        "tide",
+        "gale"
+      ],
+      "size": "brute",
+      "stage": 3,
+      "tier": 3,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 690,
+        "attack": 78,
+        "armour_reduction": 0.3,
+        "speed": 6,
+        "base_restraint": 200,
+        "skittishness": 0.2,
+        "flee_threshold": 0.15
+      },
+      "aggression": "aggressive",
+      "weak_points": [
+        "crest",
+        "heart_ice"
+      ],
+      "rarity": "rare",
+      "spawn": {
+        "biomes": [
+          "open_ground",
+          "waterside",
+          "woodland"
+        ],
+        "time_windows": [
+          "dawn",
+          "night"
+        ]
+      },
+      "evolves_from": "rimeclaw",
+      "evolves_to": [],
+      "family_blurb": "Frost-riding ambushers. They hold still and cold until something walks past.",
+      "notes": "Tide/Gale, so Volt hits for 4.0x. The clearest teaching example of dual-element liability."
+    },
+    {
+      "id": "hoarfell",
+      "dex": 14,
+      "name": "Hoarfell",
+      "family": "rime",
+      "family_name": "Rime",
+      "elements": [
+        "tide",
+        "gale"
+      ],
+      "size": "brute",
+      "stage": 3,
+      "tier": 3,
+      "is_branch_form": true,
+      "stats": {
+        "hp": 760,
+        "attack": 70,
+        "armour_reduction": 0.4,
+        "speed": 5,
+        "base_restraint": 225,
+        "skittishness": 0.15,
+        "flee_threshold": 0.12
+      },
+      "aggression": "territorial",
+      "weak_points": [
+        "frost_core",
+        "shoulder_plate"
+      ],
+      "rarity": "very_rare",
+      "spawn": {
+        "biomes": [
+          "open_ground",
+          "waterside",
+          "woodland"
+        ],
+        "time_windows": [
+          "dawn",
+          "night"
+        ]
+      },
+      "evolves_from": "rimeclaw",
+      "evolves_to": [],
+      "family_blurb": "Frost-riding ambushers. They hold still and cold until something walks past.",
+      "notes": "The cold-form branch. Slower and far better armoured than a Glaciarch, and only reachable in real-world sub-zero weather."
+    },
+    {
+      "id": "sporelet",
+      "dex": 15,
+      "name": "Sporelet",
+      "family": "thorn",
+      "family_name": "Thorn",
+      "elements": [
+        "verdant"
+      ],
+      "size": "mote",
+      "stage": 1,
+      "tier": 1,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 65,
+        "attack": 7,
+        "armour_reduction": 0.05,
+        "speed": 2,
+        "base_restraint": 25,
+        "skittishness": 0.5,
+        "flee_threshold": 0.45
+      },
+      "aggression": "passive",
+      "weak_points": [
+        "cap"
+      ],
+      "rarity": "common",
+      "spawn": {
+        "biomes": [
+          "parkland",
+          "woodland",
+          "residential"
+        ],
+        "time_windows": [
+          "day"
+        ]
+      },
+      "evolves_from": null,
+      "evolves_to": [
+        {
+          "id": "thornhide",
+          "condition": "none",
+          "study_required": 400,
+          "rank_required": 3
+        }
+      ],
+      "family_blurb": "Ambulatory bramble. Docile, slow, and covered in things that will ruin your hands."
+    },
+    {
+      "id": "thornhide",
+      "dex": 16,
+      "name": "Thornhide",
+      "family": "thorn",
+      "family_name": "Thorn",
+      "elements": [
+        "verdant"
+      ],
+      "size": "strider",
+      "stage": 2,
+      "tier": 2,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 380,
+        "attack": 30,
+        "armour_reduction": 0.3,
+        "speed": 3,
+        "base_restraint": 110,
+        "skittishness": 0.25,
+        "flee_threshold": 0.2
+      },
+      "aggression": "territorial",
+      "weak_points": [
+        "root_bundle"
+      ],
+      "rarity": "common",
+      "spawn": {
+        "biomes": [
+          "parkland",
+          "woodland"
+        ],
+        "time_windows": [
+          "day"
+        ]
+      },
+      "evolves_from": "sporelet",
+      "evolves_to": [
+        {
+          "id": "bramblewarden",
+          "condition": "none",
+          "study_required": 1600,
+          "rank_required": 8
+        }
+      ],
+      "family_blurb": "Ambulatory bramble. Docile, slow, and covered in things that will ruin your hands."
+    },
+    {
+      "id": "bramblewarden",
+      "dex": 17,
+      "name": "Bramblewarden",
+      "family": "thorn",
+      "family_name": "Thorn",
+      "elements": [
+        "verdant"
+      ],
+      "size": "brute",
+      "stage": 3,
+      "tier": 3,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 880,
+        "attack": 58,
+        "armour_reduction": 0.45,
+        "speed": 2,
+        "base_restraint": 215,
+        "skittishness": 0.1,
+        "flee_threshold": 0.12
+      },
+      "aggression": "territorial",
+      "weak_points": [
+        "heartwood",
+        "crown"
+      ],
+      "rarity": "rare",
+      "spawn": {
+        "biomes": [
+          "parkland",
+          "woodland"
+        ],
+        "time_windows": [
+          "day"
+        ]
+      },
+      "evolves_from": "thornhide",
+      "evolves_to": [],
+      "family_blurb": "Ambulatory bramble. Docile, slow, and covered in things that will ruin your hands."
+    },
+    {
+      "id": "mycelid",
+      "dex": 18,
+      "name": "Mycelid",
+      "family": "myco",
+      "family_name": "Myco",
+      "elements": [
+        "verdant",
+        "gloom"
+      ],
+      "size": "mote",
+      "stage": 1,
+      "tier": 1,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 75,
+        "attack": 9,
+        "armour_reduction": 0.1,
+        "speed": 3,
+        "base_restraint": 30,
+        "skittishness": 0.4,
+        "flee_threshold": 0.4
+      },
+      "aggression": "passive",
+      "weak_points": [
+        "stalk"
+      ],
+      "rarity": "common",
+      "spawn": {
+        "biomes": [
+          "woodland",
+          "parkland"
+        ],
+        "time_windows": [
+          "night",
+          "dawn"
+        ]
+      },
+      "evolves_from": null,
+      "evolves_to": [
+        {
+          "id": "blightcap",
+          "condition": "none",
+          "study_required": 400,
+          "rank_required": 3
+        }
+      ],
+      "family_blurb": "Fungal colonies wearing an animal shape. What you fight is the fruiting body; the organism is under the pavement and does not care."
+    },
+    {
+      "id": "blightcap",
+      "dex": 19,
+      "name": "Blightcap",
+      "family": "myco",
+      "family_name": "Myco",
+      "elements": [
+        "verdant",
+        "gloom"
+      ],
+      "size": "strider",
+      "stage": 2,
+      "tier": 2,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 360,
+        "attack": 38,
+        "armour_reduction": 0.2,
+        "speed": 4,
+        "base_restraint": 115,
+        "skittishness": 0.3,
+        "flee_threshold": 0.25
+      },
+      "aggression": "territorial",
+      "weak_points": [
+        "gill_cluster"
+      ],
+      "rarity": "uncommon",
+      "spawn": {
+        "biomes": [
+          "woodland",
+          "parkland"
+        ],
+        "time_windows": [
+          "night",
+          "dawn"
+        ]
+      },
+      "evolves_from": "mycelid",
+      "evolves_to": [
+        {
+          "id": "rotmatron",
+          "condition": "none",
+          "study_required": 1600,
+          "rank_required": 8
+        },
+        {
+          "id": "sporeherald",
+          "condition": "captured_with_ammo",
+          "params": {
+            "ammo": "rune_arrow"
+          },
+          "study_required": 1600,
+          "rank_required": 8,
+          "description": "The Blightcap must have been catalogued with a Rune Arrow."
+        }
+      ],
+      "family_blurb": "Fungal colonies wearing an animal shape. What you fight is the fruiting body; the organism is under the pavement and does not care."
+    },
+    {
+      "id": "rotmatron",
+      "dex": 20,
+      "name": "Rotmatron",
+      "family": "myco",
+      "family_name": "Myco",
+      "elements": [
+        "verdant",
+        "gloom"
+      ],
+      "size": "brute",
+      "stage": 3,
+      "tier": 3,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 840,
+        "attack": 64,
+        "armour_reduction": 0.3,
+        "speed": 3,
+        "base_restraint": 220,
+        "skittishness": 0.15,
+        "flee_threshold": 0.15
+      },
+      "aggression": "aggressive",
+      "weak_points": [
+        "gill_cluster",
+        "spore_sac"
+      ],
+      "rarity": "rare",
+      "spawn": {
+        "biomes": [
+          "woodland",
+          "parkland"
+        ],
+        "time_windows": [
+          "night",
+          "dawn"
+        ]
+      },
+      "evolves_from": "blightcap",
+      "evolves_to": [],
+      "family_blurb": "Fungal colonies wearing an animal shape. What you fight is the fruiting body; the organism is under the pavement and does not care."
+    },
+    {
+      "id": "sporeherald",
+      "dex": 21,
+      "name": "Sporeherald",
+      "family": "myco",
+      "family_name": "Myco",
+      "elements": [
+        "verdant",
+        "gloom"
+      ],
+      "size": "strider",
+      "stage": 3,
+      "tier": 3,
+      "is_branch_form": true,
+      "stats": {
+        "hp": 520,
+        "attack": 72,
+        "armour_reduction": 0.1,
+        "speed": 6,
+        "base_restraint": 185,
+        "skittishness": 0.5,
+        "flee_threshold": 0.3
+      },
+      "aggression": "skittish",
+      "weak_points": [
+        "crown",
+        "spore_vents"
+      ],
+      "rarity": "very_rare",
+      "spawn": {
+        "biomes": [
+          "woodland",
+          "parkland"
+        ],
+        "time_windows": [
+          "night",
+          "dawn"
+        ]
+      },
+      "evolves_from": "blightcap",
+      "evolves_to": [],
+      "family_blurb": "Fungal colonies wearing an animal shape. What you fight is the fruiting body; the organism is under the pavement and does not care."
+    },
+    {
+      "id": "pebblit",
+      "dex": 22,
+      "name": "Pebblit",
+      "family": "crag",
+      "family_name": "Crag",
+      "elements": [
+        "stone"
+      ],
+      "size": "mote",
+      "stage": 1,
+      "tier": 1,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 95,
+        "attack": 8,
+        "armour_reduction": 0.35,
+        "speed": 2,
+        "base_restraint": 32,
+        "skittishness": 0.2,
+        "flee_threshold": 0.25
+      },
+      "aggression": "passive",
+      "weak_points": [
+        "underside"
+      ],
+      "rarity": "common",
+      "spawn": {
+        "biomes": [
+          "works",
+          "open_ground",
+          "industrial",
+          "residential"
+        ],
+        "time_windows": [
+          "any"
+        ]
+      },
+      "evolves_from": null,
+      "evolves_to": [
+        {
+          "id": "cragback",
+          "condition": "none",
+          "study_required": 400,
+          "rank_required": 3
+        }
+      ],
+      "family_blurb": "Sedentary armoured grazers, and the reason every Warden eventually crafts Piercing rounds."
+    },
+    {
+      "id": "cragback",
+      "dex": 23,
+      "name": "Cragback",
+      "family": "crag",
+      "family_name": "Crag",
+      "elements": [
+        "stone"
+      ],
+      "size": "strider",
+      "stage": 2,
+      "tier": 2,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 480,
+        "attack": 34,
+        "armour_reduction": 0.5,
+        "speed": 2,
+        "base_restraint": 125,
+        "skittishness": 0.1,
+        "flee_threshold": 0.15
+      },
+      "aggression": "territorial",
+      "weak_points": [
+        "cracked_shoulder_plate"
+      ],
+      "rarity": "common",
+      "spawn": {
+        "biomes": [
+          "works",
+          "open_ground",
+          "industrial"
+        ],
+        "time_windows": [
+          "any"
+        ]
+      },
+      "evolves_from": "pebblit",
+      "evolves_to": [
+        {
+          "id": "obelisc",
+          "condition": "none",
+          "study_required": 1600,
+          "rank_required": 8
+        }
+      ],
+      "family_blurb": "Sedentary armoured grazers, and the reason every Warden eventually crafts Piercing rounds."
+    },
+    {
+      "id": "obelisc",
+      "dex": 24,
+      "name": "Obelisc",
+      "family": "crag",
+      "family_name": "Crag",
+      "elements": [
+        "stone"
+      ],
+      "size": "colossus",
+      "stage": 3,
+      "tier": 4,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 1600,
+        "attack": 88,
+        "armour_reduction": 0.6,
+        "speed": 1,
+        "base_restraint": 360,
+        "skittishness": 0.0,
+        "flee_threshold": 0.0
+      },
+      "aggression": "territorial",
+      "weak_points": [
+        "keystone",
+        "base_joints"
+      ],
+      "rarity": "very_rare",
+      "spawn": {
+        "biomes": [
+          "works",
+          "open_ground",
+          "industrial"
+        ],
+        "time_windows": [
+          "any"
+        ]
+      },
+      "evolves_from": "cragback",
+      "evolves_to": [],
+      "family_blurb": "Sedentary armoured grazers, and the reason every Warden eventually crafts Piercing rounds.",
+      "notes": "Never flees and never pursues. A fight you can choose, and walk away from, at any point."
+    },
+    {
+      "id": "gustling",
+      "dex": 25,
+      "name": "Gustling",
+      "family": "gale",
+      "family_name": "Gale",
+      "elements": [
+        "gale"
+      ],
+      "size": "mote",
+      "stage": 1,
+      "tier": 1,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 60,
+        "attack": 11,
+        "armour_reduction": 0.0,
+        "speed": 9,
+        "base_restraint": 26,
+        "skittishness": 0.85,
+        "flee_threshold": 0.55
+      },
+      "aggression": "skittish",
+      "weak_points": [
+        "wing_root"
+      ],
+      "rarity": "common",
+      "spawn": {
+        "biomes": [
+          "open_ground",
+          "waterside",
+          "transit"
+        ],
+        "time_windows": [
+          "day",
+          "dusk"
+        ]
+      },
+      "evolves_from": null,
+      "evolves_to": [
+        {
+          "id": "zephyrax",
+          "condition": "none",
+          "study_required": 400,
+          "rank_required": 3
+        }
+      ],
+      "family_blurb": "High-altitude skimmers. The hardest common family to hit and the easiest to hold once hit."
+    },
+    {
+      "id": "zephyrax",
+      "dex": 26,
+      "name": "Zephyrax",
+      "family": "gale",
+      "family_name": "Gale",
+      "elements": [
+        "gale"
+      ],
+      "size": "strider",
+      "stage": 2,
+      "tier": 2,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 290,
+        "attack": 42,
+        "armour_reduction": 0.05,
+        "speed": 9,
+        "base_restraint": 98,
+        "skittishness": 0.6,
+        "flee_threshold": 0.35
+      },
+      "aggression": "skittish",
+      "weak_points": [
+        "wing_root",
+        "keel"
+      ],
+      "rarity": "uncommon",
+      "spawn": {
+        "biomes": [
+          "open_ground",
+          "waterside",
+          "transit"
+        ],
+        "time_windows": [
+          "day",
+          "dusk"
+        ]
+      },
+      "evolves_from": "gustling",
+      "evolves_to": [
+        {
+          "id": "tempestrix",
+          "condition": "none",
+          "study_required": 1600,
+          "rank_required": 8
+        }
+      ],
+      "family_blurb": "High-altitude skimmers. The hardest common family to hit and the easiest to hold once hit."
+    },
+    {
+      "id": "tempestrix",
+      "dex": 27,
+      "name": "Tempestrix",
+      "family": "gale",
+      "family_name": "Gale",
+      "elements": [
+        "gale"
+      ],
+      "size": "brute",
+      "stage": 3,
+      "tier": 3,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 700,
+        "attack": 84,
+        "armour_reduction": 0.1,
+        "speed": 10,
+        "base_restraint": 195,
+        "skittishness": 0.4,
+        "flee_threshold": 0.25
+      },
+      "aggression": "aggressive",
+      "weak_points": [
+        "eye",
+        "storm_core"
+      ],
+      "rarity": "rare",
+      "spawn": {
+        "biomes": [
+          "open_ground",
+          "waterside",
+          "transit"
+        ],
+        "time_windows": [
+          "day",
+          "dusk"
+        ]
+      },
+      "evolves_from": "zephyrax",
+      "evolves_to": [],
+      "family_blurb": "High-altitude skimmers. The hardest common family to hit and the easiest to hold once hit."
+    },
+    {
+      "id": "sparkmite",
+      "dex": 28,
+      "name": "Sparkmite",
+      "family": "volt",
+      "family_name": "Volt",
+      "elements": [
+        "volt"
+      ],
+      "size": "mote",
+      "stage": 1,
+      "tier": 1,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 55,
+        "attack": 13,
+        "armour_reduction": 0.0,
+        "speed": 8,
+        "base_restraint": 24,
+        "skittishness": 0.75,
+        "flee_threshold": 0.5
+      },
+      "aggression": "skittish",
+      "weak_points": [
+        "core"
+      ],
+      "rarity": "common",
+      "spawn": {
+        "biomes": [
+          "transit",
+          "urban_core",
+          "industrial",
+          "residential"
+        ],
+        "time_windows": [
+          "dusk",
+          "night"
+        ]
+      },
+      "evolves_from": null,
+      "evolves_to": [
+        {
+          "id": "voltfang",
+          "condition": "none",
+          "study_required": 400,
+          "rank_required": 3
+        }
+      ],
+      "family_blurb": "Charge parasites living on infrastructure. Spawn density tracks real-world power draw."
+    },
+    {
+      "id": "voltfang",
+      "dex": 29,
+      "name": "Voltfang",
+      "family": "volt",
+      "family_name": "Volt",
+      "elements": [
+        "volt"
+      ],
+      "size": "whelp",
+      "stage": 2,
+      "tier": 2,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 210,
+        "attack": 46,
+        "armour_reduction": 0.05,
+        "speed": 9,
+        "base_restraint": 85,
+        "skittishness": 0.5,
+        "flee_threshold": 0.3
+      },
+      "aggression": "aggressive",
+      "weak_points": [
+        "core",
+        "jaw_coil"
+      ],
+      "rarity": "common",
+      "spawn": {
+        "biomes": [
+          "transit",
+          "urban_core",
+          "industrial"
+        ],
+        "time_windows": [
+          "dusk",
+          "night"
+        ]
+      },
+      "evolves_from": "sparkmite",
+      "evolves_to": [
+        {
+          "id": "thunderhelm",
+          "condition": "none",
+          "study_required": 1600,
+          "rank_required": 8
+        },
+        {
+          "id": "railmane",
+          "condition": "evolve_during_weather",
+          "params": {
+            "weather": "thunderstorm"
+          },
+          "study_required": 1600,
+          "rank_required": 8,
+          "description": "Evolve a Voltfang during a real-world thunderstorm at your location."
+        }
+      ],
+      "family_blurb": "Charge parasites living on infrastructure. Spawn density tracks real-world power draw."
+    },
+    {
+      "id": "thunderhelm",
+      "dex": 30,
+      "name": "Thunderhelm",
+      "family": "volt",
+      "family_name": "Volt",
+      "elements": [
+        "volt"
+      ],
+      "size": "brute",
+      "stage": 3,
+      "tier": 3,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 660,
+        "attack": 90,
+        "armour_reduction": 0.2,
+        "speed": 7,
+        "base_restraint": 190,
+        "skittishness": 0.25,
+        "flee_threshold": 0.18
+      },
+      "aggression": "aggressive",
+      "weak_points": [
+        "helm_seam",
+        "core"
+      ],
+      "rarity": "rare",
+      "spawn": {
+        "biomes": [
+          "transit",
+          "urban_core",
+          "industrial"
+        ],
+        "time_windows": [
+          "dusk",
+          "night"
+        ]
+      },
+      "evolves_from": "voltfang",
+      "evolves_to": [],
+      "family_blurb": "Charge parasites living on infrastructure. Spawn density tracks real-world power draw."
+    },
+    {
+      "id": "railmane",
+      "dex": 31,
+      "name": "Railmane",
+      "family": "volt",
+      "family_name": "Volt",
+      "elements": [
+        "volt"
+      ],
+      "size": "strider",
+      "stage": 3,
+      "tier": 3,
+      "is_branch_form": true,
+      "stats": {
+        "hp": 480,
+        "attack": 104,
+        "armour_reduction": 0.05,
+        "speed": 10,
+        "base_restraint": 175,
+        "skittishness": 0.35,
+        "flee_threshold": 0.22
+      },
+      "aggression": "aggressive",
+      "weak_points": [
+        "mane_nodes"
+      ],
+      "rarity": "very_rare",
+      "spawn": {
+        "biomes": [
+          "transit",
+          "urban_core",
+          "industrial"
+        ],
+        "time_windows": [
+          "dusk",
+          "night"
+        ]
+      },
+      "evolves_from": "voltfang",
+      "evolves_to": [],
+      "family_blurb": "Charge parasites living on infrastructure. Spawn density tracks real-world power draw."
+    },
+    {
+      "id": "shadelet",
+      "dex": 32,
+      "name": "Shadelet",
+      "family": "gloom",
+      "family_name": "Gloom",
+      "elements": [
+        "gloom"
+      ],
+      "size": "whelp",
+      "stage": 1,
+      "tier": 1,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 105,
+        "attack": 18,
+        "armour_reduction": 0.0,
+        "speed": 7,
+        "base_restraint": 42,
+        "skittishness": 0.9,
+        "flee_threshold": 0.6
+      },
+      "aggression": "skittish",
+      "weak_points": [],
+      "rarity": "uncommon",
+      "spawn": {
+        "biomes": [
+          "urban_core",
+          "woodland",
+          "residential"
+        ],
+        "time_windows": [
+          "night"
+        ]
+      },
+      "evolves_from": null,
+      "evolves_to": [
+        {
+          "id": "nightmaw",
+          "condition": "none",
+          "study_required": 400,
+          "rank_required": 3
+        }
+      ],
+      "family_blurb": "Not hostile so much as present, and they get worse the longer you look.",
+      "notes": "No weak point until illuminated. A Lumen-element hit or a flare exposes one for 8 seconds.",
+      "weak_point_requires": "illumination"
+    },
+    {
+      "id": "nightmaw",
+      "dex": 33,
+      "name": "Nightmaw",
+      "family": "gloom",
+      "family_name": "Gloom",
+      "elements": [
+        "gloom"
+      ],
+      "size": "strider",
+      "stage": 2,
+      "tier": 2,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 330,
+        "attack": 56,
+        "armour_reduction": 0.1,
+        "speed": 8,
+        "base_restraint": 108,
+        "skittishness": 0.65,
+        "flee_threshold": 0.35
+      },
+      "aggression": "territorial",
+      "weak_points": [
+        "maw_interior"
+      ],
+      "rarity": "rare",
+      "spawn": {
+        "biomes": [
+          "urban_core",
+          "woodland"
+        ],
+        "time_windows": [
+          "night"
+        ]
+      },
+      "evolves_from": "shadelet",
+      "evolves_to": [
+        {
+          "id": "umbrakhan",
+          "condition": "none",
+          "study_required": 1600,
+          "rank_required": 8
+        }
+      ],
+      "family_blurb": "Not hostile so much as present, and they get worse the longer you look."
+    },
+    {
+      "id": "umbrakhan",
+      "dex": 34,
+      "name": "Umbrakhan",
+      "family": "gloom",
+      "family_name": "Gloom",
+      "elements": [
+        "gloom"
+      ],
+      "size": "colossus",
+      "stage": 3,
+      "tier": 4,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 1250,
+        "attack": 112,
+        "armour_reduction": 0.25,
+        "speed": 7,
+        "base_restraint": 330,
+        "skittishness": 0.3,
+        "flee_threshold": 0.2
+      },
+      "aggression": "aggressive",
+      "weak_points": [
+        "eye_ring_1",
+        "eye_ring_2",
+        "eye_ring_3",
+        "eye_ring_4",
+        "eye_ring_5"
+      ],
+      "rarity": "very_rare",
+      "spawn": {
+        "biomes": [
+          "urban_core",
+          "woodland"
+        ],
+        "time_windows": [
+          "night"
+        ]
+      },
+      "evolves_from": "nightmaw",
+      "evolves_to": [],
+      "family_blurb": "Not hostile so much as present, and they get worse the longer you look."
+    },
+    {
+      "id": "glimmerfly",
+      "dex": 35,
+      "name": "Glimmerfly",
+      "family": "lumen",
+      "family_name": "Lumen",
+      "elements": [
+        "lumen"
+      ],
+      "size": "mote",
+      "stage": 1,
+      "tier": 1,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 50,
+        "attack": 9,
+        "armour_reduction": 0.0,
+        "speed": 8,
+        "base_restraint": 22,
+        "skittishness": 0.9,
+        "flee_threshold": 0.65
+      },
+      "aggression": "passive",
+      "weak_points": [
+        "wing"
+      ],
+      "rarity": "common",
+      "spawn": {
+        "biomes": [
+          "parkland",
+          "urban_core",
+          "open_ground",
+          "residential"
+        ],
+        "time_windows": [
+          "day"
+        ]
+      },
+      "evolves_from": null,
+      "evolves_to": [
+        {
+          "id": "solafaun",
+          "condition": "none",
+          "study_required": 400,
+          "rank_required": 3
+        }
+      ],
+      "family_blurb": "Daylight creatures drawn to landmarks and open squares. Very hard to sneak up on, because they are already looking at you."
+    },
+    {
+      "id": "solafaun",
+      "dex": 36,
+      "name": "Solafaun",
+      "family": "lumen",
+      "family_name": "Lumen",
+      "elements": [
+        "lumen"
+      ],
+      "size": "strider",
+      "stage": 2,
+      "tier": 2,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 280,
+        "attack": 40,
+        "armour_reduction": 0.1,
+        "speed": 8,
+        "base_restraint": 96,
+        "skittishness": 0.7,
+        "flee_threshold": 0.4
+      },
+      "aggression": "skittish",
+      "weak_points": [
+        "flank",
+        "antler_base"
+      ],
+      "rarity": "uncommon",
+      "spawn": {
+        "biomes": [
+          "parkland",
+          "urban_core",
+          "open_ground"
+        ],
+        "time_windows": [
+          "day"
+        ]
+      },
+      "evolves_from": "glimmerfly",
+      "evolves_to": [
+        {
+          "id": "aurelian",
+          "condition": "none",
+          "study_required": 1600,
+          "rank_required": 8
+        }
+      ],
+      "family_blurb": "Daylight creatures drawn to landmarks and open squares. Very hard to sneak up on, because they are already looking at you."
+    },
+    {
+      "id": "aurelian",
+      "dex": 37,
+      "name": "Aurelian",
+      "family": "lumen",
+      "family_name": "Lumen",
+      "elements": [
+        "lumen"
+      ],
+      "size": "brute",
+      "stage": 3,
+      "tier": 3,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 750,
+        "attack": 76,
+        "armour_reduction": 0.2,
+        "speed": 7,
+        "base_restraint": 210,
+        "skittishness": 0.45,
+        "flee_threshold": 0.25
+      },
+      "aggression": "territorial",
+      "weak_points": [
+        "halo",
+        "chest"
+      ],
+      "rarity": "rare",
+      "spawn": {
+        "biomes": [
+          "parkland",
+          "urban_core",
+          "open_ground"
+        ],
+        "time_windows": [
+          "day"
+        ]
+      },
+      "evolves_from": "solafaun",
+      "evolves_to": [],
+      "family_blurb": "Daylight creatures drawn to landmarks and open squares. Very hard to sneak up on, because they are already looking at you."
+    },
+    {
+      "id": "riftspawn",
+      "dex": 38,
+      "name": "Riftspawn",
+      "family": "rift",
+      "family_name": "Rift",
+      "elements": [
+        "rift"
+      ],
+      "size": "whelp",
+      "stage": 1,
+      "tier": 1,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 160,
+        "attack": 30,
+        "armour_reduction": 0.1,
+        "speed": 7,
+        "base_restraint": 60,
+        "skittishness": 0.5,
+        "flee_threshold": 0.3
+      },
+      "aggression": "aggressive",
+      "weak_points": [
+        "seam"
+      ],
+      "rarity": "rare",
+      "spawn": {
+        "biomes": [
+          "rift_event"
+        ],
+        "time_windows": [
+          "event"
+        ]
+      },
+      "evolves_from": null,
+      "evolves_to": [
+        {
+          "id": "voidmaw",
+          "condition": "none",
+          "study_required": 400,
+          "rank_required": 3
+        }
+      ],
+      "family_blurb": "Not from here, and not shaped right. Immune to element counterplay, so they are pure execution."
+    },
+    {
+      "id": "voidmaw",
+      "dex": 39,
+      "name": "Voidmaw",
+      "family": "rift",
+      "family_name": "Rift",
+      "elements": [
+        "rift"
+      ],
+      "size": "brute",
+      "stage": 2,
+      "tier": 3,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 820,
+        "attack": 88,
+        "armour_reduction": 0.25,
+        "speed": 6,
+        "base_restraint": 240,
+        "skittishness": 0.3,
+        "flee_threshold": 0.2
+      },
+      "aggression": "aggressive",
+      "weak_points": [
+        "inner_ring"
+      ],
+      "rarity": "very_rare",
+      "spawn": {
+        "biomes": [
+          "rift_event"
+        ],
+        "time_windows": [
+          "event"
+        ]
+      },
+      "evolves_from": "riftspawn",
+      "evolves_to": [
+        {
+          "id": "aeonrend",
+          "condition": "none",
+          "study_required": 1600,
+          "rank_required": 8
+        }
+      ],
+      "family_blurb": "Not from here, and not shaped right. Immune to element counterplay, so they are pure execution."
+    },
+    {
+      "id": "aeonrend",
+      "dex": 40,
+      "name": "Aeonrend",
+      "family": "rift",
+      "family_name": "Rift",
+      "elements": [
+        "rift"
+      ],
+      "size": "titan",
+      "stage": 3,
+      "tier": 5,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 4200,
+        "attack": 180,
+        "armour_reduction": 0.45,
+        "speed": 5,
+        "base_restraint": 900,
+        "skittishness": 0.0,
+        "flee_threshold": 0.0
+      },
+      "aggression": "aggressive",
+      "weak_points": [
+        "phase_dependent"
+      ],
+      "rarity": "apex",
+      "spawn": {
+        "biomes": [
+          "rift_event"
+        ],
+        "time_windows": [
+          "event"
+        ]
+      },
+      "evolves_from": "voidmaw",
+      "evolves_to": [],
+      "family_blurb": "Not from here, and not shaped right. Immune to element counterplay, so they are pure execution.",
+      "notes": "Apex. Spawns only in the final 20 minutes of a rift event; not obtainable by evolution in practice.",
+      "apex": true
+    },
+    {
+      "id": "karrahk",
+      "dex": 41,
+      "name": "Karrahk, the Sunken Spire",
+      "family": "apex",
+      "family_name": "Apex",
+      "elements": [
+        "tide",
+        "stone"
+      ],
+      "size": "titan",
+      "stage": 3,
+      "tier": 5,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 5800,
+        "attack": 165,
+        "armour_reduction": 0.55,
+        "speed": 3,
+        "base_restraint": 1100,
+        "skittishness": 0.0,
+        "flee_threshold": 0.0
+      },
+      "aggression": "aggressive",
+      "weak_points": [
+        "spire_core"
+      ],
+      "rarity": "apex",
+      "spawn": {
+        "biomes": [
+          "waterside"
+        ],
+        "time_windows": [
+          "event"
+        ],
+        "requires_weather": "storm"
+      },
+      "evolves_from": null,
+      "evolves_to": [],
+      "apex": true,
+      "phases": 3,
+      "party_size": [
+        4,
+        8
+      ],
+      "notes": "Surfaces in rivers and flooded ground during storm events. Phase 1 breaks armour, phase 2 floods the arena, phase 3 exposes the core. Quadruple-weak to Verdant."
+    },
+    {
+      "id": "nyxhollow",
+      "dex": 42,
+      "name": "Nyxhollow",
+      "family": "apex",
+      "family_name": "Apex",
+      "elements": [
+        "gloom"
+      ],
+      "size": "colossus",
+      "stage": 3,
+      "tier": 5,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 3100,
+        "attack": 140,
+        "armour_reduction": 0.3,
+        "speed": 8,
+        "base_restraint": 780,
+        "skittishness": 0.0,
+        "flee_threshold": 0.0
+      },
+      "aggression": "aggressive",
+      "weak_points": [
+        "hollow_eye"
+      ],
+      "rarity": "apex",
+      "spawn": {
+        "biomes": [
+          "urban_core",
+          "woodland"
+        ],
+        "time_windows": [
+          "midnight"
+        ]
+      },
+      "evolves_from": null,
+      "evolves_to": [],
+      "apex": true,
+      "phases": 2,
+      "party_size": [
+        2,
+        6
+      ],
+      "notes": "Extinguishes light in a radius, blanking the weak-point overlay. Countered by a Lumen carrier keeping a flare up. The only apex that can kill a careless solo Warden."
+    },
+    {
+      "id": "aeonrend_apex",
+      "dex": 43,
+      "name": "Aeonrend (Apex encounter)",
+      "family": "apex",
+      "family_name": "Apex",
+      "elements": [
+        "rift"
+      ],
+      "size": "titan",
+      "stage": 3,
+      "tier": 5,
+      "is_branch_form": false,
+      "stats": {
+        "hp": 4200,
+        "attack": 180,
+        "armour_reduction": 0.45,
+        "speed": 5,
+        "base_restraint": 900,
+        "skittishness": 0.0,
+        "flee_threshold": 0.0
+      },
+      "aggression": "aggressive",
+      "weak_points": [
+        "phase_dependent"
+      ],
+      "rarity": "apex",
+      "spawn": {
+        "biomes": [
+          "rift_event"
+        ],
+        "time_windows": [
+          "event"
+        ]
+      },
+      "evolves_from": "voidmaw",
+      "evolves_to": [],
+      "apex": true,
+      "phases": 4,
+      "party_size": [
+        6,
+        8
+      ],
+      "notes": "The endgame. Weak points move between phases and element multipliers are flat 1.0 both ways, so no loadout counters it. First server capture is a permanent Codex banner."
+    }
+  ]
+}

@@ -1,0 +1,324 @@
+{
+  "$comment": "RIFTBORN ammunition. Lethal rounds go in chamber A, capture rounds in chamber B.",
+  "version": 1,
+  "lethal": [
+    {
+      "id": "ball_round",
+      "name": "Ball Round",
+      "tier": 1,
+      "damage_multiplier": 1.0,
+      "element": null,
+      "effect": null,
+      "fits": [
+        "marker_pistol",
+        "splitbore",
+        "longtooth"
+      ]
+    },
+    {
+      "id": "slug",
+      "name": "Slug",
+      "tier": 2,
+      "damage_multiplier": 1.6,
+      "element": null,
+      "effect": "splitbore_single_projectile",
+      "fits": [
+        "splitbore",
+        "longtooth"
+      ]
+    },
+    {
+      "id": "piercing_round",
+      "name": "Piercing Round",
+      "tier": 2,
+      "damage_multiplier": 1.0,
+      "element": null,
+      "effect": "halve_armour_reduction",
+      "fits": [
+        "marker_pistol",
+        "longtooth",
+        "tether_harpoon"
+      ],
+      "note": "Poor value against unarmoured targets."
+    },
+    {
+      "id": "incendiary",
+      "name": "Incendiary",
+      "tier": 3,
+      "damage_multiplier": 0.8,
+      "element": "ember",
+      "effect": "burning",
+      "dot": {
+        "dps": 8,
+        "seconds": 6
+      },
+      "fits": [
+        "splitbore",
+        "longtooth",
+        "lattice_launcher"
+      ]
+    },
+    {
+      "id": "cryo_round",
+      "name": "Cryo Round",
+      "tier": 3,
+      "damage_multiplier": 0.7,
+      "element": "tide",
+      "effect": "chilled",
+      "status_seconds": 5,
+      "fits": [
+        "marker_pistol",
+        "longtooth",
+        "lattice_launcher"
+      ]
+    },
+    {
+      "id": "arc_cell",
+      "name": "Arc Cell",
+      "tier": 3,
+      "damage_multiplier": 1.0,
+      "element": "volt",
+      "effect": "stunned_on_third_chain",
+      "fits": [
+        "arcbrand_coil"
+      ]
+    },
+    {
+      "id": "broadhead",
+      "name": "Broadhead",
+      "tier": 2,
+      "damage_multiplier": 1.3,
+      "element": null,
+      "effect": "bleeding",
+      "dot": {
+        "dps": 5,
+        "seconds": 8
+      },
+      "fits": [
+        "sylvan_bow",
+        "sting_crossbow"
+      ]
+    }
+  ],
+  "capture": [
+    {
+      "id": "tranq_dart",
+      "name": "Tranq Dart",
+      "tier": 1,
+      "restraint_multiplier": 1.0,
+      "applies": "sedated",
+      "stacks_to_apply": 3,
+      "fits": [
+        "marker_pistol",
+        "longtooth",
+        "sting_crossbow"
+      ]
+    },
+    {
+      "id": "heavy_sedative_dart",
+      "name": "Heavy Sedative Dart",
+      "tier": 3,
+      "restraint_multiplier": 1.4,
+      "applies": "sedated",
+      "stacks_to_apply": 1,
+      "fits": [
+        "longtooth",
+        "sting_crossbow"
+      ],
+      "note": "Slow projectile with heavy drop. Leads moving targets badly."
+    },
+    {
+      "id": "net_shell",
+      "name": "Net Shell",
+      "tier": 2,
+      "restraint_multiplier": 1.2,
+      "applies": "ensnared",
+      "stacks_to_apply": 1,
+      "fits": [
+        "splitbore",
+        "lattice_launcher"
+      ],
+      "note": "Short range only."
+    },
+    {
+      "id": "snare_grenade",
+      "name": "Snare Grenade",
+      "tier": 3,
+      "restraint_multiplier": 1.1,
+      "applies": "ensnared",
+      "stacks_to_apply": 1,
+      "aoe_radius_m": 6.0,
+      "fits": [
+        "lattice_launcher"
+      ]
+    },
+    {
+      "id": "rune_arrow",
+      "name": "Rune Arrow",
+      "tier": 3,
+      "restraint_multiplier": 1.5,
+      "applies": null,
+      "silent": true,
+      "bonus_vs": [
+        "gloom",
+        "lumen"
+      ],
+      "bonus_multiplier": 1.3,
+      "fits": [
+        "sylvan_bow",
+        "sting_crossbow"
+      ]
+    },
+    {
+      "id": "lullaby_bolt",
+      "name": "Lullaby Bolt",
+      "tier": 4,
+      "restraint_multiplier": 0.8,
+      "applies": "calmed",
+      "status_seconds": 10,
+      "never_enrages": true,
+      "fits": [
+        "sylvan_bow",
+        "sting_crossbow"
+      ]
+    },
+    {
+      "id": "anchor_tether",
+      "name": "Anchor Tether",
+      "tier": 4,
+      "restraint_multiplier": 1.1,
+      "applies": "anchored",
+      "fits": [
+        "tether_harpoon"
+      ],
+      "note": "Mandatory for any Colossus or Titan capture."
+    }
+  ],
+  "statuses": {
+    "sedated": {
+      "restraint_multiplier": 1.8,
+      "decay_multiplier": 0.35,
+      "move_speed_multiplier": 0.5
+    },
+    "ensnared": {
+      "restraint_multiplier": 1.5,
+      "halts_restraint_decay": false,
+      "prevents_flee": true,
+      "prevents_move": true
+    },
+    "stunned": {
+      "restraint_multiplier": 1.3,
+      "halts_restraint_decay": false,
+      "seconds": 2,
+      "prevents_actions": true
+    },
+    "anchored": {
+      "restraint_multiplier": 1.4,
+      "halts_restraint_decay": true,
+      "prevents_flee": true
+    },
+    "chilled": {
+      "restraint_multiplier": 1.2,
+      "move_speed_multiplier": 0.6
+    },
+    "burning": {
+      "restraint_multiplier": 0.9,
+      "dps": 8
+    },
+    "bleeding": {
+      "restraint_multiplier": 1.0,
+      "dps": 5
+    },
+    "enraged": {
+      "restraint_multiplier": 0.6,
+      "damage_dealt_multiplier": 1.4,
+      "prevents_flee": true
+    },
+    "calmed": {
+      "restraint_multiplier": 1.1,
+      "prevents_flee": true
+    }
+  },
+  "status_product_cap": 2.5,
+  "hit_zones": {
+    "body": {
+      "damage": 1.0,
+      "restraint": 1.0
+    },
+    "limb": {
+      "damage": 0.7,
+      "restraint": 0.7
+    },
+    "weak_point": {
+      "damage": 2.5,
+      "restraint": 2.0
+    }
+  },
+  "ambush": {
+    "damage_multiplier": 1.8,
+    "restraint_multiplier": 1.5,
+    "requires": "target_unaware"
+  },
+  "formulas": {
+    "damage": "base_damage * ammo_damage_multiplier * element_multiplier * hit_zone_damage * (1 - armour_reduction) * ambush_multiplier",
+    "restraint_gain": "weapon_base_restraint * ammo_restraint_multiplier * element_multiplier * hit_zone_restraint * status_product * wound_multiplier * ambush_multiplier / size_resistance",
+    "wound_multiplier": "1.0 + 2.0 * (1 - current_hp / max_hp) ^ wound_multiplier_exponent",
+    "restraint_required": "species_base_restraint * size_restraint_multiplier * (1 + 0.15 * evolution_stage) * restraint_required_scale",
+    "restraint_decay_per_second": "(4.0 + 0.35 * species_tier) * status_decay_multiplier * lerp(at_zero_hp, at_full_hp, current_hp / max_hp)",
+    "flee_chance_per_second": "skittishness * flee_chance_scale * (1 - restraint / restraint_required)",
+    "weak_point_damage_note": "A weak point hit uses the weapon's crit_multiplier in place of hit_zones.weak_point.damage; the hit_zones value is the default for weapons that do not define one.",
+    "restraint_decay_note": "Statuses scale decay: a status with halts_restraint_decay stops it entirely, otherwise decay_multiplier values multiply together.",
+    "flee_speed": "species_speed * (0.75 + 0.6 * current_hp / max_hp) -- a badly wounded monster limps, so a chase is winnable rather than a formality"
+  },
+  "subdue_window_seconds": 5,
+  "failed_subdue": {
+    "restraint_retained": 0.5,
+    "applies": "enraged"
+  },
+  "restraint_required_scale": 3.0,
+  "$restraint_required_scale_note": "Converts between two independently authored ladders: weapon `restraint` (14-58 per projectile) and species `base_restraint` (22-1100). Without it a sedated weak-point dart on a wounded Strider fills the whole bar in one shot. Raise it to make every capture slower; it is the single global dial for capture pacing.",
+  "flee_chance_scale": 1.0,
+  "$flee_chance_scale_note": "Global multiplier on every species' skittishness, kept at 1.0 so the bestiary's published values stand. It exists because the flee rate was losing roughly a quarter of straightforward culls; that turned out to be better fixed by making a badly wounded monster limp (see formulas.flee_speed) than by blunting the flee roll, which would have removed the drama instead of giving the player an answer to it.",
+  "restraint_decay_health_scale": {
+    "at_full_hp": 1.4,
+    "at_zero_hp": 0.6
+  },
+  "$restraint_decay_health_scale_note": "A healthy monster shakes off sedative faster than a wounded one. This is what stops 'swap to darts at half health' being a strategy with no failure mode: dart it early and the meter drains against you.",
+  "wound_multiplier_exponent": 1.8,
+  "$wound_multiplier_exponent_note": "Curves the wound multiplier instead of ramping it linearly. Linear left almost no gradient between 50% and 30% health (2.0 vs 2.4), so darting early cost the same per capture as wounding deeply first and never risked the flee threshold — it strictly dominated. Curving it makes the timing of the chamber swap the decision it is supposed to be.",
+  "$field_comment": "Field items are the only thing you can do about a wounded party WITHOUT going home. Health and PP carry across a patrol, which makes a patrol about three fights long; without a field item the only answers are walk back to the Sanctuary or wait out the regen clock, and 'wait half an hour' is not a thing you can ask of someone standing in a street.\n\nUsing one IN BATTLE costs the turn, and that turn is the whole balance. Measured (FIELD=1 in balance_sim.mjs): a salve restoring 40% is worth +15 points of win rate and the DUMBEST policy scores best — heal whenever you are low beats reading the matchup, so it is a button you hold, and it cancels the patrol limit this whole system exists to create. At 18% — about one turn of incoming damage, which is what the comparable-damage cap holds an exchange to — healing is worth only +3 flat, and a policy that reads whether the damage race is close beats every flat rule while spending FEWER salves. That is a decision, so that is what in_battle items are tuned to.\n\nThe generous restores are therefore NOT usable in a fight. They work between battles, on patrol, where extending the patrol is exactly their job and they cannot make a losing fight winnable by attrition.",
+  "field": [
+    {
+      "id": "field_salve",
+      "name": "Field Salve",
+      "tier": 1,
+      "in_battle": true,
+      "restores_hp": 0.18,
+      "note": "About one turn of incoming damage. Deliberately marginal: worth the turn when the race is close, wasted when it is not."
+    },
+    {
+      "id": "focus_draught",
+      "name": "Focus Draught",
+      "tier": 2,
+      "in_battle": true,
+      "restores_pp": 4,
+      "note": "4 PP back on every move. Costs the turn, so it only pays when the alternative is several turns of Strike."
+    },
+    {
+      "id": "deep_salve",
+      "name": "Deep Salve",
+      "tier": 2,
+      "in_battle": false,
+      "restores_hp": 0.85,
+      "note": "Most of the bar, between fights only. In a fight this was worth +15 points and made healing a button you hold."
+    },
+    {
+      "id": "rouse_vial",
+      "name": "Rouse Vial",
+      "tier": 3,
+      "in_battle": false,
+      "revives_to": 0.5,
+      "note": "Brings one back from down, at half. The only way to un-lose a monster mid-patrol, and never mid-fight."
+    }
+  ]
+}

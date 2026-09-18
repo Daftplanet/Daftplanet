@@ -1,0 +1,957 @@
+{
+  "$comment": "RIFTBORN element definitions and effectiveness matrix. First-pass tuning values.",
+  "version": 1,
+  "elements": [
+    {
+      "id": "ember",
+      "name": "Ember",
+      "signature_status": "burning",
+      "biomes": [
+        "industrial",
+        "urban_core",
+        "works"
+      ],
+      "sanctuary_bonus": "lethal_damage",
+      "bonus_per_resident": 0.01
+    },
+    {
+      "id": "tide",
+      "name": "Tide",
+      "signature_status": "chilled",
+      "biomes": [
+        "waterside",
+        "urban_core"
+      ],
+      "sanctuary_bonus": "restraint_gain",
+      "bonus_per_resident": 0.01
+    },
+    {
+      "id": "verdant",
+      "name": "Verdant",
+      "signature_status": "bleeding",
+      "biomes": [
+        "parkland",
+        "woodland"
+      ],
+      "sanctuary_bonus": "material_quantity",
+      "bonus_per_resident": 0.01
+    },
+    {
+      "id": "stone",
+      "name": "Stone",
+      "signature_status": "armoured",
+      "biomes": [
+        "works",
+        "open_ground",
+        "industrial"
+      ],
+      "sanctuary_bonus": "damage_resistance",
+      "bonus_per_resident": 0.01
+    },
+    {
+      "id": "gale",
+      "name": "Gale",
+      "signature_status": "knockback",
+      "biomes": [
+        "open_ground",
+        "waterside",
+        "transit"
+      ],
+      "sanctuary_bonus": "detection_radius",
+      "bonus_per_resident": 0.01
+    },
+    {
+      "id": "volt",
+      "name": "Volt",
+      "signature_status": "stunned",
+      "biomes": [
+        "transit",
+        "urban_core",
+        "industrial"
+      ],
+      "sanctuary_bonus": "reload_speed",
+      "bonus_per_resident": 0.01
+    },
+    {
+      "id": "gloom",
+      "name": "Gloom",
+      "signature_status": "feared",
+      "biomes": [
+        "urban_core",
+        "woodland"
+      ],
+      "sanctuary_bonus": "rare_spawn_night",
+      "bonus_per_resident": 0.02
+    },
+    {
+      "id": "lumen",
+      "name": "Lumen",
+      "signature_status": "revealed",
+      "biomes": [
+        "parkland",
+        "urban_core",
+        "open_ground"
+      ],
+      "sanctuary_bonus": "rare_spawn_day",
+      "bonus_per_resident": 0.02
+    },
+    {
+      "id": "rift",
+      "name": "Rift",
+      "signature_status": "unstable",
+      "biomes": [
+        "rift_event"
+      ],
+      "sanctuary_bonus": "all",
+      "bonus_per_resident": 0.01
+    }
+  ],
+  "sanctuary_bonus_cap_per_element": 0.15,
+  "evolved_resident_counts_as": 2,
+  "effectiveness": {
+    "$comment": "effectiveness[attacker][defender] -> damage and restraint multiplier",
+    "ember": {
+      "ember": 0.5,
+      "tide": 0.5,
+      "verdant": 2.0,
+      "stone": 0.5,
+      "gale": 1.0,
+      "volt": 1.0,
+      "gloom": 2.0,
+      "lumen": 1.0,
+      "rift": 1.0
+    },
+    "tide": {
+      "ember": 2.0,
+      "tide": 0.5,
+      "verdant": 0.5,
+      "stone": 2.0,
+      "gale": 1.0,
+      "volt": 1.0,
+      "gloom": 1.0,
+      "lumen": 1.0,
+      "rift": 1.0
+    },
+    "verdant": {
+      "ember": 0.5,
+      "tide": 2.0,
+      "verdant": 0.5,
+      "stone": 2.0,
+      "gale": 0.5,
+      "volt": 1.0,
+      "gloom": 1.0,
+      "lumen": 1.0,
+      "rift": 1.0
+    },
+    "stone": {
+      "ember": 1.0,
+      "tide": 1.0,
+      "verdant": 0.5,
+      "stone": 1.0,
+      "gale": 2.0,
+      "volt": 2.0,
+      "gloom": 1.0,
+      "lumen": 1.0,
+      "rift": 1.0
+    },
+    "gale": {
+      "ember": 1.0,
+      "tide": 1.0,
+      "verdant": 2.0,
+      "stone": 0.5,
+      "gale": 0.5,
+      "volt": 0.5,
+      "gloom": 2.0,
+      "lumen": 1.0,
+      "rift": 1.0
+    },
+    "volt": {
+      "ember": 1.0,
+      "tide": 2.0,
+      "verdant": 0.5,
+      "stone": 0.5,
+      "gale": 2.0,
+      "volt": 0.5,
+      "gloom": 1.0,
+      "lumen": 1.0,
+      "rift": 1.0
+    },
+    "gloom": {
+      "ember": 0.5,
+      "tide": 1.0,
+      "verdant": 1.0,
+      "stone": 1.0,
+      "gale": 1.0,
+      "volt": 1.0,
+      "gloom": 0.5,
+      "lumen": 2.0,
+      "rift": 1.0
+    },
+    "lumen": {
+      "ember": 1.0,
+      "tide": 1.0,
+      "verdant": 1.0,
+      "stone": 1.0,
+      "gale": 1.0,
+      "volt": 1.0,
+      "gloom": 2.0,
+      "lumen": 0.5,
+      "rift": 1.0
+    },
+    "rift": {
+      "ember": 1.25,
+      "tide": 1.25,
+      "verdant": 1.25,
+      "stone": 1.25,
+      "gale": 1.25,
+      "volt": 1.25,
+      "gloom": 1.25,
+      "lumen": 1.25,
+      "rift": 1.0
+    }
+  },
+  "dual_element_rule": "Multiply the attacker's multiplier against each of the defender's elements. A Tide/Gale defender hit by Volt takes 2.0 x 2.0 = 4.0.",
+  "escort_ability_rules": {
+    "$comment": "Answers decision 1 in 09-risks-and-roadmap.md: 'Limited — one resident gives an active ability.' One escort, one charge per encounter, no autonomous action. The escort never attacks on its own; that is the line between a limited companion and a pet sim.",
+    "charges_per_encounter": 1,
+    "stage_scale": [
+      1.0,
+      1.35,
+      1.7
+    ],
+    "ready_after_seconds": 3.0
+  },
+  "escort_abilities": {
+    "ember": {
+      "id": "scorch",
+      "name": "Scorch",
+      "blurb": "Sets the target alight.",
+      "effect": "burn",
+      "damage_per_second": 9,
+      "seconds": 5
+    },
+    "tide": {
+      "id": "undertow",
+      "name": "Undertow",
+      "blurb": "A surge of cold that drags at it.",
+      "effect": "restraint",
+      "restraint": 22
+    },
+    "verdant": {
+      "id": "rootgrasp",
+      "name": "Rootgrasp",
+      "blurb": "Roots it where it stands.",
+      "effect": "status",
+      "status": "ensnared",
+      "seconds": 2.5
+    },
+    "stone": {
+      "id": "bulwark",
+      "name": "Bulwark",
+      "blurb": "Absorbs the next blow.",
+      "effect": "shield",
+      "hp": 34
+    },
+    "gale": {
+      "id": "downdraught",
+      "name": "Downdraught",
+      "blurb": "Shoves it back and spoils its lunge.",
+      "effect": "interrupt",
+      "knockback": 150
+    },
+    "volt": {
+      "id": "jolt",
+      "name": "Jolt",
+      "blurb": "Slams both chambers full.",
+      "effect": "reload"
+    },
+    "gloom": {
+      "id": "shroud",
+      "name": "Shroud",
+      "blurb": "You go unseen. Ambush is back on the table.",
+      "effect": "unsee"
+    },
+    "lumen": {
+      "id": "kindle",
+      "name": "Kindle",
+      "blurb": "Lights what hides — including a weak point that has none.",
+      "effect": "illuminate",
+      "seconds": 7
+    },
+    "rift": {
+      "id": "fracture",
+      "name": "Fracture",
+      "blurb": "Splits its plating open.",
+      "effect": "sunder",
+      "armour_pierce": 0.4,
+      "seconds": 8
+    }
+  },
+  "battle_rules": {
+    "$comment": "Turn-based battle. Your Sanctuary residents fight; weapons became the capture step. Damage reuses the element chart above, and the catch roll reuses the Restraint maths in ammo.json, so four phases of balance work carry over instead of being thrown away. hp_fraction_damage is the share of the DEFENDER's health a power-50 move takes at equal attack stats: damage is relative because health is not, and an absolute base made a mirror match 6 turns at stage 1 and 118 turns against Karrahk.",
+    "party_size": 3,
+    "hp_fraction_damage": 0.15,
+    "attack_ratio_exponent": 0.55,
+    "stab_multiplier": 1.5,
+    "crit_chance": 0.0625,
+    "crit_multiplier": 1.75,
+    "damage_roll": [
+      0.85,
+      1.0
+    ],
+    "level_scale_per_stage": 0.55,
+    "switch_costs_turn": true,
+    "flee_base": 0.35,
+    "status_turns": 4,
+    "comparable_damage_cap": 0.2,
+    "outclass_ratio": 2.5,
+    "$cap_comment": "A fight between comparable monsters cannot end in one hit. Four terms in the damage formula each reach about 2x — move power, the same-element bonus, the type chart, the attack ratio — and they multiply. Measured over 60 fair matchups (same stage, same size class, different element), 35% of fights ended inside two turns and the average was 3.3, which leaves no room for a status, a swap or anything else the battle offers. The cap is conditional on outclass_ratio rather than universal because a mismatch SHOULD end in one hit: at cap 0.20 fair fights run 6.1 turns, two-turn fights drop to 0%, mirror matches are untouched at 9.7, and Karrahk still one-shots a Glimmerfly.",
+    "hold_scale": 0.5,
+    "$hold_comment": "How much a speed penalty costs a monster its TURN, not just its place in the order. Speed was read in exactly one line of the engine — who acts first — and both sides act every turn regardless, so 'held', 'anchored', 'chilled' and 'sedated' were four status moves that did essentially nothing. A slowed monster now loses its turn with probability (1 - speed factor) * hold_scale: held is 40%, anchored 45%, sedated 25%, chilled 20%. That is the paralysis model, and it is what makes a status move worth the turn it costs.",
+    "hp_regen_per_minute": 0.03,
+    "mend_essence_per_tier": 10,
+    "$condition_comment": "A monster carries its wounds and its spent PP out of a battle and into the next one. Before this every fight started everyone at full, so a patrol was a series of unrelated battles: fainting cost nothing past the turn it happened on, there was no reason to rotate the party, and no reason ever to go home. Measured over 40 fair matchups, winning one fight costs 75% of the winner's health and 6 of its 13 PP — so a party of three sustains about four battles, which is a patrol. Recovery is 3% of the bar per minute (about half an hour from empty), or pay Essence to mend now. The price is one cull per heal at the same tier, which is the point: culling pays to keep the monsters you catalogued in the field, and the game's two halves finally need each other."
+  },
+  "element_moves": {
+    "ember": [
+      {
+        "id": "cinder_spit",
+        "name": "Cinder Spit",
+        "power": 38,
+        "accuracy": 0.95,
+        "priority": 3,
+        "element": "ember",
+        "pp": 8
+      },
+      {
+        "id": "magma_lash",
+        "name": "Magma Lash",
+        "power": 78,
+        "accuracy": 0.75,
+        "priority": -2,
+        "element": "ember",
+        "pp": 3
+      },
+      {
+        "id": "cinderbrand",
+        "name": "Cinderbrand",
+        "power": 0,
+        "accuracy": 0.9,
+        "priority": 1,
+        "element": "ember",
+        "applies": "burning",
+        "pp": 2,
+        "blurb": "Sets it alight. It keeps burning."
+      }
+    ],
+    "tide": [
+      {
+        "id": "spray",
+        "name": "Spray",
+        "power": 36,
+        "accuracy": 0.95,
+        "priority": 3,
+        "element": "tide",
+        "pp": 8
+      },
+      {
+        "id": "undertow_crush",
+        "name": "Undertow Crush",
+        "power": 80,
+        "accuracy": 0.75,
+        "priority": -2,
+        "element": "tide",
+        "pp": 3
+      },
+      {
+        "id": "coldshock",
+        "name": "Coldshock",
+        "power": 0,
+        "accuracy": 0.9,
+        "priority": 1,
+        "element": "tide",
+        "applies": "chilled",
+        "pp": 2,
+        "blurb": "Cold enough to slow anything down."
+      }
+    ],
+    "verdant": [
+      {
+        "id": "thorn_flick",
+        "name": "Thorn Flick",
+        "power": 34,
+        "accuracy": 1.0,
+        "priority": 4,
+        "element": "verdant",
+        "pp": 8
+      },
+      {
+        "id": "bramble_wrack",
+        "name": "Bramble Wrack",
+        "power": 76,
+        "accuracy": 0.8,
+        "priority": -2,
+        "element": "verdant",
+        "pp": 3
+      },
+      {
+        "id": "rootgrasp",
+        "name": "Rootgrasp",
+        "power": 0,
+        "accuracy": 0.9,
+        "priority": 1,
+        "element": "verdant",
+        "applies": "ensnared",
+        "pp": 2,
+        "blurb": "Roots it where it stands."
+      }
+    ],
+    "stone": [
+      {
+        "id": "shard",
+        "name": "Shard",
+        "power": 40,
+        "accuracy": 0.95,
+        "priority": 1,
+        "element": "stone",
+        "pp": 8
+      },
+      {
+        "id": "tectonic_slam",
+        "name": "Tectonic Slam",
+        "power": 88,
+        "accuracy": 0.7,
+        "priority": -4,
+        "element": "stone",
+        "pp": 3
+      },
+      {
+        "id": "ballast",
+        "name": "Ballast",
+        "power": 0,
+        "accuracy": 0.9,
+        "priority": 1,
+        "element": "stone",
+        "applies": "anchored",
+        "pp": 2,
+        "blurb": "Buries its feet."
+      }
+    ],
+    "gale": [
+      {
+        "id": "gust_cut",
+        "name": "Gust Cut",
+        "power": 34,
+        "accuracy": 1.0,
+        "priority": 6,
+        "element": "gale",
+        "pp": 8
+      },
+      {
+        "id": "cyclone_rake",
+        "name": "Cyclone Rake",
+        "power": 74,
+        "accuracy": 0.8,
+        "priority": 0,
+        "element": "gale",
+        "pp": 3
+      },
+      {
+        "id": "razorwind",
+        "name": "Razorwind",
+        "power": 0,
+        "accuracy": 0.9,
+        "priority": 1,
+        "element": "gale",
+        "applies": "bleeding",
+        "pp": 2,
+        "blurb": "A thousand small cuts that do not close."
+      }
+    ],
+    "volt": [
+      {
+        "id": "arc_snap",
+        "name": "Arc Snap",
+        "power": 40,
+        "accuracy": 0.95,
+        "priority": 5,
+        "element": "volt",
+        "pp": 8
+      },
+      {
+        "id": "overload",
+        "name": "Overload",
+        "power": 84,
+        "accuracy": 0.7,
+        "priority": -1,
+        "element": "volt",
+        "pp": 3
+      },
+      {
+        "id": "stunlock",
+        "name": "Stunlock",
+        "power": 0,
+        "accuracy": 0.9,
+        "priority": 1,
+        "element": "volt",
+        "applies": "stunned",
+        "pp": 2,
+        "blurb": "One good jolt through the nervous system."
+      }
+    ],
+    "gloom": [
+      {
+        "id": "shade_rake",
+        "name": "Shade Rake",
+        "power": 38,
+        "accuracy": 0.95,
+        "priority": 3,
+        "element": "gloom",
+        "pp": 8
+      },
+      {
+        "id": "nightfall",
+        "name": "Nightfall",
+        "power": 80,
+        "accuracy": 0.75,
+        "priority": -2,
+        "element": "gloom",
+        "pp": 3
+      },
+      {
+        "id": "lull",
+        "name": "Lull",
+        "power": 0,
+        "accuracy": 0.9,
+        "priority": 1,
+        "element": "gloom",
+        "applies": "sedated",
+        "pp": 2,
+        "blurb": "It gets heavy, and then it gets slow."
+      }
+    ],
+    "lumen": [
+      {
+        "id": "glare",
+        "name": "Glare",
+        "power": 36,
+        "accuracy": 1.0,
+        "priority": 4,
+        "element": "lumen",
+        "pp": 8
+      },
+      {
+        "id": "solar_lance",
+        "name": "Solar Lance",
+        "power": 82,
+        "accuracy": 0.75,
+        "priority": -1,
+        "element": "lumen",
+        "pp": 3
+      },
+      {
+        "id": "becalm",
+        "name": "Becalm",
+        "power": 0,
+        "accuracy": 0.9,
+        "priority": 1,
+        "element": "lumen",
+        "applies": "calmed",
+        "pp": 2,
+        "blurb": "Takes the fight out of it."
+      }
+    ],
+    "rift": [
+      {
+        "id": "seam_tear",
+        "name": "Seam Tear",
+        "power": 42,
+        "accuracy": 0.9,
+        "priority": 2,
+        "element": "rift",
+        "pp": 8
+      },
+      {
+        "id": "unmake",
+        "name": "Unmake",
+        "power": 92,
+        "accuracy": 0.65,
+        "priority": -3,
+        "element": "rift",
+        "pp": 3
+      },
+      {
+        "id": "unbind",
+        "name": "Unbind",
+        "power": 0,
+        "accuracy": 1.0,
+        "priority": 0,
+        "element": "rift",
+        "applies_self": "enraged",
+        "pp": 2,
+        "blurb": "Lets a little of the rift through. It hurts, and it helps."
+      }
+    ]
+  },
+  "universal_moves": [
+    {
+      "id": "strike",
+      "name": "Strike",
+      "power": 35,
+      "accuracy": 1.0,
+      "priority": 0,
+      "element": null,
+      "$comment": "Every monster knows it. Untyped, so it is never resisted and never boosted — and it has no PP, so it is what you are left with when everything else is spent. That is the whole point of it.",
+      "pp": null
+    }
+  ],
+  "warden_moves": [
+    {
+      "id": "covering_fire",
+      "name": "Covering Fire",
+      "power": 30,
+      "accuracy": 0.9,
+      "priority": 2,
+      "element": null,
+      "uses_weapon": true,
+      "$comment": "Before you have a monster, you fight with the gun. It is deliberately weaker than a monster's move: the game wants you to catch something."
+    }
+  ],
+  "apex_phase_rules": {
+    "$comment": "Apex phases, shared by both combat modes. A phase is an HP band: phase = 1 + floor((1 - hp/maxHp) * phases), which is what the real-time arena already did. The point of a phase, in the bestiary's words, is that a long fight should be a sequence of different problems rather than the same shot repeated — so each one changes what the apex does, what it is wearing, and whether it can be taken at all.",
+    "transition_ends_turn": true,
+    "transition_clears_statuses": true,
+    "$transition_comment": "The arena gives the apex 1.2 seconds of invulnerability while it re-forms, and wipes the Restraint you had built. The turn-based reading of that is: the turn a band breaks, the apex takes no further damage and does not act, and every status on it is shrugged off. Both rules exist to stop a burst carrying you through two phases at once, which is the one thing that would make phases decorative.",
+    "one_band_per_turn": true,
+    "$band_comment": "A break advances ONE phase, even if the hit crossed two health bands. Measured before this rule, a Verdant party took Karrahk from phase 1 to phase 3 in a single hit and the whole of phase 2 never happened — the phases were a caption on a health bar. Guaranteeing one band per turn makes them content rather than probability.",
+    "damage_fraction_band": [
+      0.06,
+      0.16
+    ],
+    "$damage_comment": "The share of an apex's health any single move may take. Relative damage means the type chart multiplies a FRACTION of health, so a quadruple weakness with same-element bonus came to 0.9 of the bar in one hit while a resisted move came to 0.03 — measured, 4 hits to kill Karrahk with the right element against 38 with the wrong one. Both ends ruin a designed fight: one skips the phases, the other is a slog. The band keeps the chart pointing the right way (about 2.4x for bringing the counter) without letting it decide whether the fight happens at all. It applies to apexes only — Karrahk one-shotting a Glimmerfly is correct and stays.",
+    "$catch_comment": "An apex's capture chance is DESIGNED per phase rather than derived. The Restraint maths is built for a monster you could plausibly carry home; a Titan with 1100 base Restraint is not that, and the derived chance against Karrahk is 0.04% — indistinguishable from the 2% floor, so every phase read the same and the phase gate did nothing. catch_chance below is the chance at the ideal moment: badly wounded, sedated, heavy dart. The actual roll scales down from there by the ratio of your Restraint value to that ideal, so softening and sedating still matter and no new constants are invented."
+  },
+  "apex_phases": {
+    "$comment": "One entry per phase, in order. weak_points and armour_scale are read by the real-time arena too, so the two modes cannot drift apart. catch_scale, moves, flat_effectiveness and conceal are the turn-based battle's.",
+    "karrahk": [
+      {
+        "label": "Sunken Plating",
+        "weak_points": [
+          "outer_plating"
+        ],
+        "armour_scale": 1.0,
+        "catch_chance": 0.0,
+        "blurb": "Karrahk surfaces still sheathed in plating. Nothing you fire is reaching anything that matters.",
+        "moves": [
+          {
+            "id": "tidal_slam",
+            "name": "Tidal Slam",
+            "power": 85,
+            "accuracy": 0.85,
+            "priority": 0,
+            "element": "tide"
+          },
+          {
+            "id": "sediment_guard",
+            "name": "Sediment Guard",
+            "power": 55,
+            "accuracy": 1.0,
+            "priority": 0,
+            "element": "stone"
+          }
+        ]
+      },
+      {
+        "label": "Floodtide",
+        "weak_points": [
+          "vent_cluster"
+        ],
+        "armour_scale": 0.72,
+        "catch_chance": 0.0,
+        "blurb": "The plating splits and the water comes with it. The ground is gone — everything is slower now.",
+        "moves": [
+          {
+            "id": "undertow_crush",
+            "name": "Undertow Crush",
+            "power": 95,
+            "accuracy": 0.75,
+            "priority": -2,
+            "element": "tide"
+          },
+          {
+            "id": "drowning_weight",
+            "name": "Drowning Weight",
+            "power": 45,
+            "accuracy": 0.95,
+            "priority": 0,
+            "element": "tide",
+            "applies": "anchored"
+          }
+        ]
+      },
+      {
+        "label": "Spire Core",
+        "weak_points": [
+          "spire_core"
+        ],
+        "armour_scale": 0.4,
+        "catch_chance": 0.1,
+        "blurb": "The spire cracks open and the core is finally in the light. This is the window.",
+        "moves": [
+          {
+            "id": "core_lash",
+            "name": "Core Lash",
+            "power": 110,
+            "accuracy": 0.7,
+            "priority": 0,
+            "element": "stone"
+          },
+          {
+            "id": "spire_break",
+            "name": "Spire Break",
+            "power": 60,
+            "accuracy": 0.95,
+            "priority": 1,
+            "element": "tide"
+          }
+        ]
+      }
+    ],
+    "nyxhollow": [
+      {
+        "label": "Shroud",
+        "weak_points": [
+          "shroud_knot"
+        ],
+        "armour_scale": 1.0,
+        "catch_chance": 0.0,
+        "conceal": true,
+        "blurb": "Nyxhollow puts the light out. You can hear where it is and that is all.",
+        "moves": [
+          {
+            "id": "smother",
+            "name": "Smother",
+            "power": 70,
+            "accuracy": 0.9,
+            "priority": 0,
+            "element": "gloom"
+          },
+          {
+            "id": "night_terror",
+            "name": "Night Terror",
+            "power": 50,
+            "accuracy": 0.95,
+            "priority": 0,
+            "element": "gloom",
+            "applies": "sedated"
+          }
+        ]
+      },
+      {
+        "label": "Hollow Eye",
+        "weak_points": [
+          "hollow_eye"
+        ],
+        "armour_scale": 0.55,
+        "catch_chance": 0.14,
+        "blurb": "The shroud tears and the eye opens. It can see you, and you can finally see it.",
+        "moves": [
+          {
+            "id": "eye_of_the_hollow",
+            "name": "Eye of the Hollow",
+            "power": 100,
+            "accuracy": 0.8,
+            "priority": 0,
+            "element": "gloom"
+          },
+          {
+            "id": "unlight",
+            "name": "Unlight",
+            "power": 65,
+            "accuracy": 0.9,
+            "priority": 1,
+            "element": "gloom"
+          }
+        ]
+      }
+    ],
+    "aeonrend_apex": [
+      {
+        "label": "First Seam",
+        "weak_points": [
+          "rift_seam_a"
+        ],
+        "armour_scale": 1.0,
+        "catch_chance": 0.0,
+        "flat_effectiveness": true,
+        "blurb": "A seam opens. Whatever you brought, it does not care — nothing is strong or weak against this.",
+        "moves": [
+          {
+            "id": "seam_split",
+            "name": "Seam Split",
+            "power": 80,
+            "accuracy": 0.9,
+            "priority": 0,
+            "element": "rift"
+          },
+          {
+            "id": "unmake",
+            "name": "Unmake",
+            "power": 55,
+            "accuracy": 1.0,
+            "priority": 1,
+            "element": "rift"
+          }
+        ]
+      },
+      {
+        "label": "Second Seam",
+        "weak_points": [
+          "rift_seam_b"
+        ],
+        "armour_scale": 0.82,
+        "catch_chance": 0.0,
+        "flat_effectiveness": true,
+        "blurb": "The seam moves. Wherever you were aiming, it is not there any more.",
+        "moves": [
+          {
+            "id": "hour_collapse",
+            "name": "Hour Collapse",
+            "power": 95,
+            "accuracy": 0.8,
+            "priority": -1,
+            "element": "rift"
+          },
+          {
+            "id": "stutter",
+            "name": "Stutter",
+            "power": 45,
+            "accuracy": 1.0,
+            "priority": 3,
+            "element": "rift"
+          }
+        ]
+      },
+      {
+        "label": "Third Seam",
+        "weak_points": [
+          "rift_seam_c"
+        ],
+        "armour_scale": 0.64,
+        "catch_chance": 0.0,
+        "flat_effectiveness": true,
+        "blurb": "Three seams now, and it is bleeding something that is not blood.",
+        "moves": [
+          {
+            "id": "rend",
+            "name": "Rend",
+            "power": 105,
+            "accuracy": 0.78,
+            "priority": 0,
+            "element": "rift"
+          },
+          {
+            "id": "displace",
+            "name": "Displace",
+            "power": 60,
+            "accuracy": 0.95,
+            "priority": 0,
+            "element": "rift",
+            "applies": "stunned"
+          }
+        ]
+      },
+      {
+        "label": "Aeon",
+        "weak_points": [
+          "phase_dependent"
+        ],
+        "armour_scale": 0.45,
+        "catch_chance": 0.06,
+        "flat_effectiveness": true,
+        "blurb": "It stops pretending to have a shape. This is the last of it, one way or the other.",
+        "moves": [
+          {
+            "id": "aeonrend",
+            "name": "Aeonrend",
+            "power": 125,
+            "accuracy": 0.72,
+            "priority": 0,
+            "element": "rift"
+          },
+          {
+            "id": "endless",
+            "name": "Endless",
+            "power": 70,
+            "accuracy": 0.92,
+            "priority": 0,
+            "element": "rift"
+          }
+        ]
+      }
+    ]
+  },
+  "$moves_comment": "Four moves each: a quick one, a heavy one, something that is not damage, and Strike. PP is PER BATTLE and deliberately tight — three heavies in a fight that now runs six turns — so the menu is a sequencing decision rather than a button you hold. Before this, every element had exactly two damage moves and 'pick the biggest number' matched a type-chart-aware policy on 83% of turns.",
+  "apex_encounter": {
+    "$comment": "An apex is a raid boss, and the bestiary says so: party_size is [4,8] for Karrahk, [2,6] for Nyxhollow, [6,8] for Aeonrend. The real-time arena has always read that through apexHpScale(partySize) — a solo Warden fights a scaled-down instance. The turn battle read nothing, and fought every apex at its full solo numbers.\n\nMeasured, that made them too EASY rather than too hard, which is the opposite of what it looks like: four stage-3 parties beat all three apexes 85-100% of the time, Karrahk costing a third of one monster. (A party of stage-1 starters loses 99% of the time, but nobody brings starters to a raid boss — measuring that first was a narrow sample, and it pointed at exactly the wrong fix.)\n\nattack_scale is per apex because one global dial cannot serve all three: at the same multiplier the three sit 30 points apart, and Aeonrend — which switches the type chart off, so nothing you bring is super effective — falls off a cliff where Nyxhollow barely moves. The values below put each at roughly 55-60% for a full party, which is a boss you can lose. They are level-independent by construction: damage is a share of the defender's health, so raising both sides cancels, and the same numbers measure the same at level 30, 40 and 50.",
+    "designed_party": 3,
+    "attack_scale": {
+      "karrahk": 1.5,
+      "nyxhollow": 2.0,
+      "aeonrend_apex": 1.2
+    },
+    "short_party_hp_exponent": 1.0,
+    "short_party_attack_exponent": 0.5,
+    "$short_party_comment": "Turn up with fewer than three and the apex is scaled down, so a short party is a handicap rather than a wall — but it must stay a handicap, or there is no reason to bring a full party. Scaling health and attack BOTH by the party share got that backwards: a party of two measured EASIER (73-85%) than a party of three (55-60%), because the bench is worth more than its share of the health pool — every extra member is also a free swap. Health by share and attack by its square root is monotonic: three is the best call at every apex, one is a real struggle, and turning up alone to Aeonrend — designed for six to eight — is 8%, which is correct."
+  },
+  "rift_touched": {
+    "$comment": "A rare colourway on a wild specimen — this game's shiny. Cosmetic only, and that is the whole discipline of it: the moment a rare skin carries a stat it stops being a collector's prize and becomes a thing you have to farm.\n\nIt fits the fiction rather than being bolted to it. Monsters come through rifts; once in a while one comes through CHANGED, its colours pulled toward Rift. So the rare variant is the setting's own explanation of itself, and it is the one palette in the game no ordinary species can wear.\n\nRolled from (tile, time bucket, world seed) like everything else about a spawn, which means it is the same for everybody: two Wardens standing in the same park see the same rift-touched monster. A shiny nobody else can witness is a screenshot; one your friend can walk to is an event.",
+    "name": "Rift-touched",
+    "rate": 0.001,
+    "$rate_comment": "One spawn in a thousand. MEASURED with TOUCHED=1 through the real spawn generator: about one sighting every 8 patrols, which against PROGRESS=1's seven patrols per evolution is roughly one rare monster per milestone.\n\nThis number was wrong twice before it was right, and both are worth keeping. It started at 1 in 200 with a comment claiming 'about one sighting every 11 patrols' — a figure I had reasoned rather than run. Measured, 1 in 200 is one sighting every TWO patrols, because a patrol walks past around a hundred spawns and nobody divides that in their head correctly.\n\nThen the first sweep reported an identical 45.8% at four different rates, which is the 'identical to the decimal' smell: the sim imports world.js directly and never called setRiftTouchedRate, so it was measuring the module default and not the data at all. The dial was not connected to the thing being measured.\n\nPokemon's 1/4096 is tuned for a game offering far more encounters an hour than a walking game can.",
+    "palette_pull": 0.55,
+    "$palette_comment": "How far the body colours are dragged toward the Rift ramp. At 1.0 every rift-touched monster is the same violet and the species stops being recognisable, which defeats the point — you should still know what it is. At 0.55 it reads as itself, wrongly coloured."
+  },
+  "biome_coats": {
+    "$comment": "A monster wears the ground it came from. Not a re-typing and not a stat change — Pokemon's regional variants are whole new creatures, which for 43 species across 9 biomes would be 387 of them and a balance problem in every one. This is the cosmetic half of that idea, which is the half that makes your Sanctuary a visible record of where you have walked.\n\nIt had to use a channel the markings were not already using. The marking accent means THE SECOND ELEMENT (see rift_touched and the voxel builder), and overwriting it with a biome colour would have destroyed the type legibility that was the whole point of markings. So a coat settles on the TOP-EXPOSED voxels only — the ones with nothing above them — the way soot, dust, moss or water actually settles on an animal. Element reads off the body, second element off the markings, and where it has been off the top. Three channels, three meanings, no collision.\n\nStrength is deliberately low. At a strong mix every monster in a woodland is green and the biome eats the species, which is the same failure a full palette pull would have been for rift_touched.",
+    "strength": 0.34,
+    "coats": {
+      "urban_core": {
+        "name": "sooted",
+        "colour": "#2f333b"
+      },
+      "industrial": {
+        "name": "rusted",
+        "colour": "#8a5a2b"
+      },
+      "works": {
+        "name": "dusted",
+        "colour": "#b09666"
+      },
+      "transit": {
+        "name": "grimed",
+        "colour": "#3a4048"
+      },
+      "waterside": {
+        "name": "sodden",
+        "colour": "#2f6f96"
+      },
+      "woodland": {
+        "name": "mossed",
+        "colour": "#3f7a42"
+      },
+      "parkland": {
+        "name": "pollened",
+        "colour": "#9fbf6a"
+      },
+      "open_ground": {
+        "name": "sunbaked",
+        "colour": "#b5a765"
+      },
+      "residential": {
+        "name": "weathered",
+        "colour": "#8d7f72"
+      }
+    }
+  }
+}
