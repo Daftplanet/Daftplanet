@@ -1,0 +1,73 @@
+# RIFTBORN — run the checks that nothing was running.
+#
+# Every bug this project found in itself was found by one of two things: a
+# browser suite, or a diagnostic that got re-run. Until now both depended on
+# somebody remembering to type the command, which is the same failure as the
+# service-worker stamp — a check nothing runs is a comment.
+#
+# This runs the whole lot on every push and every pull request. `run.mjs` does
+# its own preflight (the service-worker stamp and the prototype data sync), so
+# there is one command here rather than three that can drift apart.
+name: checks
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# A second push to the same branch makes the first run pointless, so stop it.
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  suites:
+    name: fourteen browser suites
+    runs-on: ubuntu-latest
+    # Comfortably over the ~100s the run takes, and short enough that a hang
+    # fails rather than burning twenty minutes of somebody's quota.
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: game/tests/package-lock.json
+
+      # The two --check tools shell out to `python3`.
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install test dependencies
+        working-directory: game/tests
+        run: npm ci
+
+      # Playwright brings its own Chromium, matched to the installed version.
+      # CHROMIUM is deliberately NOT set here: it exists for environments where
+      # the browser is somewhere Playwright would not look, and setting it in CI
+      # would pin us to whatever the runner image happens to ship.
+      - name: Install Chromium
+        working-directory: game/tests
+        run: npx playwright install --with-deps chromium
+
+      - name: Run the suites
+        run: node game/tests/run.mjs
+
+      # A failing UI check is much easier to read as a picture than as a string
+      # of coordinates, and each suite leaves one behind.
+      - name: Upload screenshots
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: suite-screenshots
+          path: game/tests/*.png
+          if-no-files-found: ignore
+          retention-days: 7

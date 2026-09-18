@@ -36,6 +36,26 @@ woodland, parkland and built ground in known positions — so the whole map path
 needs OpenStreetMap to be up fails for reasons that are not the code's. Set `CHROMIUM=/path/to/chrome` if Playwright cannot find a browser,
 or `RIFTBORN_URL` to point a single suite at an already-running copy.
 
+`run.mjs` also runs two repository checks before the browser starts — the
+service-worker stamp and the prototype data sync — because both existed as
+scripts that nothing ran, and a stale stamp pins every installed player to a
+dead build. They are skipped when you name a single suite, which is the tight
+loop.
+
+## In CI
+
+`.github/workflows/checks.yml` runs all of this on every push to `main` and
+every pull request, and uploads the suites' screenshots when something fails,
+because a failing UI check is easier to read as a picture than as a string of
+coordinates.
+
+One thing there is deliberate: **CI does not set `CHROMIUM`.** That variable
+exists for environments where the browser is somewhere Playwright would not
+look — this project was built in one, where the image ships Chromium 1194 while
+Playwright 1.63 wants 1243. In CI, `npx playwright install chromium` fetches the
+build matching the installed Playwright, so they agree by construction, and
+pinning the path would tie the run to whatever the runner image happens to ship.
+
 ## For a long time, a failing check did not fail the run
 
 Every suite ended `process.exit(errors.length ? 1 : 0)`. It exited on console
