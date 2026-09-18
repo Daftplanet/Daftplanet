@@ -214,24 +214,40 @@ const codex = await page.evaluate(async () => {
     return false;
   }).length;
   const drawnC = canvases.find((c) => r.hasArt(c.dataset.model));
-  const modelC = canvases.find((c) => !r.hasArt(c.dataset.model));
   const beforeDrawn = drawnC ? read(drawnC) : null;
-  const beforeModel = modelC ? read(modelC) : null;
   await new Promise((d) => setTimeout(d, 700));
+
+  /*
+   * Every shipped species is drawn now, so there is no modelled entry left in
+   * the grid to watch — asking the grid whether a model turns has quietly
+   * become a question with no subject, and it answered `null` and passed.
+   *
+   * The fallback still matters: it is what a species added to monsters.json
+   * without a drawing gets, which is the state every future species starts in.
+   * So exercise it on purpose with a species id that has no art, rather than
+   * letting the check sit there looking green about nothing.
+   */
+  const invented = { ...r.speciesById[r.data.monsters.monsters[0].id], id: 'not-a-real-species' };
+  const shot = (turns) => {
+    const c = document.createElement('canvas');
+    c.width = 90; c.height = 90;
+    r.paintInto(c.getContext('2d'), invented, { width: 90, height: 90, turns });
+    return c.getContext('2d').getImageData(0, 0, 90, 90).data.join(',');
+  };
   return {
     total: canvases.length, painted,
-    drawn: !!drawnC, modelled: !!modelC,
+    drawn: !!drawnC,
     drawnHeld: drawnC ? read(drawnC) === beforeDrawn : null,
-    modelTurned: modelC ? read(modelC) !== beforeModel : null,
+    fallbackDrew: shot(0.1).split(',').some((v, i) => i % 4 === 3 && Number(v) > 8),
+    fallbackTurned: shot(0.1) !== shot(0.4),
   };
 });
-ok('every Codex entry draws, the models turn, and the drawings hold still',
+ok('every Codex entry draws, drawings hold still, and an undrawn species still gets a model',
    codex.painted === codex.total && codex.total >= 6
-   && (!codex.modelled || codex.modelTurned) && (!codex.drawn || codex.drawnHeld),
-   `${codex.painted}/${codex.total} entries drew something`
-   + ` · a voxel model turned on its own: ${codex.modelTurned}`
-   + ` · a drawn one held still: ${codex.drawnHeld}`
-   + ' — two renderers, two correct behaviours');
+   && codex.drawn && codex.drawnHeld && codex.fallbackDrew && codex.fallbackTurned,
+   `${codex.painted}/${codex.total} entries drew something · a drawn one held still: ${codex.drawnHeld}`
+   + ` · a species with no art still renders, and still turns: ${codex.fallbackTurned}`
+   + ' — all 43 are drawn, so the fallback has to be provoked rather than observed');
 
 /*
  * A drawn species must be drawn everywhere.

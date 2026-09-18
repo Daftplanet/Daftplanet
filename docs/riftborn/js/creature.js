@@ -915,6 +915,650 @@ const ART = {
     eye(ctx, 34, 30, 4.6, { look: 0.3, angry: true, glow: '#f0d8fa' });
     eye(ctx, 67, 32, 4.6, { look: -0.3, angry: true, glow: '#f0d8fa' });
   },
+
+  /* -------------------------------------------------------- stage three
+   *
+   * A stage 3 is not a bigger stage 2 — everything is drawn in the same box, so
+   * "bigger" is invisible. What reads as final-form is mass sitting low, a
+   * silhouette that breaks the outline of the box, and one feature that has
+   * grown past being useful into being a problem: a crown of vents, three vent
+   * stacks, a ring of eyes.
+   *
+   * The branch forms are the interesting constraint. Ashenreaver and Pyrecrown
+   * are both what a Cinderfang can become, so they have to be visibly siblings
+   * AND visibly a choice — same frame, opposite build.
+   */
+
+  /* Pyrecrown — Cinder, stage 3. The heavy branch: a maned thing whose crown has
+   * become a row of vents it cannot close. */
+  pyrecrown(ctx, p) {
+    for (const lx of [30, 50, 70]) {
+      form(ctx, curve(ctx, [[lx - 8, 62], [lx + 8, 62], [lx + 9, 88], [lx - 9, 88]]), p,
+           { fill: p.dark, shade: 0.3, line: 2.4 });
+    }
+    form(ctx, curve(ctx, [[16, 58], [30, 36], [66, 32], [88, 50], [80, 74], [44, 80], [20, 72]]), p,
+         { shade: 0.5, lit: p.light });
+    // the mane, behind the head
+    form(ctx, curve(ctx, [[10, 44], [22, 18], [48, 14], [58, 34], [46, 56], [18, 58]]), p,
+         { fill: p.dark, shade: 0.35, line: 2.4 });
+    form(ctx, oval(ctx, 30, 40, 19, 17), p, { shade: 0.45, lit: p.light });
+    // the crown: vents, glowing, uneven
+    ctx.save();
+    for (const [vx, vy, h] of [[16, 22, 13], [28, 15, 18], [42, 17, 15], [54, 24, 11]]) {
+      ctx.beginPath();
+      ctx.moveTo(vx - 5, vy); ctx.lineTo(vx, vy - h); ctx.lineTo(vx + 5, vy);
+      ctx.closePath();
+      ctx.fillStyle = p.light; ctx.fill();
+      ctx.strokeStyle = p.line; ctx.lineWidth = 2.2; ctx.stroke();
+    }
+    ctx.restore();
+    weakSpot(ctx, 34, 20, 4, p);
+    weakSpot(ctx, 52, 58, 4, p);
+    eye(ctx, 24, 40, 5.4, { look: -0.5, angry: true });
+  },
+
+  /* Ashenreaver — Cinder, stage 3, the other way. Pyrecrown's opposite: burnt
+   * out rather than burning, lean, with a ridge of spines and two eyes doing all
+   * the heat. */
+  ashenreaver(ctx, p) {
+    for (const lx of [32, 52, 72]) {
+      form(ctx, curve(ctx, [[lx - 5, 62], [lx + 5, 62], [lx + 4, 88], [lx - 6, 88]]), p,
+           { fill: mix(p.dark, p.line, 0.4), shade: 0.3, line: 2.2 });
+    }
+    form(ctx, curve(ctx, [[18, 56], [38, 44], [70, 42], [86, 54], [70, 70], [34, 70]]), p,
+         { fill: mix(p.base, p.line, 0.35), shade: 0.45, lit: p.dark });
+    // spine ridge
+    ctx.save();
+    ctx.fillStyle = p.light; ctx.strokeStyle = p.line; ctx.lineWidth = 2;
+    for (const [tx, h] of [[34, 12], [46, 17], [58, 15], [70, 10]]) {
+      ctx.beginPath();
+      ctx.moveTo(tx - 5, 44); ctx.lineTo(tx, 44 - h); ctx.lineTo(tx + 5, 44);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+    weakSpot(ctx, 52, 34, 3.6, p);
+    // A narrow neck and a long low skull, in a paler ash than the body, so the
+    // head is a separate mass instead of the front end of one.
+    form(ctx, curve(ctx, [[22, 50], [36, 46], [38, 62], [24, 64]]), p,
+         { fill: mix(p.base, p.line, 0.5), shade: 0.35, line: 2.2 });
+    form(ctx, curve(ctx, [[4, 48], [16, 36], [36, 40], [38, 56], [18, 62], [6, 58]]), p,
+         { fill: mix(p.base, '#cfc4bb', 0.35), shade: 0.4, lit: p.light });
+    ctx.save();
+    ctx.strokeStyle = p.line; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(6, 54); ctx.lineTo(26, 56); ctx.stroke();
+    ctx.restore();
+    eye(ctx, 14, 46, 5.6, { look: -0.5, angry: true, glow: '#ffcf8a' });
+    eye(ctx, 29, 48, 4.6, { look: -0.5, angry: true, glow: '#ffcf8a' });
+  },
+
+  /* Vulcarne — Slag, colossus. Three vent stacks, each its own weak point, on a
+   * mass too heavy to have a neck. */
+  vulcarne(ctx, p) {
+    for (const lx of [26, 50, 76]) {
+      form(ctx, curve(ctx, [[lx - 10, 66], [lx + 10, 66], [lx + 10, 90], [lx - 10, 90]]), p,
+           { fill: mix(p.accent, p.line, 0.3), shade: 0.3, line: 2.4 });
+    }
+    const mass = curve(ctx, [[10, 60], [22, 40], [50, 32], [80, 40], [92, 62], [50, 76], [16, 74]]);
+    form(ctx, mass, p, { fill: p.accent, shade: 0.5, lit: p.accentDark });
+    ctx.save();
+    mass(); ctx.clip();
+    ctx.lineCap = 'round';
+    for (const seam of [[[18, 56], [46, 50], [76, 56]], [[26, 68], [56, 64], [84, 68]]]) {
+      for (const [w, col] of [[8, p.line], [3.6, p.light]]) {
+        ctx.beginPath(); ctx.moveTo(seam[0][0], seam[0][1]);
+        for (let i = 1; i < seam.length; i++) ctx.lineTo(seam[i][0], seam[i][1]);
+        ctx.strokeStyle = col; ctx.lineWidth = w; ctx.stroke();
+      }
+    }
+    ctx.restore();
+    // three stacks, different heights, so the count reads without being counted
+    for (const [sx, h] of [[26, 22], [50, 30], [74, 18]]) {
+      form(ctx, curve(ctx, [[sx - 8, 38], [sx - 6, 38 - h], [sx + 6, 38 - h], [sx + 8, 38]]), p,
+           { fill: mix(p.accent, p.line, 0.2), shade: 0.35, line: 2.4 });
+      weakSpot(ctx, sx, 40 - h, 4.2, p);
+    }
+    eye(ctx, 34, 56, 5.2, { look: 0.2, angry: true, glow: '#ffcf8a' });
+    eye(ctx, 62, 56, 5.2, { look: -0.2, angry: true, glow: '#ffcf8a' });
+  },
+
+  /* Maelstrix — Brine, stage 3. The coil has closed into a spiral with a core in
+   * the middle of it, and the mantle is the ring of water it drags along. */
+  maelstrix(ctx, p) {
+    ctx.save();
+    ctx.strokeStyle = p.dark; ctx.lineWidth = 9; ctx.lineCap = 'round';
+    for (let i = 0; i < 3; i++) {
+      ctx.beginPath();
+      ctx.ellipse(50, 52, 34 - i * 3, 30 - i * 5, i * 0.5, 0.4, Math.PI * 1.7);
+      ctx.stroke();
+    }
+    ctx.restore();
+    const mantle = curve(ctx, [[16, 52], [26, 24], [56, 16], [84, 32], [86, 62], [58, 80], [26, 74]]);
+    form(ctx, mantle, p, { shade: 0.5, lit: p.light });
+    weakSpot(ctx, 74, 30, 4, p);
+    // the core, down the middle
+    ctx.save();
+    const glow = ctx.createRadialGradient(50, 52, 2, 50, 52, 22);
+    glow.addColorStop(0, 'rgba(190,240,255,0.95)');
+    glow.addColorStop(1, 'rgba(190,240,255,0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath(); ctx.arc(50, 52, 22, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    form(ctx, oval(ctx, 50, 52, 13, 13), p, { fill: p.light, shade: 0.3, line: 2.4 });
+    weakSpot(ctx, 50, 52, 5.4, p);
+    eye(ctx, 38, 40, 5, { look: 0.3, angry: true });
+    eye(ctx, 63, 42, 5, { look: -0.3, angry: true });
+  },
+
+  /* Glaciarch — Rime, stage 3. The tall branch: a crest of ice it carries like
+   * antlers, and the heart visible through the chest. */
+  glaciarch(ctx, p) {
+    for (const lx of [36, 58, 74]) {
+      form(ctx, curve(ctx, [[lx - 7, 62], [lx + 7, 62], [lx + 7, 88], [lx - 7, 88]]), p,
+           { fill: p.dark, shade: 0.3, line: 2.4 });
+    }
+    form(ctx, curve(ctx, [[22, 56], [40, 40], [72, 42], [88, 56], [70, 74], [32, 72]]), p,
+         { shade: 0.5, lit: p.light });
+    // heart ice, showing through
+    ctx.save();
+    const glow = ctx.createRadialGradient(54, 58, 1, 54, 58, 15);
+    glow.addColorStop(0, 'rgba(210,245,255,0.95)');
+    glow.addColorStop(1, 'rgba(210,245,255,0)');
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(54, 58, 15, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    weakSpot(ctx, 54, 58, 4.6, p);
+    form(ctx, curve(ctx, [[10, 44], [28, 30], [42, 40], [34, 56], [14, 56]]), p,
+         { shade: 0.45, lit: p.light });
+    // the crest: tall, forward-swept, taller than the head
+    ctx.save();
+    ctx.fillStyle = mix(p.accent, '#ffffff', 0.4); ctx.strokeStyle = p.line; ctx.lineWidth = 2.2;
+    for (const [tx, ty, h, lean] of [[16, 30, 24, -5], [27, 26, 30, -3], [38, 30, 22, 2]]) {
+      ctx.beginPath();
+      ctx.moveTo(tx - 6, ty); ctx.lineTo(tx + lean, ty - h); ctx.lineTo(tx + 6, ty);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+    weakSpot(ctx, 27, 6, 3.8, p);
+    eye(ctx, 20, 44, 5.2, { look: -0.5, angry: true });
+  },
+
+  /* Hoarfell — Rime, stage 3, the other way. Glaciarch's opposite: nothing tall
+   * on it at all, everything packed into armoured shoulders. */
+  hoarfell(ctx, p) {
+    for (const lx of [30, 52, 74]) {
+      form(ctx, curve(ctx, [[lx - 10, 64], [lx + 10, 64], [lx + 10, 90], [lx - 10, 90]]), p,
+           { fill: p.dark, shade: 0.3, line: 2.4 });
+    }
+    form(ctx, curve(ctx, [[14, 58], [28, 40], [62, 34], [88, 48], [84, 72], [46, 80], [18, 74]]), p,
+         { shade: 0.5, lit: p.light });
+    // shoulder plates, overlapping, the whole silhouette
+    // Plates that grow off the back: they overlap each other and their lower
+    // edges are buried in the body rather than outlined against it.
+    ctx.save();
+    ctx.fillStyle = mix(p.accent, '#ffffff', 0.3); ctx.strokeStyle = p.line; ctx.lineWidth = 2.4;
+    for (const [px_, py, w] of [[34, 42, 15], [54, 37, 17], [73, 44, 14]]) {
+      ctx.beginPath();
+      ctx.moveTo(px_ - w, py + 14);
+      ctx.quadraticCurveTo(px_ - w * 0.5, py - 10, px_ + w * 0.2, py - 8);
+      ctx.quadraticCurveTo(px_ + w, py - 2, px_ + w, py + 16);
+      ctx.closePath();
+      ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+    weakSpot(ctx, 54, 34, 4, p);
+    form(ctx, oval(ctx, 20, 58, 15, 13), p, { shade: 0.4, lit: p.light });
+    weakSpot(ctx, 14, 60, 3.6, p);
+    eye(ctx, 15, 54, 5, { look: -0.4, angry: true });
+    eye(ctx, 27, 56, 4.4, { look: -0.4, angry: true });
+  },
+
+  /* Bramblewarden — Thorn, stage 3. A tree that has decided to stand guard.
+   * The crown is a canopy and the heartwood shows through a split in the trunk. */
+  bramblewarden(ctx, p) {
+    form(ctx, curve(ctx, [[36, 48], [64, 48], [72, 90], [28, 90]]), p,
+         { fill: mix(p.base, p.line, 0.25), shade: 0.45, lit: p.dark });
+    // roots
+    ctx.save();
+    ctx.strokeStyle = p.line; ctx.lineWidth = 5; ctx.lineCap = 'round';
+    for (const [rx, ry] of [[22, 84], [50, 92], [80, 84]]) {
+      ctx.beginPath(); ctx.moveTo(50, 78); ctx.quadraticCurveTo((50 + rx) / 2, 86, rx, ry); ctx.stroke();
+    }
+    ctx.restore();
+    // heartwood
+    ctx.save();
+    ctx.fillStyle = p.accent;
+    ctx.beginPath();
+    ctx.moveTo(44, 54); ctx.lineTo(56, 58); ctx.lineTo(52, 78); ctx.lineTo(42, 72);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = p.line; ctx.lineWidth = 2; ctx.stroke();
+    ctx.restore();
+    weakSpot(ctx, 49, 66, 4, p);
+    // the crown, three overlapping masses so it is not one blob
+    for (const [cx, cy, rx, ry] of [[28, 34, 22, 17], [66, 32, 24, 18], [48, 22, 26, 19]]) {
+      form(ctx, oval(ctx, cx, cy, rx, ry), p, { shade: 0.45, lit: p.light });
+    }
+    weakSpot(ctx, 48, 10, 3.8, p);
+    ctx.save();
+    ctx.fillStyle = mix(p.light, p.line, 0.15); ctx.strokeStyle = p.line; ctx.lineWidth = 1.8;
+    for (const [tx, ty] of [[22, 22], [40, 12], [62, 14], [78, 24]]) {
+      ctx.beginPath();
+      ctx.moveTo(tx - 4, ty + 4); ctx.lineTo(tx, ty - 9); ctx.lineTo(tx + 4, ty + 4);
+      ctx.closePath(); ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+    eye(ctx, 40, 44, 5.4, { look: 0.2, angry: true, glow: '#d9f0c8' });
+    eye(ctx, 60, 44, 5.4, { look: -0.2, angry: true, glow: '#d9f0c8' });
+  },
+
+  /* Rotmatron — Myco, stage 3. Blightcap gone to seed: a bloated sac under a
+   * canopy of gills. Wide and low, which is what makes it unpleasant. */
+  rotmatron(ctx, p) {
+    form(ctx, oval(ctx, 50, 66, 30, 22), p, { fill: p.light, shade: 0.5, lit: p.base });
+    weakSpot(ctx, 50, 74, 4.4, p);
+    ctx.save();
+    ctx.strokeStyle = p.accent; ctx.lineWidth = 3.4; ctx.lineCap = 'round';
+    for (let i = 0; i < 13; i++) {
+      const gx = 14 + i * 6;
+      ctx.beginPath(); ctx.moveTo(gx, 38); ctx.lineTo(gx + (gx - 50) * 0.12, 56); ctx.stroke();
+    }
+    ctx.restore();
+    weakSpot(ctx, 24, 48, 4, p);
+    const cap = curve(ctx, [[8, 42], [10, 20], [50, 4], [90, 20], [92, 42], [68, 34], [50, 38], [32, 34]]);
+    form(ctx, cap, p, { shade: 0.5, lit: p.light });
+    ctx.save();
+    cap(); ctx.clip();
+    ctx.fillStyle = p.accent;
+    for (const [sx, sy, sr] of [[26, 22, 8], [54, 14, 10], [76, 26, 7], [40, 30, 6]]) {
+      ctx.beginPath(); ctx.arc(sx, sy, sr, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+    eye(ctx, 40, 64, 5.4, { look: 0.1, angry: true });
+    eye(ctx, 61, 64, 5.4, { look: -0.1, angry: true });
+  },
+
+  /* Sporeherald — Myco, stage 3, the other way. Rotmatron's opposite: tall,
+   * thin, crowned, and it vents upward instead of spreading. */
+  sporeherald(ctx, p) {
+    form(ctx, curve(ctx, [[42, 40], [58, 40], [64, 90], [36, 90]]), p,
+         { fill: p.light, shade: 0.45, lit: p.base });
+    // vents along the stalk, puffing
+    ctx.save();
+    ctx.fillStyle = p.accent; ctx.globalAlpha = 0.8;
+    for (const [vx, vy, vr] of [[34, 52, 6], [68, 62, 7], [32, 72, 5]]) {
+      ctx.beginPath(); ctx.arc(vx, vy, vr, 0, Math.PI * 2); ctx.fill();
+    }
+    ctx.restore();
+    weakSpot(ctx, 68, 62, 3.8, p);
+    form(ctx, curve(ctx, [[28, 38], [30, 20], [50, 10], [70, 20], [72, 38], [50, 44]]), p,
+         { shade: 0.5, lit: p.light });
+    // the crown: thin spires, taller than the cap
+    ctx.save();
+    ctx.strokeStyle = p.accent; ctx.lineWidth = 3.2; ctx.lineCap = 'round';
+    for (const [cx, h] of [[36, 14], [50, 20], [64, 15]]) {
+      ctx.beginPath(); ctx.moveTo(cx, 18); ctx.lineTo(cx + (cx - 50) * 0.15, 18 - h); ctx.stroke();
+    }
+    ctx.restore();
+    weakSpot(ctx, 50, 0 + 4, 3.6, p);
+    eye(ctx, 43, 30, 4.8, { look: 0.1, angry: true });
+    eye(ctx, 58, 30, 4.8, { look: -0.1, angry: true });
+  },
+
+  /* Obelisc — Crag, colossus. A standing stone that got up. Nothing about it is
+   * animal: it is a monolith with a keystone holding it together. */
+  obelisc(ctx, p) {
+    for (const lx of [34, 66] ) {
+      form(ctx, curve(ctx, [[lx - 9, 70], [lx + 9, 70], [lx + 8, 92], [lx - 8, 92]]), p,
+           { fill: p.dark, shade: 0.3, line: 2.4 });
+      weakSpot(ctx, lx, 72, 3.4, p);
+    }
+    const slab = () => {
+      ctx.beginPath();
+      ctx.moveTo(36, 6); ctx.lineTo(66, 10); ctx.lineTo(74, 72);
+      ctx.lineTo(50, 78); ctx.lineTo(26, 70);
+      ctx.closePath();
+    };
+    form(ctx, slab, p, { shade: 0.5, lit: p.light });
+    ctx.save();
+    slab(); ctx.clip();
+    ctx.strokeStyle = mix(p.base, p.line, 0.5); ctx.lineWidth = 2.2;
+    ctx.beginPath();
+    ctx.moveTo(30, 34); ctx.lineTo(74, 30);
+    ctx.moveTo(28, 56); ctx.lineTo(74, 52);
+    ctx.stroke();
+    // the keystone
+    ctx.fillStyle = p.accent;
+    ctx.beginPath();
+    ctx.moveTo(40, 34); ctx.lineTo(62, 32); ctx.lineTo(60, 52); ctx.lineTo(42, 54);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = p.line; ctx.lineWidth = 2.2; ctx.stroke();
+    ctx.restore();
+    weakSpot(ctx, 51, 43, 4.4, p);
+    eye(ctx, 43, 20, 4.8, { look: 0.2, angry: true, glow: '#efe6d4' });
+    eye(ctx, 59, 21, 4.8, { look: -0.2, angry: true, glow: '#efe6d4' });
+  },
+
+  /* Tempestrix — Gale, stage 3. Zephyrax become weather: a storm with one eye
+   * at the middle of it, which is the joke and also the weak point. */
+  tempestrix(ctx, p) {
+    // The storm reads at the edges only. Drawn any thicker it becomes the
+    // subject, and the creature inside it disappears.
+    ctx.save();
+    ctx.strokeStyle = p.accent; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.globalAlpha = 0.75;
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2;
+      ctx.beginPath();
+      ctx.ellipse(50, 50, 46, 42, a, a + 0.3, a + 1.1);
+      ctx.stroke();
+    }
+    ctx.restore();
+    for (const [tipY] of [[16], [80]]) {
+      form(ctx, curve(ctx, [[54, 48], [80, tipY], [96, tipY + (tipY < 50 ? 16 : -16)], [70, 54]]), p,
+           { fill: mix(p.light, '#ffffff', 0.2), shade: 0.25, line: 2.4 });
+    }
+    form(ctx, curve(ctx, [[10, 48], [30, 28], [64, 30], [82, 48], [62, 72], [26, 70]]), p,
+         { shade: 0.5, lit: p.light });
+    weakSpot(ctx, 70, 58, 4, p);       // storm core
+    ctx.save();
+    const glow = ctx.createRadialGradient(40, 48, 2, 40, 48, 22);
+    glow.addColorStop(0, 'rgba(235,250,255,0.95)');
+    glow.addColorStop(1, 'rgba(235,250,255,0)');
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(40, 48, 22, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // One enormous eye, which is what a storm with an eye should actually be.
+    eye(ctx, 40, 48, 14, { look: -0.2, angry: true });
+    weakSpot(ctx, 40, 30, 3.6, p);
+  },
+
+  /* Thunderhelm — Volt, stage 3. Everything has gone into the head: an armoured
+   * helm with a seam down it and the core showing through the gap. */
+  thunderhelm(ctx, p) {
+    for (const lx of [34, 56, 76]) {
+      form(ctx, curve(ctx, [[lx - 8, 66], [lx + 8, 66], [lx + 8, 90], [lx - 8, 90]]), p,
+           { fill: p.dark, shade: 0.3, line: 2.4 });
+    }
+    form(ctx, curve(ctx, [[26, 60], [44, 46], [76, 48], [90, 62], [72, 76], [36, 74]]), p,
+         { shade: 0.5, lit: p.light });
+    const helm = curve(ctx, [[8, 44], [20, 22], [46, 20], [56, 40], [46, 60], [16, 60]]);
+    form(ctx, helm, p, { fill: mix(p.accent, p.line, 0.35), shade: 0.4, lit: p.light });
+    // the seam, glowing, straight down the middle of the helm
+    ctx.save();
+    helm(); ctx.clip();
+    ctx.strokeStyle = p.light; ctx.lineWidth = 4; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(30, 18); ctx.lineTo(28, 62); ctx.stroke();
+    ctx.restore();
+    weakSpot(ctx, 29, 30, 4, p);
+    ctx.save();
+    const glow = ctx.createRadialGradient(62, 60, 1, 62, 60, 16);
+    glow.addColorStop(0, 'rgba(255,246,190,0.9)');
+    glow.addColorStop(1, 'rgba(255,246,190,0)');
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(62, 60, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    weakSpot(ctx, 62, 60, 5, p);
+    eye(ctx, 20, 44, 5, { look: -0.5, angry: true, glow: '#fff3c4' });
+    eye(ctx, 38, 44, 4.4, { look: -0.5, angry: true, glow: '#fff3c4' });
+  },
+
+  /* Railmane — Volt, stage 3, the other way. Thunderhelm's opposite: nothing
+   * armoured, all speed, and the charge carried in a mane of nodes. */
+  railmane(ctx, p) {
+    for (const [lx, h] of [[30, 90], [44, 86], [64, 90], [78, 86]]) {
+      form(ctx, curve(ctx, [[lx - 4, 60], [lx + 5, 60], [lx + 3, h], [lx - 6, h]]), p,
+           { fill: p.dark, shade: 0.3, line: 2.2 });
+    }
+    form(ctx, curve(ctx, [[20, 54], [42, 42], [74, 44], [88, 54], [70, 66], [34, 66]]), p,
+         { shade: 0.5, lit: p.light });
+    // the mane: nodes on a spine, each one a little lamp
+    ctx.save();
+    for (const [nx, ny] of [[30, 38], [42, 32], [56, 30], [70, 34], [82, 42]]) {
+      const glow = ctx.createRadialGradient(nx, ny, 1, nx, ny, 10);
+      glow.addColorStop(0, 'rgba(255,246,190,0.9)');
+      glow.addColorStop(1, 'rgba(255,246,190,0)');
+      ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(nx, ny, 10, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(nx, ny, 4.4, 0, Math.PI * 2);
+      ctx.fillStyle = p.accent; ctx.fill();
+      ctx.strokeStyle = p.line; ctx.lineWidth = 2; ctx.stroke();
+    }
+    ctx.restore();
+    weakSpot(ctx, 56, 30, 3.8, p);
+    form(ctx, curve(ctx, [[8, 46], [24, 36], [36, 46], [26, 58], [10, 58]]), p,
+         { shade: 0.45, lit: p.light });
+    eye(ctx, 17, 46, 5, { look: -0.5, angry: true });
+  },
+
+  /* Umbrakhan — Gloom, colossus. Nightmaw with nothing left to open: a mass of
+   * dark carrying two rings of eyes, and no face among them. */
+  umbrakhan(ctx, p) {
+    const mass = curve(ctx, [
+      [12, 58], [18, 28], [50, 10], [82, 28], [88, 58],
+      [78, 80], [66, 64], [50, 88], [34, 64], [22, 82],
+    ]);
+    form(ctx, mass, p, { shade: 0.5, lit: p.light });
+    ctx.save();
+    mass(); ctx.clip();
+    ctx.fillStyle = mix(p.base, p.line, 0.6);
+    ctx.beginPath(); ctx.ellipse(66, 62, 34, 28, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // two rings of eyes, different radii, none of them a face
+    for (const [r, n, ry, er] of [[22, 6, 44, 4.4], [34, 8, 50, 3.2]]) {
+      for (let i = 0; i < n; i++) {
+        const a = (i / n) * Math.PI * 2 + (r === 22 ? 0.3 : 0);
+        eye(ctx, 50 + Math.cos(a) * r, ry + Math.sin(a) * r * 0.7, er,
+            { look: 0.2, glow: '#e9defb' });
+      }
+    }
+    weakSpot(ctx, 50, 22, 4, p);
+    weakSpot(ctx, 50, 78, 4, p);
+  },
+
+  /* Aurelian — Lumen, stage 3. Solafaun grown into something that gives light
+   * rather than carries it: a halo above and the chest lit from inside. */
+  aurelian(ctx, p) {
+    ctx.save();
+    const halo = ctx.createRadialGradient(50, 20, 6, 50, 20, 30);
+    halo.addColorStop(0, 'rgba(255,244,196,0.75)');
+    halo.addColorStop(1, 'rgba(255,244,196,0)');
+    ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(50, 20, 30, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = mix(p.light, '#ffffff', 0.5); ctx.lineWidth = 3.4;
+    ctx.beginPath(); ctx.ellipse(50, 20, 22, 8, 0, 0, Math.PI * 2); ctx.stroke();
+    ctx.restore();
+    weakSpot(ctx, 50, 12, 4, p);
+    for (const lx of [34, 48, 66, 78]) {
+      form(ctx, curve(ctx, [[lx - 5, 64], [lx + 5, 64], [lx + 5, 90], [lx - 5, 90]]), p,
+           { fill: p.dark, shade: 0.3, line: 2.2 });
+    }
+    form(ctx, curve(ctx, [[22, 56], [42, 42], [74, 44], [88, 58], [70, 72], [32, 70]]), p,
+         { shade: 0.45, lit: p.light });
+    ctx.save();
+    const chest = ctx.createRadialGradient(44, 58, 1, 44, 58, 16);
+    chest.addColorStop(0, 'rgba(255,250,225,0.95)');
+    chest.addColorStop(1, 'rgba(255,250,225,0)');
+    ctx.fillStyle = chest; ctx.beginPath(); ctx.arc(44, 58, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    weakSpot(ctx, 44, 58, 5, p);
+    form(ctx, oval(ctx, 20, 44, 14, 12), p, { shade: 0.4, lit: p.light });
+    eye(ctx, 15, 44, 4.8, { look: -0.4 });
+  },
+
+  /* Aeonrend — Rift, titan. Not a creature at all: a tear, with the far side
+   * showing through it. Everything else in the cast is drawn as a solid thing;
+   * this one is drawn as an absence, which is the point of it. */
+  aeonrend(ctx, p) {
+    ctx.save();
+    ctx.strokeStyle = p.light; ctx.lineWidth = 2.6; ctx.lineCap = 'round'; ctx.globalAlpha = 0.7;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2 + 0.2;
+      ctx.beginPath();
+      ctx.moveTo(50 + Math.cos(a) * 30, 50 + Math.sin(a) * 34);
+      ctx.lineTo(50 + Math.cos(a) * 48, 50 + Math.sin(a) * 52);
+      ctx.stroke();
+    }
+    ctx.restore();
+    const tear = () => {
+      ctx.beginPath();
+      ctx.moveTo(50, 4);
+      ctx.bezierCurveTo(70, 26, 66, 40, 78, 50);
+      ctx.bezierCurveTo(66, 60, 70, 74, 50, 96);
+      ctx.bezierCurveTo(30, 74, 34, 60, 22, 50);
+      ctx.bezierCurveTo(34, 40, 30, 26, 50, 4);
+      ctx.closePath();
+    };
+    form(ctx, tear, p, { shade: 0.5, lit: p.light });
+    ctx.save();
+    tear(); ctx.clip();
+    // the far side: bands of somewhere else
+    for (let i = 0; i < 6; i++) {
+      ctx.fillStyle = i % 2 ? mix(p.line, '#000000', 0.4) : mix(p.light, '#ffffff', 0.25);
+      ctx.globalAlpha = 0.55;
+      ctx.fillRect(20, 8 + i * 15, 60, 8);
+    }
+    ctx.restore();
+    weakSpot(ctx, 50, 50, 5.4, p);
+    eye(ctx, 42, 34, 5, { look: 0.3, angry: true, glow: '#f0d8fa' });
+    eye(ctx, 59, 62, 5, { look: -0.3, angry: true, glow: '#f0d8fa' });
+  },
+
+  /* ------------------------------------------------------------- apexes
+   *
+   * These are raid bosses: the bestiary wants four to eight Wardens for each of
+   * them. They have to say so before anybody reads a stat, and the way to say it
+   * is to break the rules the rest of the cast follows. The other forty sit
+   * inside the box with air around them; these fill it corner to corner and run
+   * off the edges. Karrahk has no legs because it does not walk anywhere.
+   * Nyxhollow has no body at all, only the shroud and the thing inside it.
+   */
+
+  /* Karrahk, the Sunken Spire — Tide/Stone, titan. A drowned tower that turned
+   * out to be an animal, still wearing the sea it came up through. */
+  karrahk(ctx, p) {
+    // the water it drags with it, behind everything
+    ctx.save();
+    ctx.strokeStyle = p.base; ctx.lineWidth = 5; ctx.lineCap = 'round'; ctx.globalAlpha = 0.5;
+    for (const y of [72, 82, 92]) {
+      ctx.beginPath();
+      ctx.moveTo(-4, y);
+      ctx.bezierCurveTo(26, y - 8, 74, y + 8, 104, y - 4);
+      ctx.stroke();
+    }
+    ctx.restore();
+    const spire = () => {
+      ctx.beginPath();
+      ctx.moveTo(50, -6); ctx.lineTo(74, 22); ctx.lineTo(70, 48);
+      ctx.lineTo(88, 62); ctx.lineTo(80, 92); ctx.lineTo(50, 82);
+      ctx.lineTo(20, 92); ctx.lineTo(12, 62); ctx.lineTo(30, 48);
+      ctx.lineTo(26, 22);
+      ctx.closePath();
+    };
+    form(ctx, spire, p, { fill: p.accent, shade: 0.55, lit: p.accentDark, line: 3 });
+    // stonework, drowned
+    ctx.save();
+    spire(); ctx.clip();
+    ctx.strokeStyle = mix(p.accent, p.line, 0.55); ctx.lineWidth = 2.4;
+    for (const y of [24, 40, 58, 74]) {
+      ctx.beginPath(); ctx.moveTo(10, y); ctx.lineTo(90, y - 3); ctx.stroke();
+    }
+    ctx.fillStyle = p.base;
+    ctx.globalAlpha = 0.5;
+    ctx.beginPath(); ctx.ellipse(50, 84, 44, 16, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // the core, sealed behind the plating until the last phase
+    ctx.save();
+    const glow = ctx.createRadialGradient(50, 50, 2, 50, 50, 24);
+    glow.addColorStop(0, 'rgba(150,235,255,0.95)');
+    glow.addColorStop(1, 'rgba(150,235,255,0)');
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(50, 50, 24, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    form(ctx, oval(ctx, 50, 50, 12, 14), p, { fill: p.light, shade: 0.3, line: 2.6 });
+    weakSpot(ctx, 50, 50, 5.6, p);
+    eye(ctx, 36, 28, 5.6, { look: 0.3, angry: true, glow: '#cfeeff' });
+    eye(ctx, 64, 28, 5.6, { look: -0.3, angry: true, glow: '#cfeeff' });
+  },
+
+  /* Nyxhollow — Gloom, colossus. It hides its own health bar unless you bring a
+   * Lumen carrier, so the drawing does the same thing: a shroud with one eye
+   * open in it, and no way to tell how big the thing underneath is. */
+  nyxhollow(ctx, p) {
+    ctx.save();
+    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = mix(p.line, '#000000', 0.3);
+    ctx.beginPath(); ctx.ellipse(50, 56, 48, 44, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    const shroud = curve(ctx, [
+      [6, 56], [14, 22], [50, 2], [86, 22], [94, 56],
+      [82, 88], [68, 66], [50, 94], [32, 66], [18, 88],
+    ]);
+    form(ctx, shroud, p, { fill: mix(p.base, p.line, 0.4), shade: 0.45, lit: p.base, line: 3 });
+    ctx.save();
+    shroud(); ctx.clip();
+    ctx.fillStyle = mix(p.line, '#000000', 0.25);
+    ctx.beginPath(); ctx.ellipse(66, 66, 40, 34, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    // the hollow eye: the only thing on it that is not shroud
+    ctx.save();
+    const glow = ctx.createRadialGradient(50, 44, 3, 50, 44, 30);
+    glow.addColorStop(0, 'rgba(220,200,255,0.9)');
+    glow.addColorStop(1, 'rgba(220,200,255,0)');
+    ctx.fillStyle = glow; ctx.beginPath(); ctx.arc(50, 44, 30, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+    ctx.save();
+    ctx.beginPath(); ctx.ellipse(50, 44, 21, 15, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#0d0a12'; ctx.fill();
+    ctx.strokeStyle = p.line; ctx.lineWidth = 3; ctx.stroke();
+    ctx.restore();
+    eye(ctx, 50, 44, 11, { look: 0.1, glow: '#e9defb' });
+    weakSpot(ctx, 50, 44, 4.4, p);
+    // wisps, off the top, long enough to leave the box
+    ctx.save();
+    ctx.strokeStyle = p.accent; ctx.lineWidth = 3.2; ctx.lineCap = 'round';
+    for (const [wx, wy] of [[26, 14], [50, 2], [74, 14]]) {
+      ctx.beginPath();
+      ctx.moveTo(wx, wy); ctx.quadraticCurveTo(wx + 6, wy - 14, wx - 4, wy - 26);
+      ctx.stroke();
+    }
+    ctx.restore();
+  },
+
+  /* Aeonrend, apex — Rift, titan. The same tear as the stage 3, opened all the
+   * way: wider, with more of the far side visible and the seams of four phases
+   * across it. It switches the type chart off, so nothing you bring is right. */
+  aeonrend_apex(ctx, p) {
+    ctx.save();
+    ctx.strokeStyle = p.light; ctx.lineWidth = 3; ctx.lineCap = 'round'; ctx.globalAlpha = 0.75;
+    for (let i = 0; i < 12; i++) {
+      const a = (i / 12) * Math.PI * 2 + 0.15;
+      ctx.beginPath();
+      ctx.moveTo(50 + Math.cos(a) * 34, 50 + Math.sin(a) * 40);
+      ctx.lineTo(50 + Math.cos(a) * 56, 50 + Math.sin(a) * 62);
+      ctx.stroke();
+    }
+    ctx.restore();
+    const tear = () => {
+      ctx.beginPath();
+      ctx.moveTo(50, -8);
+      ctx.bezierCurveTo(78, 22, 72, 40, 92, 50);
+      ctx.bezierCurveTo(72, 60, 78, 78, 50, 108);
+      ctx.bezierCurveTo(22, 78, 28, 60, 8, 50);
+      ctx.bezierCurveTo(28, 40, 22, 22, 50, -8);
+      ctx.closePath();
+    };
+    form(ctx, tear, p, { shade: 0.55, lit: p.light, line: 3 });
+    ctx.save();
+    tear(); ctx.clip();
+    for (let i = 0; i < 9; i++) {
+      ctx.fillStyle = i % 2 ? mix(p.line, '#000000', 0.45) : mix(p.light, '#ffffff', 0.3);
+      ctx.globalAlpha = 0.6;
+      ctx.fillRect(4, -4 + i * 12, 92, 6);
+    }
+    ctx.globalAlpha = 1;
+    // the four phase seams, which is what the fight is actually about
+    ctx.strokeStyle = mix(p.light, '#ffffff', 0.55); ctx.lineWidth = 3;
+    for (const y of [14, 36, 62, 84]) {
+      ctx.beginPath(); ctx.moveTo(10, y); ctx.lineTo(90, y - 4); ctx.stroke();
+    }
+    ctx.restore();
+    weakSpot(ctx, 50, 50, 6, p);
+    eye(ctx, 36, 28, 5.6, { look: 0.3, angry: true, glow: '#f0d8fa' });
+    eye(ctx, 64, 30, 5.6, { look: -0.3, angry: true, glow: '#f0d8fa' });
+    eye(ctx, 44, 72, 4.6, { look: 0.2, angry: true, glow: '#f0d8fa' });
+  },
 };
 
 /** Whether this species has been drawn yet, or still falls back to the model. */
