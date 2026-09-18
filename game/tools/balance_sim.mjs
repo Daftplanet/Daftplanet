@@ -338,14 +338,46 @@ if (process.env.PROBE) {
  * and anything inside it is reported as noise rather than as a finding.
  */
 if (process.env.MODNOISE) {
-  // Control: how much does the headline figure move when only the seeds change?
+  /*
+   * Control: how much does the headline figure move when ONLY the seeds change?
+   *
+   * This used to run at 200 and nothing else, while MODS runs at 800 and printed
+   * "seed noise at this sample size is about +/-2pt" — a number nobody had
+   * measured at 800. It was extrapolated from the 200-run spread, which is the
+   * one thing this diagnostic exists to stop people doing. It measures both now,
+   * and MODS takes its threshold from the measurement rather than from a guess.
+   */
   const skill = SKILLS[1];
-  for (const base of [13, 14, 15, 16, 17]) {
-    let win = 0;
-    for (let i = 0; i < 200; i++) if (runFight(i * 7919 + base, STRATEGIES.cull, skill).outcome === 'culled') win++;
-    console.log(`seed base ${base}: cull ${((win / 200) * 100).toFixed(0)}%`);
+  const BASES = [13, 14, 15, 16, 17, 18, 19, 20];
+  for (const n of (process.env.MODNOISE_N ?? '200,800').split(',').map(Number)) {
+    const rates = BASES.map((base) => {
+      let win = 0;
+      for (let i = 0; i < n; i++) if (runFight(i * 7919 + base, STRATEGIES.cull, skill).outcome === 'culled') win++;
+      return win / n;
+    });
+    const lo = Math.min(...rates), hi = Math.max(...rates);
+    const mean = rates.reduce((a, b) => a + b, 0) / rates.length;
+    const sd = Math.sqrt(rates.reduce((a, b) => a + (b - mean) ** 2, 0) / (rates.length - 1));
+    console.log(`N=${String(n).padStart(4)}  ${BASES.length} seed bases: `
+      + `${rates.map((r) => `${(r * 100).toFixed(0)}%`).join(' ')}`
+      + `  ·  spread ${((hi - lo) * 100).toFixed(1)}pt  ·  sd ${(sd * 100).toFixed(1)}pt`
+      + `  ·  a 2-sd effect needs ${((sd * 2) * 100).toFixed(1)}pt`);
   }
+  console.log('\nMODS calls anything under its threshold noise. That threshold should come');
+  console.log('from the bottom row, at the sample size MODS actually uses.');
 }
+
+/*
+ * The bar an effect has to clear before it is reported as a finding rather than
+ * as noise, at the 800 runs MODS and ESCORT both use.
+ *
+ * It was 2.5pt, and 2.5 was not measured at 800 — it was extrapolated from the
+ * 200-run spread MODNOISE printed, in the one diagnostic whose entire job is to
+ * stop people doing exactly that. Measured over eight seed bases at 800 runs the
+ * standard deviation is 1.5pt, so two standard deviations is 3.1. Run
+ * `MODNOISE=1` to re-derive it; if the fight changes, this number moves.
+ */
+const NOISE_2SD = 0.031;
 
 if (process.env.MODS) {
   const N = 800;
@@ -356,7 +388,8 @@ if (process.env.MODS) {
   }
 
   console.log(`\nMOD DIAGNOSTIC — one mod at a time, Marker Pistol vs Cinderfang, average aim, ${N} runs each`);
-  console.log('Seed noise at this sample size is about \u00b12pt; treat anything smaller as no effect.');
+  console.log(`Seed noise at this sample size is \u00b1${(NOISE_2SD * 100).toFixed(1)}pt at two standard deviations,`
+    + ' measured by MODNOISE=1 at this exact sample size. Anything smaller is no effect.');
   for (const [stratName, strat] of [['cull', STRATEGIES.cull], ['soften_30', STRATEGIES.soften_30]]) {
     console.log(`\n${stratName}`);
     console.log('mod              win   esc   time   shots  darts   Δwin');
@@ -377,7 +410,7 @@ if (process.env.MODS) {
         + `${`${((esc/N)*100).toFixed(0)}%`.padStart(5)} ${(time/N).toFixed(1).padStart(6)}s `
         + `${(shots/N).toFixed(1).padStart(6)} ${(darts/N).toFixed(1).padStart(6)}  `
         + `${name === 'stock' ? '    —' : `${d >= 0 ? '+' : ''}${(d*100).toFixed(0)}pt`.padStart(5)}`
-        + `${name !== 'stock' && Math.abs(d) < 0.025 ? '  (noise)' : ''}`);
+        + `${name !== 'stock' && Math.abs(d) < NOISE_2SD ? '  (noise)' : ''}`);
     }
   }
 }
@@ -429,7 +462,7 @@ if (process.env.ESCORT) {
         + `${(time/N).toFixed(1).padStart(6)}s ${(shots/N).toFixed(1).padStart(6)} `
         + `${(hits/N).toFixed(2).padStart(10)} ${(hp/N).toFixed(1).padStart(7)}  `
         + `${name === 'none' ? '    —' : `${d >= 0 ? '+' : ''}${(d*100).toFixed(0)}pt`.padStart(5)}`
-        + `${name !== 'none' && Math.abs(d) < 0.025 ? '  (noise)' : ''}`);
+        + `${name !== 'none' && Math.abs(d) < NOISE_2SD ? '  (noise)' : ''}`);
     }
   }
 }

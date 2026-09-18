@@ -683,8 +683,14 @@ Nothing is a win button. The largest single effect is 11 points, and it is
 **negative** — Jolt tops the magazine up early and relocates the one real reload
 into the window where the target is deciding whether to bolt, which is precisely
 the Extended Cell finding from part 4 arriving by a different road. Scorch splits
-the same way the damage-reducing mods did: +3 on a cull, −7 on a capture, because
-burning a target past its flee threshold early makes it bolt before you can dart it.
+the same way the damage-reducing mods did: **−7 on a capture**, because burning a
+target past its flee threshold early makes it bolt before you can dart it.
+
+> **Corrected in part 11.** This originally read "+3 on a cull, −7 on a capture".
+> The −7 stands; the +3 does not. The noise threshold these tables use was 2.5pt,
+> a figure extrapolated rather than measured — at the 800 runs they actually use
+> the standard deviation is 1.5pt, so an effect needs **3.1pt** to clear two of
+> them. Scorch on a cull is +3. The split is real in one direction only.
 
 Against a Railmane with a Longtooth — a fight you *lose*, driven off 72% of the
 time:
@@ -874,8 +880,10 @@ its flee threshold before you can swap chambers and dart it, so it bolts.
 
 This is the third time this phase the same shape has appeared from a completely
 different direction: the damage-reducing weapon mods (Suppressor, Flechette,
-Potency Coil) all lose culls and win captures; Scorch is +3 on a cull and −7 on a
-capture; and now precise aim is worth +10 on a cull and −22 on a capture. **This
+Potency Coil) all lose culls and win captures — measured at −9/+6, −6/+9 and
+−10/+5, every one of them clear of the noise floor; Scorch is −7 on a capture
+(its cull side is inside the noise, see part 11); and precise aim is worth +10 on
+a cull and −22 on a capture. **This
 game systematically rewards doing less damage when you intend to take something
 alive**, and it falls out of the wound multiplier and the flee threshold
 interacting, not from anything anyone designed. It is the most load-bearing
@@ -2216,3 +2224,81 @@ broken: the game worked, the diagnostic ran, the table printed.
 The only defence found so far is the one that worked here: **after adding a
 system, re-run the diagnostics that never mentioned it.** Both failures in this
 section were found that way and neither would have surfaced otherwise.
+
+# Phase 4, part 11: taking my own advice, and finding the bar was set by a guess
+
+Part 10 ended with a rule: **after adding a system, re-run the diagnostics that
+never mentioned it.** I had applied it to exactly one diagnostic. So this is the
+rest of them — `DART`, `PROBE`, `MODNOISE`, `MODS`, `ESCORT`, `AIM` — re-run and
+checked against what this repository claims they say.
+
+## Most of it held
+
+- **`AIM`**: "a walking player goes 43% → 77% by switching". Still 43% → 77%.
+- **`MODNOISE`**: "79% to 89% on seed choice alone at N=200". Still 79–89%.
+- **The escort's headline**: "against a fight you lose 72% of the time, Rootgrasp
+  is +40 points". Reproduces exactly — 21% → 61%, driven off 72% → 26%. That one
+  is not in the default scenarios, but it is re-runnable from the committed
+  harness (`SPECIES=railmane WEAPON=longtooth`), which is the difference between
+  a measurement and an anecdote.
+- **The load-bearing accident**: damage-reducing mods lose culls and win
+  captures. Suppressor −9/+6, Flechette −6/+9, Potency Coil −10/+5. Every one
+  clear of the noise floor, in both directions.
+
+## But the noise floor was itself a guess
+
+`MODS` and `ESCORT` label any effect under 2.5 points as noise. Where did 2.5
+come from? The comment above `MODNOISE` explains it:
+
+> At the headline table's 200 runs the same strategy swings 79-89% purely on the
+> seed base... So this runs 800 apiece and prints the noise band.
+
+`MODNOISE` measures the spread at **200 runs**. `MODS` and `ESCORT` run at
+**800**. Nobody measured the floor at 800 — 2.5pt was extrapolated from the
+200-run spread, and then printed as "seed noise at this sample size is about
+±2pt" as though it had been.
+
+That is the exact failure this diagnostic exists to prevent, sitting inside the
+diagnostic that exists to prevent it.
+
+Measured properly, eight seed bases at each size:
+
+```
+N= 200  89% 84% 79% 82% 86% 88% 83% 85%  · spread 9.5pt · sd 3.1pt · 2sd = 6.3pt
+N= 800  85% 86% 83% 82% 86% 84% 84% 84%  · spread 4.5pt · sd 1.5pt · 2sd = 3.1pt
+```
+
+**The bar is 3.1 points, not 2.5.** `MODNOISE` measures both sizes now, and the
+threshold is a named constant derived from the bottom row rather than a literal
+someone reasoned their way to.
+
+## What moved
+
+| | was | now |
+|---|---|---|
+| Fast Cycle on a capture | +3pt, a finding | +3pt, **noise** |
+| Scorch on a cull | +3pt, a finding | +3pt, **noise** |
+| Rootgrasp on an easy cull | +3pt, a finding | +3pt, **noise** |
+
+Three claims, all sitting in the 2.5–3.1 band that the old threshold called real
+and the measured one does not. None of them load-bearing, which is lucky rather
+than clever: a threshold that is 20% too lenient reports a false finding whenever
+one lands in the gap, and with thirteen mods and ten escorts there are
+twenty-three chances per run for one to.
+
+The correction that matters is in the prose. "Scorch is +3 on a cull and −7 on a
+capture" was used to argue that Scorch splits the same way the damage-reducing
+mods do. The −7 is real and the argument survives on it; the +3 is not, so the
+**symmetry** was never there. The narrower claim is the true one and it says the
+same thing.
+
+## What this adds
+
+Part 10 said a measurement is only true of the system that existed when it was
+taken. This is a different way for a number to be wrong, and a quieter one: **the
+threshold that decides whether a measurement counts can itself be unmeasured.**
+
+Everything downstream of it inherits the error and looks rigorous doing it. The
+tables had a noise column, the comment cited a control, the control existed and
+ran — and the number connecting them had been reasoned about rather than
+measured. It took re-reading the diagnostic that was supposed to be the check.
