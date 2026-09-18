@@ -2008,3 +2008,83 @@ rather than the design being catastrophically wrong.
 Widening cost one command. The fix it would have justified would have cost a
 damage cap in the engine, a test defending it, and a section of this document
 arguing for it — all of it wrong, and all of it plausible.
+
+# Phase 4, part 9: the flake that would not reproduce
+
+One `phase1` failure has been carried on the open list since phase 4 began: a
+lost fight set `driven_off` correctly and the result card never appeared. It was
+never claimed as fixed, because it was never explained.
+
+## It still will not reproduce
+
+Ten consecutive runs of `phase1`, all green, including two that ended in exactly
+the failing case:
+
+```
+run 6: PASS  DRIVEN OFF · +203 XP · +12 essence · +6 RP · → Sanctuary
+run 7: PASS  DRIVEN OFF · +10 XP · +8 essence
+```
+
+Two things in that output looked like bugs and are not, which is worth recording
+because both are the kind of thing that reads as a defect at a glance:
+
+- **`ENCOUNTER OVER` on four runs** looked like a fallback verdict for an outcome
+  missing from the `VERDICTS` table. It is the pack summary: a multi-target
+  encounter reports `resolved` rather than any one member's ending.
+- **`DRIVEN OFF` paying a full catalogue reward** looked like losing a fight and
+  being paid for it anyway. It is a pack where one member was tagged before the
+  rest finished the Warden. The verdict names how the encounter ended; the
+  rewards are what you actually banked.
+
+## So stop hunting it and remove the coupling instead
+
+The overlay was shown from the **last line of `renderFightHud`** — after a
+hundred lines of health bars, restraint notches, status chips, pack pips, escort
+buttons and dev readouts, all inside the frame loop's `try/catch`:
+
+```js
+try {
+  draw(fightCtx, fight, {...});
+  renderFightHud(elapsed);          // ← the result card was the final line
+} catch (err) {
+  if (!frame.warned) { console.error(...); frame.warned = true; }
+}
+```
+
+Any one of those HUD lines throwing takes the result card with it. The fight is
+over, `outcome` is set correctly, the engine is fine — and the player is looking
+at a finished fight with no way out of it. That is exactly the reported symptom,
+and it does not require the *same* HUD line to fail twice, which is why it never
+reproduced.
+
+Showing a result is a **state transition, not a readout**. It has no business
+depending on whether the readouts render. It now runs first, separately, in its
+own `try`, before the drawing that might fail.
+
+The `frame.warned` one-shot went too. It exists so a repeating exception does not
+flood the console, which is right, but keyed on "ever warned at all" it means an
+early unrelated throw silences the one that would have explained a later failure
+— a guard that hides the evidence for the bug it is guarding against. It keys on
+the distinct error message now, so each *different* failure is still reported once.
+
+## A check that breaks the HUD on purpose
+
+```
+PASS  a finished fight shows its result even when the HUD cannot draw
+      — HUD throwing every frame · outcome "driven_off" · card reads "DRIVEN OFF"
+```
+
+It replaces `#hp-fill`'s `style` with a getter that throws, ends the fight through
+the engine's real out-of-ammo path, and demands the result card anyway. Reverted
+against the old code it fails — and takes **three downstream checks** with it,
+because a Warden stranded in a finished fight cannot do anything afterwards
+either. That is a fair measure of what the flake actually cost.
+
+This does not prove the original failure was a HUD exception. **It makes that
+entire class of failure impossible**, which is worth more than a diagnosis of one
+instance, and it is the part that can be defended by a check rather than by a
+paragraph.
+
+The honest status: the specific 2026-09-17 failure remains unexplained, the
+mechanism that could produce it is gone, and there is now a check that fails if
+anyone reintroduces it.

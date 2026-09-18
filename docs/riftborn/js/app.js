@@ -1070,11 +1070,28 @@ function boot(data) {
       ].map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
     }
 
-    if (f.outcome && shownOutcome !== f.outcome) {
-      shownOutcome = f.outcome;
-      finishFight();
-      showOutcome(f);
-    }
+  }
+
+  /*
+   * Show the result card the moment the fight has one.
+   *
+   * This used to live at the BOTTOM of renderFightHud, after a hundred lines of
+   * bars, chips, pack pips and escort buttons — all inside the frame loop's
+   * try/catch. So any HUD line that threw took the result card with it: the
+   * fight was over, `outcome` was set correctly, and the player was left looking
+   * at a finished fight with no way out of it. That is the shape of the one
+   * unexplained `phase1` failure on this branch — a lost fight that set
+   * `driven_off` and never showed the overlay.
+   *
+   * It is a state transition, not a readout, so it no longer depends on the
+   * readouts rendering. The frame loop calls this first and separately.
+   */
+  function checkFightResolved() {
+    const f = fight;
+    if (!f || !f.outcome || shownOutcome === f.outcome) return;
+    shownOutcome = f.outcome;
+    finishFight();
+    showOutcome(f);
   }
 
   function showOutcome(f) {
@@ -1907,7 +1924,15 @@ function boot(data) {
       }
     } catch (err) {
       accumulator = 0;
-      if (!frame.warnedStep) { console.error('[riftborn] step error', err); frame.warnedStep = true; }
+      // Log each DISTINCT failure rather than only the first ever seen. The
+      // one-shot guard kept the console quiet, which is what it was for, but it
+      // also meant an early unrelated throw silenced the one that would have
+      // explained a later failure.
+      frame.seen = frame.seen ?? new Set();
+      if (!frame.seen.has(`step:${err.message}`)) {
+        frame.seen.add(`step:${err.message}`);
+        console.error('[riftborn] step error', err);
+      }
     }
 
     studyClock += elapsed;
@@ -1924,6 +1949,9 @@ function boot(data) {
         drawPatrol(mapCtx, patrol, mapView, speciesById);
         renderPatrolHud();
       } else if (view === 'fight' && fight) {
+        // Before the drawing, and in its own try: a fight that has ended must
+        // say so even if the HUD cannot render.
+        try { checkFightResolved(); } catch (err) { console.error('[riftborn] resolve error', err); }
         draw(fightCtx, fight, {
           ...fightView,
           // The Tracker Lens marks what you already researched; it doesn't teach
@@ -1935,7 +1963,11 @@ function boot(data) {
         renderFightHud(elapsed);
       }
     } catch (err) {
-      if (!frame.warned) { console.error('[riftborn] frame error', err); frame.warned = true; }
+      frame.seen = frame.seen ?? new Set();
+      if (!frame.seen.has(`frame:${err.message}`)) {
+        frame.seen.add(`frame:${err.message}`);
+        console.error('[riftborn] frame error', err);
+      }
     }
     requestAnimationFrame(frame);
   }

@@ -7,8 +7,15 @@ const URL = process.env.RIFTBORN_URL ?? 'http://127.0.0.1:8765/riftborn/';
 const browser = await chromium.launch(LAUNCH);
 const page = await browser.newPage({ viewport: { width: 1200, height: 900 } });
 const errors = [];
-page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
-page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
+/*
+ * One check breaks the HUD on purpose, to prove a finished fight still shows its
+ * result. The error it causes is the point of that check, so it is excluded by
+ * its exact text — and only that text, so a real rendering failure still fails
+ * the run.
+ */
+const DELIBERATE = 'deliberate HUD failure';
+page.on('console', (m) => { if (m.type() === 'error' && !m.text().includes(DELIBERATE)) errors.push(m.text()); });
+page.on('pageerror', (e) => { if (!e.message.includes(DELIBERATE)) errors.push(`pageerror: ${e.message}`); });
 page.on('requestfailed', (r) => errors.push(`requestfailed: ${r.url()} ${r.failure()?.errorText}`));
 
 /*
@@ -319,6 +326,64 @@ await mobile.waitForTimeout(300);
 const of = await mobile.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
 ok('no horizontal overflow at 390px', of === 0, `${of}px`);
 await mobile.screenshot({ path: (process.argv[2] ?? 'p1.png').replace('.png', '-mobile.png') });
+
+/*
+ * --- a finished fight says so even when the HUD cannot draw
+ *
+ * The one unexplained failure on this branch was a lost fight that set
+ * `driven_off` correctly and never showed the result card. It would not
+ * reproduce — ten clean runs of this suite — so rather than keep hunting it,
+ * the coupling that makes it possible is gone: the overlay used to be shown
+ * from the BOTTOM of renderFightHud, after a hundred lines of bars and pips,
+ * all inside the frame loop's try/catch. Any HUD line that threw stranded the
+ * player in a finished fight with no way out.
+ *
+ * This check breaks the HUD on purpose and demands the result card anyway. It
+ * does not prove the original flake was that — it makes that whole class of
+ * flake impossible, which is the part worth defending.
+ */
+const stranded = await page.evaluate(async () => {
+  const r = window.__riftborn;
+  r.show('patrol');
+  r.refreshSpawns?.();
+  for (let i = 0; i < 40 && r.patrol.spawns.length === 0; i++) {
+    r.patrol.x += 90; r.patrol.y += 40;
+    r.refreshSpawns?.();
+  }
+  const spawn = r.patrol.spawns[0];
+  if (!spawn) return { note: 'no spawn' };
+  r.startFight({ ...spawn, id: `x-${Math.random()}` });
+
+  // Break a HUD element the renderer writes to every frame, the way a real
+  // rendering bug would: the write throws, the rest of the HUD never runs.
+  const bar = document.getElementById('hp-fill');
+  const realStyle = bar.style;
+  Object.defineProperty(bar, 'style', {
+    configurable: true,
+    get() { throw new TypeError('deliberate HUD failure'); },
+  });
+
+  // End the fight the way the engine really ends one: out of rounds, nothing in
+  // the air. That is the same `finish(f, 'driven_off')` a lost fight takes.
+  for (const w of r.fight.weapons) {
+    w.mag.lethal = 0; w.reserve.lethal = 0;
+    w.mag.capture = 0; w.reserve.capture = 0;
+  }
+  r.fight.projectiles.length = 0;
+  for (let i = 0; i < 6; i++) await new Promise((d) => requestAnimationFrame(d));
+  await new Promise((d) => setTimeout(d, 250));
+
+  const shown = !document.getElementById('overlay').hidden;
+  const verdict = document.getElementById('verdict').textContent;
+  const outcome = r.fight?.outcome ?? null;
+  Object.defineProperty(bar, 'style', { configurable: true, value: realStyle });
+  return { shown, verdict, outcome };
+});
+ok('a finished fight shows its result even when the HUD cannot draw',
+   stranded.shown === true && Boolean(stranded.verdict),
+   stranded.note ? stranded.note
+     : `HUD throwing every frame · outcome "${stranded.outcome}" · card reads "${stranded.verdict}"`
+       + ' — the result card used to be the last line of the renderer that just died');
 
 await browser.close();
 console.log(errors.length ? `\nCONSOLE ERRORS:\n${errors.join('\n')}` : '\nno console errors');
