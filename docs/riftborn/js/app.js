@@ -17,6 +17,7 @@ import { createInput } from './input.js';
 import { createProfile, AMMO_COST, ITEM_COST, RANK_XP, WEAPON_UNLOCK, RESEARCH_COST } from './profile.js';
 import { drawFieldReport, toPng } from './report.js';
 import { buildModel, modelFor, fitModel, spriteFor, clearVoxelCache, ELEMENT_RAMP, setBiomeCoats, biomeCoat } from './voxel.js';
+import { TILT, structuresOn, drawStructures, drawTileSkyline, standsUp } from './city.js';
 import {
   createBattle, makeCombatant, takeTurn, options, catchChance,
   levelOf, wildLevel, activeMon, movesFor, computeMoveDamage, remaining, concealed,
@@ -29,7 +30,7 @@ import {
 } from './world.js';
 import { blockers, escortAbility, studyFromBattle, studyAsMinutes } from './sanctuary.js';
 import {
-  createPatrol, stepPatrol, drawPatrol, drawTileSkin, patrolClock, biomeUnderfoot, biomeAtWorld, placePatrol,
+  createPatrol, stepPatrol, drawPatrol, drawTileSkin, patrolClock, biomeUnderfoot, biomeAtWorld, placePatrol, PX_PER_M,
   VIEW as MAP_VIEW, ELEMENT_COLOUR,
 } from './patrol.js';
 import { createTileSource, MAP_ZOOM } from './tiles.js';
@@ -1236,9 +1237,15 @@ function boot(data) {
     mapCanvas.addEventListener('pointermove', (ev) => {
       if (!dragging) return;
       const now = worldAt(ev);
-      // 1.7 canvas px per world metre, the same constant drawPatrol renders with.
-      const dx = (now.px - dragging.px) / 1.7;
-      const dy = (now.py - dragging.py) / 1.7;
+      /*
+       * Screen back to world. The camera is tipped forward, so a pixel of
+       * vertical movement covers more ground than a pixel of horizontal — divide
+       * both by the same number and the map slips under your finger as you drag
+       * north, which is the sort of thing that feels broken without being
+       * obviously wrong in a screenshot.
+       */
+      const dx = (now.px - dragging.px) / PX_PER_M;
+      const dy = (now.py - dragging.py) / (PX_PER_M * TILT);
       dragging.moved = Math.hypot(dx, dy);
       placePatrol(patrol, dragging.x - dx, dragging.y - dy, { jumped: false, live: false });
       renderLocation();
@@ -1964,15 +1971,22 @@ function boot(data) {
       }
     }
 
+    /*
+     * The periodic study tick. This used to sit here unguarded, between the two
+     * try blocks rather than inside either — so a throw from tickStudy or from a
+     * save escaped `frame` entirely, the requestAnimationFrame at the bottom was
+     * never reached, and the app froze mid-fight with the outcome already set and
+     * no result card. That is the same stranded-in-a-finished-fight symptom this
+     * branch already fixed once in the HUD, surviving in the five lines between
+     * the two guards, and firing only every five seconds, which is why it showed
+     * up as an occasional unreproducible failure rather than a bug.
+     *
+     * The whole body is guarded now and the loop re-arms in a finally, so the
+     * question "is every line covered" has one answer instead of one per block.
+     */
     studyClock += elapsed;
     if (studyClock > 5) { studyClock = 0; if (profile.tickStudy()) profile.save(); }
 
-    /*
-     * Never let one bad frame end the game. An exception escaping this callback
-     * means requestAnimationFrame is never re-armed and the whole app silently
-     * freezes — which is exactly what a temporal-dead-zone slip in the rift
-     * drawing did: the loop died the moment a rift came within range.
-     */
     try {
       if (view === 'patrol') {
         drawPatrol(mapCtx, patrol, mapView, speciesById);
@@ -2025,6 +2039,7 @@ function boot(data) {
      */
     refreshSpawns: () => stepPatrol(patrol, 0, { moveX: 0, moveY: 0 }),
     drawTileSkin, drawPatrol, BIOMES, reportFromEntry,
+    TILT, structuresOn, drawStructures, drawTileSkyline, standsUp,
     get battle() { return battle; },
     takeTurn: (a) => takeTurn(battle, a), battleOptions: () => options(battle),
     // For driving a battle the app does not own — a harness building its own.

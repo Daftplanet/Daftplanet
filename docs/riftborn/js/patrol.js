@@ -20,9 +20,10 @@ import {
 import { lonLatToWorld, groundScale, groundMetres } from './geo.js';
 import { createTileSource, MAP_ZOOM } from './tiles.js';
 import { spriteFor } from './voxel.js';
+import { TILT, drawTileSkyline, standsUp } from './city.js';
 
 export const VIEW = { w: 960, h: 640 };
-const PX_PER_M = 1.7;   // wide enough to see more than one neighbourhood at a time
+export const PX_PER_M = 1.7;   // wide enough to see more than one neighbourhood at a time
 const WALK_MS = 1.4;                 // real walking pace, metres/second
 
 const ELEMENT_COLOUR = {
@@ -288,23 +289,49 @@ function tileSprite(biome, variant, px) {
 }
 
 
-/** Paint one tile of ground: a tone from the patchwork, then its props. */
-export function drawTileSkin(ctx, biome, tx, ty, sx, sy, px, { alpha = 1, propsOnly = false } = {}) {
+/**
+ * Paint one tile of ground: a tone from the patchwork, then its props.
+ *
+ * `squash` flattens the tile vertically for the tilted camera in city.js. The
+ * baked path takes it for free — a squashed axis-aligned rectangle is still an
+ * axis-aligned rectangle, so it is the same one drawImage with a shorter
+ * destination. That is the whole reason the camera has no rotation in it.
+ */
+export function drawTileSkin(ctx, biome, tx, ty, sx, sy, px, { alpha = 1, propsOnly = false, squash = 1 } = {}) {
   const def = BIOMES[biome];
   if (!def?.skin || propsOnly || alpha !== 1 || typeof document === 'undefined') {
     // The uncached path still exists: props-only over a real basemap, anything
     // translucent, and any caller without a DOM to bake into.
+    if (squash !== 1) {
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.scale(1, squash);
+      paintTile(ctx, biome, null, tx, ty, alpha, px, propsOnly, 0, 0);
+      ctx.restore();
+      return;
+    }
     paintTile(ctx, biome, null, tx, ty, alpha, px, propsOnly, sx, sy);
     return;
   }
   const variant = tileVariant(tx, ty);
-  ctx.drawImage(tileSprite(biome, variant, px), sx, sy);
+  const sprite = tileSprite(biome, variant, px);
+  if (squash === 1) ctx.drawImage(sprite, sx, sy);
+  else ctx.drawImage(sprite, sx, sy, px + 1, (px + 1) * squash);
 }
 
 /** Which baked variant a tile uses. Its own coordinates decide, as before. */
 function tileVariant(tx, ty) {
   const h = (Math.imul(tx | 0, 0x27d4eb2d) ^ Math.imul(ty | 0, 0x165667b1)) >>> 0;
   return h % VARIANTS;
+}
+
+/** Blend two #rrggbb colours, for softening the ground patchwork. */
+function mixHex(a, b, k) {
+  const pa = parseInt(a.slice(1), 16), pb = parseInt(b.slice(1), 16);
+  const r = Math.round((pa >> 16) * (1 - k) + (pb >> 16) * k);
+  const g = Math.round(((pa >> 8) & 255) * (1 - k) + ((pb >> 8) & 255) * k);
+  const bl = Math.round((pa & 255) * (1 - k) + (pb & 255) * k);
+  return `#${((r << 16) | (g << 8) | bl).toString(16).padStart(6, '0')}`;
 }
 
 function paintTile(ctx, biome, variant, tx, ty, alpha, px, propsOnly, sx = 0, sy = 0) {
@@ -322,13 +349,27 @@ function paintTile(ctx, biome, variant, tx, ty, alpha, px, propsOnly, sx = 0, sy
   ctx.globalAlpha = alpha;
   // The ground tone is still drawn from the same rng even when it is not painted,
   // so a tile's props land in the same places with or without the floor under them.
-  const tone = skin.ground[Math.floor(r() * skin.ground.length)] ?? def.colour;
+  /*
+   * The patchwork is quieter than it was. Straight down, three well-separated
+   * tones per biome read as texture; tilted, with buildings standing on them,
+   * the same three read as a chequerboard the eye follows instead of the city.
+   * Pulled toward the biome's own colour they still break up a slab of flat
+   * ground without competing with what is standing on it.
+   */
+  const picked = skin.ground[Math.floor(r() * skin.ground.length)] ?? def.colour;
+  const tone = mixHex(picked, def.colour, 0.45);
   if (!propsOnly) {
     ctx.fillStyle = tone;
     ctx.fillRect(sx, sy, px + 1, px + 1);
   }
 
-  const draw = PROPS[skin.prop];
+  /*
+   * The flat silhouette layer is off wherever city.js stands something up
+   * instead. Both are "what names this place", drawn for two different cameras,
+   * and running them together paints a tree from above under a tree from the
+   * side. What is left here is ground markings — ripples and rails.
+   */
+  const draw = standsUp(biome) ? null : PROPS[skin.prop];
   if (draw) {
     // A fractional density is a chance rather than a count, so parkland can
     // average fewer than one tree a tile without ever drawing half of one.
@@ -351,11 +392,21 @@ export function drawPatrol(ctx, p, view, speciesById) {
 
   const cx = VIEW.w / 2, cy = VIEW.h / 2;
   const t = performance.now() / 1000;
-  const toScreen = (wx, wy) => [cx + (wx - p.x) * PX_PER_M, cy + (wy - p.y) * PX_PER_M];
+  /*
+   * The tilted camera (city.js). World X is untouched and world Y is squashed by
+   * TILT, which is what makes buildings able to stand up off the ground. Every
+   * radius drawn on the ground has to become an ellipse to match — a circle here
+   * would be a circle painted on a wall, not a ring lying on the street.
+   */
+  const toScreen = (wx, wy) => [cx + (wx - p.x) * PX_PER_M, cy + (wy - p.y) * PX_PER_M * TILT];
+  const groundRing = (gx, gy, rPx) => {
+    ctx.beginPath();
+    ctx.ellipse(gx, gy, rPx, rPx * TILT, 0, 0, Math.PI * 2);
+  };
 
   // --- the ground
   const tilePx = TILE_M * PX_PER_M;
-  const reach = Math.ceil(Math.max(VIEW.w, VIEW.h) / tilePx / 2) + 1;
+  const reach = Math.ceil(Math.max(VIEW.w / tilePx, VIEW.h / (tilePx * TILT)) / 2) + 2;
   const ctx0 = Math.floor(p.x / TILE_M), cty0 = Math.floor(p.y / TILE_M);
 
   const legendBiomes = [];
@@ -373,7 +424,7 @@ export function drawPatrol(ctx, p, view, speciesById) {
       for (let tx = ctx0 - reach; tx <= ctx0 + reach; tx++) {
         const biome = biomeAt(tx, ty, p.profile.state.seed);
         const [sx, sy] = toScreen(tx * TILE_M, ty * TILE_M);
-        drawTileSkin(ctx, biome, tx, ty, sx, sy, tilePx);
+        drawTileSkin(ctx, biome, tx, ty, sx, sy, tilePx, { squash: TILT });
       }
     }
   } else {
@@ -386,7 +437,7 @@ export function drawPatrol(ctx, p, view, speciesById) {
         const biome = biomeAtWorld(p, (tx + 0.5) * TILE_M, (ty + 0.5) * TILE_M);
         const [sx, sy] = toScreen(tx * TILE_M, ty * TILE_M);
         ctx.fillStyle = BIOMES[biome].colour;
-        ctx.fillRect(sx, sy, tilePx + 1, tilePx + 1);
+        ctx.fillRect(sx, sy, tilePx + 1, (tilePx + 1) * TILT);
       }
     }
     ctx.restore();
@@ -405,11 +456,38 @@ export function drawPatrol(ctx, p, view, speciesById) {
         const biome = biomeAtWorld(p, (tx + 0.5) * TILE_M, (ty + 0.5) * TILE_M);
         if (!NATURAL.has(biome)) continue;
         const [sx, sy] = toScreen(tx * TILE_M, ty * TILE_M);
-        drawTileSkin(ctx, biome, tx, ty, sx, sy, tilePx, { propsOnly: true });
+        drawTileSkin(ctx, biome, tx, ty, sx, sy, tilePx, { propsOnly: true, squash: TILT });
       }
     }
     ctx.restore();
   }
+
+  /*
+   * Everything that stands up off the ground, gathered across the whole visible
+   * grid and painted far to near in one pass. Gathering first is what makes the
+   * depth order right between neighbouring tiles rather than only within one.
+   *
+   * Over a real basemap only the natural things stand up. The streets already
+   * have buildings drawn into them, and a second set standing on top argues with
+   * the first — but a park drawn as flat green is improved by having trees in it.
+   */
+  const NATURAL_3D = new Set(['woodland', 'parkland', 'open_ground']);
+  ctx.save();
+  if (painted) ctx.globalAlpha = 0.8;
+  /*
+   * Row by row, far to near. Each tile blits its own baked skyline, and walking
+   * the rows in order is what keeps a near tower in front of the one behind it —
+   * the cross-tile depth sort that a per-tile sprite would otherwise lose.
+   */
+  for (let ty = cty0 - reach; ty <= cty0 + reach; ty++) {
+    for (let tx = ctx0 - reach; tx <= ctx0 + reach; tx++) {
+      const biome = biomeAtWorld(p, (tx + 0.5) * TILE_M, (ty + 0.5) * TILE_M);
+      if (painted && !NATURAL_3D.has(biome)) continue;
+      const [sx, sy] = toScreen(tx * TILE_M, ty * TILE_M);
+      drawTileSkyline(ctx, biome, tx, ty, sx, sy, PX_PER_M);
+    }
+  }
+  ctx.restore();
 
   for (let ty = cty0 - reach; ty <= cty0 + reach; ty++) {
     for (let tx = ctx0 - reach; tx <= ctx0 + reach; tx++) {
@@ -425,7 +503,7 @@ export function drawPatrol(ctx, p, view, speciesById) {
     ctx.strokeStyle = 'rgba(105,210,231,0.35)';
     ctx.lineWidth = 1;
     const rPx = (p.accuracyM / Math.max(0.1, groundScale(p.y))) * PX_PER_M;
-    ctx.beginPath(); ctx.arc(cx, cy, rPx, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    groundRing(cx, cy, rPx); ctx.fill(); ctx.stroke();
     ctx.restore();
   }
 
@@ -436,12 +514,12 @@ export function drawPatrol(ctx, p, view, speciesById) {
   ctx.strokeStyle = 'rgba(105,210,231,0.22)';
   ctx.lineWidth = 1.5;
   ctx.setLineDash([6, 6]);
-  ctx.beginPath(); ctx.arc(cx, cy, detect * PX_PER_M, 0, Math.PI * 2); ctx.stroke();
+  groundRing(cx, cy, detect * PX_PER_M); ctx.stroke();
   ctx.setLineDash([]);
 
   // --- engage radius
   ctx.strokeStyle = 'rgba(105,210,231,0.5)';
-  ctx.beginPath(); ctx.arc(cx, cy, ENGAGE_M * PX_PER_M, 0, Math.PI * 2); ctx.stroke();
+  groundRing(cx, cy, ENGAGE_M * PX_PER_M); ctx.stroke();
 
   // --- rifts: a ring you can see from outside and walk into
   for (const r of p.rifts) {
@@ -454,7 +532,7 @@ export function drawPatrol(ctx, p, view, speciesById) {
       ctx.strokeStyle = r.apexUp ? '#e0403a' : '#b05ad0';
       ctx.globalAlpha = 0.5 + 0.3 * Math.sin(t * 3);
       ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.arc(rx, ry, rad, 0, Math.PI * 2); ctx.stroke();
+      groundRing(rx, ry, rad); ctx.stroke();
       ctx.globalAlpha = 0.09;
       ctx.fillStyle = r.apexUp ? '#e0403a' : '#b05ad0';
       ctx.fill();
@@ -462,7 +540,7 @@ export function drawPatrol(ctx, p, view, speciesById) {
       ctx.strokeStyle = 'rgba(176,90,208,0.35)';
       ctx.lineWidth = 1.5;
       ctx.setLineDash([5, 7]);
-      ctx.beginPath(); ctx.arc(rx, ry, rad, 0, Math.PI * 2); ctx.stroke();
+      groundRing(rx, ry, rad); ctx.stroke();
       ctx.setLineDash([]);
     }
     ctx.globalAlpha = 1;
@@ -488,7 +566,7 @@ export function drawPatrol(ctx, p, view, speciesById) {
       ctx.strokeStyle = colour;
       ctx.globalAlpha = 0.35 + 0.35 * Math.sin(t * 4);
       ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(sx, sy, r + 7 + Math.sin(t * 4) * 2, 0, Math.PI * 2); ctx.stroke();
+      groundRing(sx, sy, r + 7 + Math.sin(t * 4) * 2); ctx.stroke();
       ctx.globalAlpha = 1;
     }
 
@@ -513,13 +591,13 @@ export function drawPatrol(ctx, p, view, speciesById) {
       ctx.strokeStyle = '#b05ad0';
       ctx.globalAlpha = 0.45 + 0.35 * Math.sin(t * 2.2 + 1);
       ctx.lineWidth = 2.5;
-      ctx.beginPath(); ctx.arc(sx, sy, r + 11 + Math.sin(t * 2.2) * 2.5, 0, Math.PI * 2); ctx.stroke();
+      groundRing(sx, sy, r + 11 + Math.sin(t * 2.2) * 2.5); ctx.stroke();
       ctx.globalAlpha = 0.9;
       ctx.fillStyle = '#dfa0f0';
       for (let i = 0; i < 3; i++) {
         const a = t * 1.3 + (i / 3) * Math.PI * 2;
         ctx.beginPath();
-        ctx.arc(sx + Math.cos(a) * (r + 13), sy + Math.sin(a) * (r + 13) * 0.6, 1.8, 0, Math.PI * 2);
+        ctx.arc(sx + Math.cos(a) * (r + 13), sy + Math.sin(a) * (r + 13) * TILT, 1.8, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
@@ -528,12 +606,17 @@ export function drawPatrol(ctx, p, view, speciesById) {
     // A disc behind it keeps the element colour readable against a real map,
     // where the ground under a marker is whatever the street happens to be.
     ctx.save();
-    ctx.globalAlpha = 0.55;
+    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = '#000000';
+    ctx.beginPath(); ctx.ellipse(sx, sy, r * 1.15, r * 1.15 * TILT, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 0.5;
     ctx.fillStyle = colour;
-    ctx.beginPath(); ctx.ellipse(sx, sy + r * 0.55, r * 1.05, r * 0.45, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(sx, sy, r * 0.95, r * 0.95 * TILT, 0, 0, Math.PI * 2); ctx.fill();
     ctx.restore();
 
-    ctx.drawImage(sprite, sx - px / 2, sy - px * 0.62, px, px);
+    // Standing on the ground rather than lying on it: the sprite's feet meet the
+    // shadow, which is the only thing that puts it in the scene at this angle.
+    ctx.drawImage(sprite, sx - px / 2, sy - px * 0.86, px, px);
 
     if (inRange) {
       ctx.strokeStyle = '#e6e9ed';
@@ -549,7 +632,7 @@ export function drawPatrol(ctx, p, view, speciesById) {
       for (let i = 1; i < pack; i++) {
         const a = (i / (pack - 1 || 1)) * Math.PI * 1.4 - Math.PI * 0.7;
         ctx.beginPath();
-        ctx.arc(sx + Math.cos(a) * (r + 7), sy + Math.sin(a) * (r + 7), Math.max(2.5, r * 0.4), 0, Math.PI * 2);
+        ctx.arc(sx + Math.cos(a) * (r + 7), sy + Math.sin(a) * (r + 7) * TILT, Math.max(2.5, r * 0.4), 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.globalAlpha = 1;
@@ -564,8 +647,13 @@ export function drawPatrol(ctx, p, view, speciesById) {
   }
 
   // --- the Warden
+  ctx.save();
+  ctx.globalAlpha = 0.34;
+  ctx.fillStyle = '#000000';
+  ctx.beginPath(); ctx.ellipse(cx, cy, 9, 9 * TILT, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
   ctx.fillStyle = '#e6e9ed';
-  ctx.beginPath(); ctx.arc(cx, cy, 7, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(cx, cy - 5, 7, 0, Math.PI * 2); ctx.fill();
   ctx.strokeStyle = '#69d2e7';
   ctx.lineWidth = 2;
   ctx.beginPath();

@@ -304,90 +304,113 @@ const skins = await page.evaluate(() => {
   const r = window.__riftborn;
   const B = r.BIOMES;
   const ids = Object.keys(B);
-  const props = new Set(ids.map((k) => B[k].skin?.prop).filter(Boolean));
   const tones = new Set();
   for (const k of ids) for (const c of B[k].skin?.ground ?? []) tones.add(c);
 
-  // Paint one tile of every biome offscreen and count what actually landed.
-  const painted = ids.map((k) => {
+  /*
+   * Compose a tile the way the map does: baked ground, then the baked skyline
+   * standing on it. Asking the ground alone what it looks like stopped being the
+   * right question when the silhouettes moved off the floor and stood up — most
+   * biomes' ground is deliberately one flat tone now, and the thing that names
+   * the place is what is standing on it.
+   */
+  const PX = 68, PAD = 70;
+  const compose = (biome, tx, ty) => {
     const c = document.createElement('canvas');
-    c.width = 68; c.height = 68;
+    c.width = PX + 24; c.height = PX + PAD;
     const g = c.getContext('2d');
-    r.drawTileSkin(g, k, 3, 7, 0, 0, 68);
-    const px = g.getImageData(0, 0, 68, 68).data;
+    g.fillStyle = '#12151a'; g.fillRect(0, 0, c.width, c.height);
+    g.save(); g.translate(12, PAD - 12);
+    r.drawTileSkin(g, biome, tx, ty, 0, 0, PX, { squash: r.TILT });
+    r.drawTileSkyline(g, biome, tx, ty, 0, 0, 1.7);
+    g.restore();
+    return g.getImageData(0, 0, c.width, c.height).data;
+  };
+  const coloursIn = (px) => {
     const seen = new Set();
     for (let i = 0; i < px.length; i += 4) seen.add(`${px[i]},${px[i + 1]},${px[i + 2]}`);
-    return { id: k, colours: seen.size };
-  });
+    return seen.size;
+  };
+
+  const painted = ids.map((k) => ({ id: k, colours: coloursIn(compose(k, 3, 7)) }));
+
+  // Nine biomes must not render as fewer than nine different places. Comparing
+  // whole-tile fingerprints catches two that differ only in a tone nobody sees.
+  const looks = new Set(ids.map((k) => compose(k, 3, 7).join(',')));
+
   /*
    * The same tile twice must be identical. "A neighbour must differ" is NOT a
-   * safe assertion any more: tiles are baked into a small set of variants and
-   * picked by hash, so any two given tiles have a one-in-thirty-two chance of
-   * landing on the same one. Asserting on one pair would fail about three runs
-   * in a hundred, for no reason. The real property is that a run of tiles shows
-   * plenty of different arrangements.
+   * safe assertion: ground and skyline are both baked into a small set of
+   * variants picked by hash, so any two given tiles can collide. The real
+   * property is that a run of tiles shows plenty of different arrangements.
    */
-  const shot = (tx, ty) => {
-    const c = document.createElement('canvas');
-    c.width = 68; c.height = 68;
-    const g = c.getContext('2d');
-    r.drawTileSkin(g, 'woodland', tx, ty, 0, 0, 68);
-    return g.getImageData(0, 0, 68, 68).data.join(',');
-  };
+  const shot = (tx, ty) => compose('woodland', tx, ty).join(',');
   const spread = new Set(Array.from({ length: 64 }, (_, i) => shot(i, 9))).size;
+
+  // Standing biomes must actually stand something up, or the tile is a slab.
+  const bare = ids.filter((k) => r.standsUp(k) && r.structuresOn(3, 7, k).length === 0);
+
   return {
-    biomes: ids.length, props: props.size, tones: tones.size,
-    flat: painted.filter((x) => x.colours < 3).map((x) => x.id),
+    biomes: ids.length, tones: tones.size,
+    flat: painted.filter((x) => x.colours < 4).map((x) => x.id),
     minColours: Math.min(...painted.map((x) => x.colours)),
-    stable: shot(4, 9) === shot(4, 9),
-    spread,
+    looks: looks.size, bare, stable: shot(4, 9) === shot(4, 9), spread,
   };
 });
-ok('every biome paints a patterned ground that is stable for its tile',
-   skins.flat.length === 0 && skins.biomes === 9 && skins.props >= 7
-   && skins.minColours >= 3 && skins.stable && skins.spread >= 8,
-   `${skins.biomes} biomes · ${skins.props} distinct prop silhouettes · ${skins.tones} ground tones`
+ok('every biome reads as its own place, and the same tile reads that way twice',
+   skins.flat.length === 0 && skins.biomes === 9 && skins.looks === 9
+   && skins.bare.length === 0 && skins.minColours >= 4 && skins.stable && skins.spread >= 8,
+   `${skins.biomes} biomes · ${skins.looks} distinct looks · ${skins.tones} ground tones`
    + ` · thinnest tile still paints ${skins.minColours} colours`
    + ` · the same tile redraws identically, and 64 tiles show ${skins.spread} different arrangements`
    + ' — each biome was one flat hex before');
 
 /*
- * The ground has to be cheap as well as pretty.
+ * The city has to be cheap as well as pretty.
  *
- * Woodland at four trees a tile measured 2.93ms for a screenful of 150 against
- * 0.14ms for a flat fill — 17% of a 16.7ms frame on a desktop CPU, and a phone
- * is several times slower. Baking the variants took it to 0.60ms. Guard the
- * ratio rather than a millisecond count, because the millisecond count belongs
- * to whatever machine happens to be running this.
+ * Drawn live, a screenful of city centre measured 9.8ms a frame — 56% of a
+ * 16.7ms budget on a desktop CPU, and a phone is several times slower. Nearly
+ * all of it was per-frame setup that never varies: a gradient per wall, and
+ * something like ten thousand window rectangles across a screen. Baking the
+ * skylines took it to 0.20ms.
+ *
+ * Guard the ratio rather than a millisecond count, because the millisecond count
+ * belongs to whatever machine happens to be running this.
  */
-const TILE_COUNT = 150;
+const TILE_COUNT = 156;
 const cost = await page.evaluate(() => {
   const r = window.__riftborn;
   const c = document.createElement('canvas');
-  c.width = 400; c.height = 400;
+  c.width = 1000; c.height = 700;
   const g = c.getContext('2d');
-  const TILES = 150, PX = 68;
-  // Same work either way: one woodland tile, 150 times. propsOnly skips the
-  // ground fill and paints the scatter live, which is the expensive half and
-  // the path a real basemap underneath still takes.
-  const run = (opts) => {
-    for (let i = 0; i < TILES; i++) r.drawTileSkin(g, 'woodland', i, 3, 0, 0, PX, opts);
+  const time = (fn) => { fn(); fn(); const t = performance.now();
+                         for (let i = 0; i < 5; i++) fn(); return (performance.now() - t) / 5; };
+
+  /*
+   * Same call, same tiles, same screen positions, both ways round: `baked`
+   * is the only thing that differs. The first version of this drew the live
+   * structures through a camera that put most of them off the canvas, so it was
+   * timing the clip test rather than the drawing, and reported baking as a
+   * slowdown. A comparison has to differ only in the thing being measured.
+   */
+  const sweep = (baked) => () => {
+    for (let ty = 0; ty < 12; ty++) {
+      for (let tx = 0; tx < 13; tx++) {
+        r.drawTileSkyline(g, 'urban_core', tx, ty, (tx * 68) % 900, (ty * 42) % 600, 1.7, { baked });
+      }
+    }
   };
-  const time = (opts) => {
-    run(opts); run(opts);                       // warm the cache and the JIT
-    const t = performance.now();
-    for (let pass = 0; pass < 5; pass++) run(opts);
-    return (performance.now() - t) / 5;
-  };
-  const live = time({ propsOnly: true });
-  const baked = time({});
-  return { live: +live.toFixed(2), baked: +baked.toFixed(2) };
+  const liveMs = time(sweep(false));
+  const bakedMs = time(sweep(true));
+  let n = 0;
+  for (let ty = 0; ty < 12; ty++) for (let tx = 0; tx < 13; tx++) n += r.structuresOn(tx, ty, 'urban_core').length;
+  return { live: +liveMs.toFixed(2), baked: +bakedMs.toFixed(2), n };
 });
-ok('a screenful of patterned ground is a blit, not six hundred arcs',
-   cost.baked * 2 < cost.live,
-   `${TILE_COUNT} tiles of woodland: ${cost.baked}ms baked against ${cost.live}ms painting the props live`
-   + ` — ${(cost.live / Math.max(cost.baked, 0.01)).toFixed(1)}x, and the live path is doing less`
-   + ' (no ground fill). Unbaked, this was 17% of a frame on a desktop.');
+ok('a screenful of city is a blit, not ten thousand window rectangles',
+   cost.baked * 4 < cost.live,
+   `${TILE_COUNT} tiles of city centre (${cost.n} structures): ${cost.baked}ms baked against ${cost.live}ms live`
+   + ` — ${(cost.live / Math.max(cost.baked, 0.01)).toFixed(0)}x.`
+   + ' Unbaked, this was 56% of a frame on a desktop.');
 
 // --- 11. phone layout
 await page.setViewportSize({ width: 390, height: 844 });
